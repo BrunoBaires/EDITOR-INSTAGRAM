@@ -107,6 +107,17 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 .btn-g:hover{background:var(--bg2);color:var(--text);border-color:#aaa;} .btn-g:disabled{opacity:.3;cursor:not-allowed;}
 .btn-p{background:var(--text);border:1px solid var(--text);color:var(--white);padding:6px 11px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:500;cursor:pointer;border-radius:2px;transition:opacity .14s;}
 .btn-p:hover{opacity:.80;} .btn-p:disabled{opacity:.3;cursor:not-allowed;}
+/* ── Panel de texto para WhatsApp ── */
+.wa-overlay{position:fixed;inset:0;z-index:100001;background:rgba(10,10,10,.6);display:flex;align-items:center;justify-content:center;padding:24px;}
+.wa-box{background:var(--white);border-radius:10px;max-width:640px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4);}
+.wa-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--text);}
+.wa-x{background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:var(--text3);padding:0 4px;}
+.wa-x:hover{color:var(--text);}
+.wa-body{padding:14px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;}
+.wa-ta{width:100%;min-height:300px;resize:vertical;border:1px solid var(--border);border-radius:4px;padding:12px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;line-height:1.55;color:var(--text);background:var(--bg);}
+.wa-opts{display:flex;align-items:center;gap:7px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--text2);cursor:pointer;}
+.wa-note{font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;line-height:1.5;color:var(--text3);}
+.wa-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:12px 18px;border-top:1px solid var(--border);background:var(--bg2);}
 .q-sel{display:flex;align-items:center;gap:2px;padding:2px 5px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;flex-shrink:0;}
 .q-btn{background:transparent;border:none;color:var(--text3);font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;padding:3px 6px;cursor:pointer;border-radius:5px;transition:all .12s;}
 .q-btn:hover{color:var(--text2);}
@@ -505,7 +516,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v136 «encuestas y cards a demanda»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v137 «texto para WhatsApp»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -641,6 +652,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
         <button class="btn-g" id="png-btn">⬇ PNG</button>
         <button class="btn-g" id="rec-btn">⏺ MP4</button>
         <button class="btn-g" id="gif-btn">💬 GIF WA</button>
+        <button class="btn-g" id="wa-btn">📝 Texto WA</button>
         <button class="btn-p" id="zip-btn">ZIP</button>
       </div>
       <div class="fx-bar">
@@ -713,7 +725,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v136 «encuestas y cards a demanda»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v137 «texto para WhatsApp»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -5151,6 +5163,9 @@ Respondé ÚNICAMENTE con JSON válido sin markdown:
     // Recortar de a bullets completos hasta entrar en 380
     while(bullets.join('\n').length>380 && bullets.length>3) bullets.pop();
     c.cuerpo=bullets.join('\n');
+    // La card de síntesis queda marcada y siempre lleva su volanta.
+    c.esSintesis=true;
+    c.volanta='SÍNTESIS';
     sel=cards.length-1;
     renderList(); renderEditor(cards[sel]); drawCard(cards[sel],1);
     setStatus('Card de síntesis agregada','');
@@ -7329,7 +7344,10 @@ async function runGeneration(){
         c.cuerpo=c.cuerpo.replace(/[«"“]([^»"”]{8,220})[»"”]/g, (m,txt)=>'//'+txt.trim()+'//');
       }
     });
-    cards=r.cards;sel=0;renderList();selectCard(0);setStatus(`${cards.length} cards · ${FMT_PROMPTS[currentFmt].label}`,'');btn.textContent='Regenerar';
+    cards=r.cards;
+    // El formato "Síntesis" produce la card de síntesis: se marca y lleva su volanta.
+    if(currentFmt==='sintesis') cards.forEach(c=>{c.esSintesis=true;c.volanta='SÍNTESIS';});
+    sel=0;renderList();selectCard(0);setStatus(`${cards.length} cards · ${FMT_PROMPTS[currentFmt].label}`,'');btn.textContent='Regenerar';
     // colapsar el bloque de generación para dejar la lista de cards protagonista
     var gb=document.getElementById('gen-block'); if(gb) gb.open=false;
     return true;
@@ -7427,6 +7445,125 @@ document.getElementById('png-btn').onclick=()=>{
     setStatus('PNG '+Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE),'');
   }, 'image/png');
 };
+// ════════════════════════════════
+// TEXTO PARA WHATSAPP
+// ════════════════════════════════
+// Pasa el markup interno de las cards (**negrita**, //itálica//, ==resaltado==)
+// a la sintaxis que entiende WhatsApp (*negrita*, _itálica_).
+function richToWhatsApp(raw){
+  let s=String(raw||'');
+  // Blindar las URLs: el // de https:// no tiene que leerse como itálica.
+  const urls=[];
+  s=s.replace(/https?:\/\/\S+/g,m=>{urls.push(m);return '\u0001'+(urls.length-1)+'\u0001';});
+  s=s.replace(/\*\*([\s\S]+?)\*\*/g,'*$1*');
+  s=s.replace(/==([\s\S]+?)==/g,'*$1*');        // el resaltado no existe en WA: va como negrita
+  s=s.replace(/\/\/([\s\S]+?)\/\//g,'_$1_');
+  // Barrer marcadores que quedaron sin pareja
+  s=s.replace(/\*\*/g,'').replace(/==/g,'').replace(/\/\//g,'');
+  s=s.replace(/\u0001(\d+)\u0001/g,(m,i)=>urls[+i]||'');
+  return s;
+}
+// Saca el texto de una card, sea del tipo que sea.
+function cardToWhatsApp(card){
+  if(!card)return '';
+  const out=[];
+  const vol=String(card.volanta||card.kicker||'').trim();
+  if(vol) out.push('*'+vol.toUpperCase()+'*');
+  const tit=String(card.titulo||'').trim();
+  if(tit) out.push('*'+richToWhatsApp(tit)+'*');
+  let cuerpo='';
+  if(card.tipo==='libre'&&Array.isArray(card.blocks)){
+    cuerpo=card.blocks.map(b=>(b&&b.text)||'').filter(Boolean).join('\n');
+  }else if(card.tipo==='vineta'&&Array.isArray(card.vinCaptions)){
+    cuerpo=card.vinCaptions.map(t=>String(t||'').trim()).filter(Boolean).map(t=>'· '+t).join('\n');
+  }else if(card.tipo==='tabla'&&Array.isArray(card.tableRows)){
+    cuerpo=card.tableRows.map(r=>Array.isArray(r)?r.filter(Boolean).join(': '):String(r||'')).filter(Boolean).join('\n');
+  }else{
+    cuerpo=card.cuerpo||'';
+  }
+  cuerpo=richToWhatsApp(cuerpo).trim();
+  if(cuerpo) out.push(cuerpo);
+  return out.join('\n');
+}
+// Arma el texto completo del carrusel, listo para pegar en WhatsApp.
+function buildWhatsAppText(incluirSintesis){
+  return cards.filter(c=>incluirSintesis||!c.esSintesis)
+              .map(cardToWhatsApp).filter(t=>t.trim()).join('\n\n');
+}
+function findSynthesisCard(){ return cards.find(c=>c&&c.esSintesis)||null; }
+function waFallbackCopy(text,done){
+  const ta=document.createElement('textarea');
+  ta.value=text;ta.style.position='fixed';ta.style.top='-9999px';
+  document.body.appendChild(ta);ta.select();
+  try{ document.execCommand('copy'); done(); }
+  catch(e){ setStatus('No se pudo copiar: seleccioná el texto y usá Cmd+C','warn'); }
+  document.body.removeChild(ta);
+}
+function waCopy(text){
+  const done=()=>setStatus('Texto copiado para WhatsApp ✓','');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>waFallbackCopy(text,done));
+  }else waFallbackCopy(text,done);
+}
+function downloadSynthesisPNG(card){
+  if(!card)return;
+  if(raf)cancelAnimationFrame(raf);
+  exportCardBlob(card,function(blob){
+    if(!blob)return;
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='incertis_sintesis.png';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    setStatus('PNG de la síntesis descargado ✓','');
+  },'image/png');
+}
+function openWhatsAppPanel(){
+  if(!cards.length){ setStatus('No hay cards todavía','warn'); return; }
+  const sc=findSynthesisCard();
+  const ov=document.createElement('div');
+  ov.className='wa-overlay';
+  ov.innerHTML='<div class="wa-box">'+
+    '<div class="wa-head"><span>Texto para WhatsApp</span><button class="wa-x" title="Cerrar">&times;</button></div>'+
+    '<div class="wa-body">'+
+      '<textarea class="wa-ta" spellcheck="false"></textarea>'+
+      '<label class="wa-opts"><input type="checkbox" id="wa-inc"> Incluir también el texto de la card de síntesis</label>'+
+      '<div class="wa-note" id="wa-note"></div>'+
+    '</div>'+
+    '<div class="wa-foot"><button class="btn-g" id="wa-png"></button><button class="btn-p" id="wa-copy">Copiar para WhatsApp</button></div>'+
+  '</div>';
+  document.body.appendChild(ov);
+  const ta=ov.querySelector('.wa-ta');
+  const inc=ov.querySelector('#wa-inc');
+  const note=ov.querySelector('#wa-note');
+  const png=ov.querySelector('#wa-png');
+  const pinta=()=>{ ta.value=buildWhatsAppText(inc.checked); };
+  pinta();
+  inc.onchange=pinta;
+  const close=()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.querySelector('.wa-x').onclick=close;
+  ov.onclick=e=>{ if(e.target===ov) close(); };
+  document.addEventListener('keydown',function esc(e){
+    if(e.key==='Escape'){ close(); document.removeEventListener('keydown',esc); }
+  });
+  ov.querySelector('#wa-copy').onclick=()=>waCopy(ta.value);
+  if(sc){
+    png.textContent='⬇ PNG de la síntesis';
+    png.onclick=()=>downloadSynthesisPNG(sc);
+    note.textContent='El PNG de la card de síntesis (card '+sc.id+') ya se descargó — mandalo primero y pegá el texto abajo.';
+    downloadSynthesisPNG(sc);   // va incluido por default
+  }else{
+    png.textContent='↯ Generar síntesis';
+    note.textContent='Todavía no hay card de síntesis. Generala acá y su PNG se descarga solo.';
+    png.onclick=async()=>{
+      png.disabled=true;png.textContent='Sintetizando…';
+      await addSynthesisCard();
+      if(findSynthesisCard()){ close(); openWhatsAppPanel(); }
+      else { png.disabled=false;png.textContent='↯ Generar síntesis'; }
+    };
+  }
+  setTimeout(()=>{ta.focus();ta.setSelectionRange(0,0);},50);
+}
+document.getElementById('wa-btn').onclick=openWhatsAppPanel;
+
 document.getElementById('rec-btn').onclick=async()=>{
   if(!cards[sel])return;
   const btn=document.getElementById('rec-btn');btn.disabled=true;
@@ -7583,6 +7720,9 @@ document.getElementById('zip-btn').onclick=async()=>{
   }
   if(!fotoN) zip.remove('fotos');
 
+  // El texto para WhatsApp viaja dentro del ZIP, así no hay que armarlo dos veces.
+  try{ const _wa=buildWhatsAppText(false); if(_wa.trim()) zip.file('texto_whatsapp.txt', _wa); }catch(e){ console.error(e); }
+
   btn.textContent='Generando ZIP…';
   setStatus('Generando ZIP…','working');
   const zb=await zip.generateAsync({type:'blob'});
@@ -7621,6 +7761,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v137','Texto para WhatsApp','Botón «Texto WA»: junta el texto de todas las cards en un solo bloque con las negritas y bullets ya convertidos a la sintaxis de WhatsApp, lo copia al portapapeles y descarga el PNG de la card de síntesis. La síntesis lleva siempre la volanta SÍNTESIS. El texto también viaja dentro del ZIP.'],
     ['v136','Encuestas y cards a demanda','Formato Encuesta con ficha técnica y resultados en listado. Y opción «Las que hagan falta» en el selector: la cantidad de cards la define el contenido'],
     ['v135','Logo opcional','Se puede sacar el logo card por card, además del interruptor global de la barra inferior'],
     ['v134','Síntesis por dos vías','Síntesis vuelve como formato propio (para usarla sola) y además queda el botón Sumar síntesis, que la agrega sin regenerar lo ya hecho'],
