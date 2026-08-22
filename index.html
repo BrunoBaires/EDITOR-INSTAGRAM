@@ -125,6 +125,18 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 .wa-opts{display:flex;align-items:center;gap:7px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--text2);cursor:pointer;}
 .wa-note{font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;line-height:1.5;color:var(--text3);}
 .wa-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:12px 18px;border-top:1px solid var(--border);background:var(--bg2);}
+/* ── Templates de estilo ── */
+.tpl-sec{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin:4px 0 2px;}
+.tpl-row{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:4px;background:var(--bg);}
+.tpl-nom{flex:1;min-width:0;font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tpl-meta{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);white-space:nowrap;}
+.tpl-mini{background:var(--white);border:1px solid var(--border);color:var(--text2);padding:4px 9px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;cursor:pointer;border-radius:2px;white-space:nowrap;}
+.tpl-mini:hover{background:var(--bg2);color:var(--text);border-color:#aaa;}
+.tpl-mini.del{color:#ef4444;border-color:#f0c4c4;}
+.tpl-vacio{font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--text3);padding:6px 2px;}
+.tpl-nuevo{display:flex;gap:8px;align-items:stretch;}
+.tpl-nuevo input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:var(--text);}
+.tpl-nuevo input:focus{border-color:#aaa;outline:none;}
 .q-sel{display:flex;align-items:center;gap:2px;padding:2px 5px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;flex-shrink:0;}
 .q-btn{background:transparent;border:none;color:var(--text3);font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;padding:3px 6px;cursor:pointer;border-radius:5px;transition:all .12s;}
 .q-btn:hover{color:var(--text2);}
@@ -525,7 +537,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v139 «traer contenido»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v140 «templates de estilo»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -622,6 +634,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
         <button class="add-btn" id="add-vineta" title="Viñeta: fotos arriba + texto abajo">▣ Viñeta</button>
         <button class="add-btn" id="add-libre" title="Bloques de texto libres, cada uno con su estilo">✦ Libre</button>
         <button class="add-btn" id="add-sintesis" title="Agrega una card de síntesis en bullets al final, sin tocar las cards que ya tenés" style="border-color:var(--text);font-weight:600">↯ Sumar síntesis</button>
+        <button class="add-btn" id="templates-btn" title="Guardar y aplicar templates de estilo" style="border-color:var(--text);font-weight:600">◇ Templates</button>
         <button class="add-btn" id="limpiar-btn" style="color:#ef4444;border-color:#ef4444">✕</button>
       </div>
     </div>
@@ -734,7 +747,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v139 «traer contenido»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v140 «templates de estilo»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -7455,6 +7468,248 @@ document.getElementById('png-btn').onclick=()=>{
   }, 'image/png');
 };
 // ════════════════════════════════
+// TEMPLATES DE ESTILO
+// Un template guarda cómo se ven las cards, nunca lo que dicen.
+// Los propios viven en este navegador; los del equipo salen de
+// templates.json, que está al lado del index.html en el repo.
+// ════════════════════════════════
+const TPL_LS='incertis_templates';
+// Estilo que comparten todos los tipos de card
+const TPL_COMUN=['cardBg','cardTextColor','frameW','frameColor','numbered',
+  'titleSz','bodySz','titleFont','titleItalic','bodyItalic','volantaColor',
+  'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur'];
+// Estilo propio de cada tipo
+const TPL_TIPO={
+  media:['mediaW','mediaH','anchor','edgeFade','fadeSides','photoRule','blurBg','scrimInt','waveStyle'],
+  cover:['coverAccent','coverBand','coverTypo','coverAlign','coverTextY','coverImgY','coverTitleSz'],
+  mapa:['mapZoom','mapStyle','mapTilt','mapLabelStep','mapVignette','mapVigColor','mapVigWhere',
+        'mapWater','mapWaterColor','mapLand','mapLandColor','mapBright','mapContrast','mapSat',
+        'mapAnimOff','mapPinColor','mapW','mapH','mapAnchor','mapFicha','mapFichaPos','mapFichaSz'],
+  nano:['nanoStyle','nanoColor1','nanoColor2'],
+  grafico:['chartType','chartColor','chartLblSz','chartValSz','chartRowH','chartRowGap','chartTrack'],
+  tabla:['tableMode','tableZebra','tableHlColor','tableHlFull','tableSubSz','tableNameSz','tableSecSz','tableRowH','tableComSz'],
+  vineta:['vinCount'],
+  libre:['libreVAlign']
+};
+let TPL_EQUIPO=[];   // los que vienen del repo
+function tplMios(){
+  try{ const v=JSON.parse(localStorage.getItem(TPL_LS)||'[]'); return Array.isArray(v)?v:[]; }
+  catch(e){ return []; }
+}
+function tplGuardarMios(lista){
+  try{ localStorage.setItem(TPL_LS, JSON.stringify(lista)); return true; }
+  catch(e){ setStatus('No se pudo guardar el template en este navegador','error'); return false; }
+}
+// Lee el estilo que hay puesto ahora mismo.
+function tplTomarEstilo(nombre){
+  const base=cards[sel]||cards[0]||{};
+  const comun={};
+  TPL_COMUN.forEach(k=>{ if(base[k]!==undefined) comun[k]=base[k]; });
+  const porTipo={};
+  Object.keys(TPL_TIPO).forEach(tipo=>{
+    const c=cards.filter(x=>x&&x.tipo===tipo)[0];
+    if(!c) return;
+    const o={};
+    TPL_TIPO[tipo].forEach(k=>{ if(c[k]!==undefined) o[k]=c[k]; });
+    if(Object.keys(o).length) porTipo[tipo]=o;
+  });
+  return {
+    v:1,
+    nombre:(nombre||'Sin nombre').slice(0,60),
+    fecha:new Date().toISOString().slice(0,10),
+    global:{
+      formato:currentFormat,
+      fx:Object.assign({},FX),
+      noche:!!nightMode,
+      logoVariant:window.__logoVariant||null,
+      logoAlpha:(typeof window.__logoAlpha==='number')?window.__logoAlpha:null,
+      calidad:exportQuality,
+      pesoVideo:videoWeight
+    },
+    comun:comun,
+    porTipo:porTipo
+  };
+}
+// Deja todas las cards con el estilo del template.
+function tplAplicar(t){
+  if(!t){ return; }
+  const g=t.global||{};
+  if(g.formato && FORMATS[g.formato] && g.formato!==currentFormat){
+    setFormat(g.formato);
+    document.querySelectorAll('.fmt-size-btn').forEach(b=>b.classList.toggle('active', b.dataset.format===g.formato));
+  }
+  if(g.fx){
+    ['fade','rise','type','cursor','chrome','logo'].forEach(k=>{
+      if(typeof g.fx[k]==='boolean') FX[k]=g.fx[k];
+      const b=document.getElementById('fx-'+k); if(b) b.classList.toggle('on',!!FX[k]);
+    });
+  }
+  if(typeof g.noche==='boolean' && g.noche!==nightMode){
+    const nb=document.getElementById('night-btn'); if(nb) nb.click();
+  }
+  if(g.logoVariant) window.__logoVariant=g.logoVariant;
+  if(typeof g.logoAlpha==='number'){
+    window.__logoAlpha=g.logoAlpha;
+    const la=document.getElementById('logo-alpha'); if(la) la.value=Math.round(g.logoAlpha*100);
+  }
+  if(g.calidad && EXPORT_PRESETS[g.calidad] && typeof setExportQuality==='function') setExportQuality(g.calidad);
+  if(g.pesoVideo && VIDEO_WEIGHT[g.pesoVideo]){
+    videoWeight=g.pesoVideo;
+    document.querySelectorAll('.w-btn').forEach(x=>x.classList.toggle('on',x.dataset.w===videoWeight));
+  }
+  cards.forEach(c=>{
+    if(!c) return;
+    Object.assign(c, t.comun||{});
+    const pt=(t.porTipo||{})[c.tipo];
+    if(pt) Object.assign(c, pt);
+  });
+  // Si el template trae una fuente que no está bajada, la pedimos y redibujamos
+  const f=(t.comun||{}).titleFont;
+  if(f && typeof ensureFont==='function'){ try{ ensureFont(f,()=>{ if(cards[sel]) drawCard(cards[sel],1); }); }catch(e){} }
+  if(cards.length){
+    sel=Math.min(sel,cards.length-1);
+    selectCard(sel);
+  }
+  setStatus('Template «'+(t.nombre||'sin nombre')+'» aplicado a '+cards.length+' card'+(cards.length!==1?'s':''),'');
+}
+function tplBajarArchivo(obj, nombreArchivo){
+  const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=nombreArchivo;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+// templates.json vive al lado del index.html, así que no hay CORS ni proxy.
+function tplCargarEquipo(){
+  return fetch('templates.json',{cache:'no-store'})
+    .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(j=>{
+      const lista=Array.isArray(j)?j:(j&&Array.isArray(j.templates)?j.templates:[]);
+      TPL_EQUIPO=lista.filter(t=>t&&t.nombre);
+      return TPL_EQUIPO;
+    })
+    .catch(()=>{ TPL_EQUIPO=[]; return TPL_EQUIPO; });
+}
+function openTemplatesPanel(){
+  const ov=document.createElement('div');
+  ov.className='wa-overlay';
+  ov.innerHTML='<div class="wa-box">'+
+    '<div class="wa-head"><span>Templates de estilo</span><button class="wa-x" title="Cerrar">&times;</button></div>'+
+    '<div class="wa-body">'+
+      '<div class="tpl-sec">Del equipo</div><div id="tpl-equipo"></div>'+
+      '<div class="tpl-sec" style="margin-top:10px">Míos, en este navegador</div><div id="tpl-mios"></div>'+
+      '<div class="tpl-sec" style="margin-top:10px">Guardar el estilo que tenés puesto</div>'+
+      '<div class="tpl-nuevo"><input type="text" id="tpl-nom" placeholder="Ej: Breaking rojo, Clarín serif…" maxlength="60"><button class="btn-p" id="tpl-save">Guardar</button></div>'+
+      '<div class="wa-note">Un template guarda cómo se ven las cards (tipografías, tamaños, fondo, marco, logo, formato, FX), nunca los textos. Al aplicarlo, todas las cards del carrusel quedan con ese estilo.</div>'+
+    '</div>'+
+    '<div class="wa-foot"><button class="btn-g" id="tpl-import">↑ Importar .json</button><button class="btn-g" id="tpl-export">⬇ Bajar templates.json para el repo</button></div>'+
+  '</div>';
+  document.body.appendChild(ov);
+  const close=()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
+  ov.querySelector('.wa-x').onclick=close;
+  ov.onclick=e=>{ if(e.target===ov) close(); };
+  document.addEventListener('keydown',function esc(e){
+    if(e.key==='Escape'){ close(); document.removeEventListener('keydown',esc); }
+  });
+
+  const zonaEq=ov.querySelector('#tpl-equipo'), zonaMi=ov.querySelector('#tpl-mios');
+  function fila(t, propio, idx){
+    const row=document.createElement('div');
+    row.className='tpl-row';
+    const nom=document.createElement('div');
+    nom.className='tpl-nom'; nom.textContent=t.nombre||'(sin nombre)';
+    const meta=document.createElement('span');
+    meta.className='tpl-meta';
+    meta.textContent=[(t.global&&t.global.formato)||'', t.fecha||''].filter(Boolean).join(' · ');
+    const bAp=document.createElement('button');
+    bAp.className='tpl-mini'; bAp.textContent='Aplicar';
+    bAp.onclick=()=>{ tplAplicar(t); close(); };
+    row.appendChild(nom); row.appendChild(meta); row.appendChild(bAp);
+    if(propio){
+      const bEx=document.createElement('button');
+      bEx.className='tpl-mini'; bEx.textContent='Exportar';
+      bEx.onclick=()=>tplBajarArchivo(t,'template-'+(t.nombre||'sin-nombre').replace(/[^\w\-]+/g,'-').toLowerCase()+'.json');
+      const bDel=document.createElement('button');
+      bDel.className='tpl-mini del'; bDel.textContent='Borrar'; bDel.title='Borrar este template';
+      bDel.onclick=()=>{
+        const l=tplMios(); l.splice(idx,1); tplGuardarMios(l); pintarMios();
+      };
+      row.appendChild(bEx); row.appendChild(bDel);
+    }
+    return row;
+  }
+  function pintarMios(){
+    const l=tplMios();
+    zonaMi.innerHTML='';
+    if(!l.length){ zonaMi.appendChild(Object.assign(document.createElement('div'),{className:'tpl-vacio',textContent:'Todavía no guardaste ninguno.'})); return; }
+    l.forEach((t,i)=>{ zonaMi.appendChild(fila(t,true,i)); zonaMi.lastChild.style.marginBottom='6px'; });
+  }
+  function pintarEquipo(){
+    zonaEq.innerHTML='';
+    if(!TPL_EQUIPO.length){
+      zonaEq.appendChild(Object.assign(document.createElement('div'),{className:'tpl-vacio',
+        textContent:'No hay templates.json en el sitio todavía. Guardá uno acá abajo, bajá el archivo y subilo al repo: a partir de ahí lo ve todo el equipo.'}));
+      return;
+    }
+    TPL_EQUIPO.forEach(t=>{ zonaEq.appendChild(fila(t,false)); zonaEq.lastChild.style.marginBottom='6px'; });
+  }
+  zonaEq.innerHTML='<div class="tpl-vacio">Buscando templates del equipo…</div>';
+  pintarMios();
+  tplCargarEquipo().then(pintarEquipo);
+
+  const inp=ov.querySelector('#tpl-nom');
+  ov.querySelector('#tpl-save').onclick=()=>{
+    const nombre=(inp.value||'').trim();
+    if(!nombre){ inp.focus(); setStatus('Ponele un nombre al template','warn'); return; }
+    if(!cards.length){ setStatus('No hay cards de las que copiar el estilo','warn'); return; }
+    const l=tplMios();
+    const t=tplTomarEstilo(nombre);
+    const ya=l.findIndex(x=>x&&x.nombre===nombre);
+    if(ya>=0) l[ya]=t; else l.push(t);
+    if(tplGuardarMios(l)){
+      inp.value='';
+      pintarMios();
+      setStatus('Template «'+nombre+'» guardado','');
+    }
+  };
+  inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ov.querySelector('#tpl-save').click(); } };
+
+  ov.querySelector('#tpl-export').onclick=()=>{
+    const todos=TPL_EQUIPO.concat(tplMios().filter(m=>!TPL_EQUIPO.some(e=>e.nombre===m.nombre)));
+    if(!todos.length){ setStatus('No hay templates para exportar','warn'); return; }
+    tplBajarArchivo(todos,'templates.json');
+    setStatus('templates.json listo: subilo al repo para que lo vea el equipo','');
+  };
+  ov.querySelector('#tpl-import').onclick=()=>{
+    const inpf=document.createElement('input');
+    inpf.type='file'; inpf.accept='application/json,.json';
+    inpf.onchange=()=>{
+      const f=inpf.files&&inpf.files[0]; if(!f) return;
+      const fr=new FileReader();
+      fr.onload=()=>{
+        try{
+          const j=JSON.parse(fr.result);
+          const nuevos=Array.isArray(j)?j:[j];
+          const l=tplMios();
+          let n=0;
+          nuevos.forEach(t=>{
+            if(!t||!t.nombre) return;
+            const ya=l.findIndex(x=>x&&x.nombre===t.nombre);
+            if(ya>=0) l[ya]=t; else l.push(t);
+            n++;
+          });
+          if(tplGuardarMios(l)){ pintarMios(); setStatus(n+' template'+(n!==1?'s':'')+' importado'+(n!==1?'s':''),''); }
+        }catch(e){ setStatus('Ese archivo no es un template válido','error'); }
+      };
+      fr.readAsText(f);
+    };
+    inpf.click();
+  };
+}
+{const _tp=document.getElementById('templates-btn'); if(_tp) _tp.onclick=openTemplatesPanel;}
+
+// ════════════════════════════════
 // TEXTO PARA WHATSAPP
 // ════════════════════════════════
 // Pasa el markup interno de las cards (**negrita**, //itálica//, ==resaltado==)
@@ -7807,6 +8062,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v140','Templates de estilo','Botón «◇ Templates» en la lista de cards: guardás cómo se ven (tipografías, tamaños, fondo, marco, logo, formato de placa, FX) y lo aplicás sobre cualquier carrusel sin tocar los textos. Los propios quedan en el navegador; bajás templates.json, lo subís al repo y pasan a estar disponibles para todo el equipo. También se importan y exportan de a uno.'],
     ['v139','Traer contenido de cualquier lado','El panel deja de ser solo de Clarín: pegás el link de cualquier página web o de un post de X y trae el texto, las fotos y el video. Los posts de X pasan por fxtwitter/vxtwitter porque x.com no se deja leer por proxy. El video se suma como card nueva, igual que si lo arrastraras. El botón pasa a llamarse «Traer contenido».'],
     ['v138','Texto para WhatsApp','Botón «Texto WA»: junta el texto de todas las cards en un solo bloque, con las negritas y bullets ya convertidos a la sintaxis de WhatsApp, y lo copia al portapapeles. El texto arranca siempre por la síntesis, que es el epígrafe de la foto. Lo que pasa de 1000 caracteres (el tope del epígrafe) se marca en rojo. La card de síntesis se suma a la lista y se edita como cualquier otra; su PNG se baja cuando uno quiere. El texto también viaja dentro del ZIP.'],
     ['v136','Encuestas y cards a demanda','Formato Encuesta con ficha técnica y resultados en listado. Y opción «Las que hagan falta» en el selector: la cantidad de cards la define el contenido'],
@@ -8985,7 +9241,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v139</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v140</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
