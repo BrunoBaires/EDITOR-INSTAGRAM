@@ -305,6 +305,8 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 #cl-box{width:min(720px,100%);background:var(--bg);display:flex;flex-direction:column;box-shadow:-8px 0 40px rgba(0,0,0,.25);}
 .cl-head{display:flex;align-items:center;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--white);flex-shrink:0;}
 .cl-title{font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:2px;font-weight:500;}
+.cl-video{width:100%;max-height:340px;border-radius:6px;background:#000;display:block;margin:6px 0 10px;}
+.cl-seccion{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);padding:14px 16px 6px;}
 .cl-head .cl-x{margin-left:auto;background:none;border:none;font-size:24px;color:var(--text3);cursor:pointer;line-height:1;}
 .cl-head .cl-x:hover{color:var(--text);}
 /* cl-body: columna flex que NO scrollea; el scroll vive en .cl-scroll */
@@ -489,7 +491,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 <div id="incertis-gate" style="position:fixed;inset:0;z-index:99999;background:#15151a;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Sans',sans-serif;">
   <div style="text-align:center;max-width:340px;padding:32px;">
     <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;letter-spacing:6px;color:#faf9f5;margin-bottom:6px;">INCERTIS</div>
-    <div style="font-size:12px;color:#8a857e;letter-spacing:2px;text-transform:uppercase;margin-bottom:28px;">Placas · Reservorio Clarín</div>
+    <div style="font-size:12px;color:#8a857e;letter-spacing:2px;text-transform:uppercase;margin-bottom:28px;">Placas · Incertis</div>
     <input type="password" id="gate-input" placeholder="Contraseña" autofocus
       style="width:100%;background:#22222a;border:1px solid #3a3a44;border-radius:3px;color:#faf9f5;font-family:'IBM Plex Sans',sans-serif;font-size:15px;padding:12px 14px;outline:none;text-align:center;letter-spacing:1px;"/>
     <button id="gate-btn"
@@ -523,7 +525,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v138 «texto para WhatsApp»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v139 «traer contenido»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -571,7 +573,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
       <div class="article-section">
         <div class="slabel">Texto de la nota <span style="color:var(--text3);font-weight:400;letter-spacing:0;text-transform:none;font-size:11px">(opcional)</span></div>
-        <textarea id="article-input" placeholder="Pegá el texto de la nota… o usá el reservorio de Clarín"></textarea>
+        <textarea id="article-input" placeholder="Pegá el texto de la nota… o traelo desde un link con «Traer contenido»"></textarea>
         <div style="margin-top:8px">
           <label style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--text3)">Instrucción libre (opcional)</label>
           <input type="text" id="global-prompt" placeholder="ej: tono más directo, enfocá en las cifras, sin citas…" style="width:100%;margin-top:4px;background:var(--bg2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 8px;outline:none"/>
@@ -732,7 +734,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v138 «texto para WhatsApp»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v139 «traer contenido»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -7805,6 +7807,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v139','Traer contenido de cualquier lado','El panel deja de ser solo de Clarín: pegás el link de cualquier página web o de un post de X y trae el texto, las fotos y el video. Los posts de X pasan por fxtwitter/vxtwitter porque x.com no se deja leer por proxy. El video se suma como card nueva, igual que si lo arrastraras. El botón pasa a llamarse «Traer contenido».'],
     ['v138','Texto para WhatsApp','Botón «Texto WA»: junta el texto de todas las cards en un solo bloque, con las negritas y bullets ya convertidos a la sintaxis de WhatsApp, y lo copia al portapapeles. El texto arranca siempre por la síntesis, que es el epígrafe de la foto. Lo que pasa de 1000 caracteres (el tope del epígrafe) se marca en rojo. La card de síntesis se suma a la lista y se edita como cualquier otra; su PNG se baja cuando uno quiere. El texto también viaja dentro del ZIP.'],
     ['v136','Encuestas y cards a demanda','Formato Encuesta con ficha técnica y resultados en listado. Y opción «Las que hagan falta» en el selector: la cantidad de cards la define el contenido'],
     ['v135','Logo opcional','Se puede sacar el logo card por card, además del interruptor global de la barra inferior'],
@@ -8147,8 +8150,92 @@ function notesForSection(){
    API CALLS  (directo del browser)
    ============================================================ */
 
+/* ============================================================
+   POSTS DE X (twitter.com / x.com)
+   x.com no se deja leer por proxy: el HTML no trae el texto y hay que
+   pasar por un servicio que hable con su API. Usamos fxtwitter y, si
+   falla, vxtwitter; los dos devuelven texto, autor, fotos y el MP4.
+   ============================================================ */
+function esPostDeX(url){
+  try{
+    var p=new URL(url);
+    var h=p.hostname.replace(/^(www|mobile|m)\./i,"").toLowerCase();
+    return (h==="twitter.com"||h==="x.com"||h==="fxtwitter.com"||h==="vxtwitter.com"||h==="fixupx.com")
+        && /\/status(?:es)?\/\d+/.test(p.pathname);
+  }catch(e){ return false; }
+}
+function idDeX(url){ var m=String(url).match(/\/status(?:es)?\/(\d+)/); return m?m[1]:null; }
+function fetchJSON(url, ms){
+  var ctrl=(typeof AbortController!=="undefined")?new AbortController():null;
+  var to=setTimeout(function(){ if(ctrl) ctrl.abort(); }, ms||10000);
+  return fetch(url,{signal:ctrl?ctrl.signal:undefined,headers:{"Accept":"application/json"}})
+    .then(function(r){ clearTimeout(to); if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
+}
+// Normaliza la respuesta de fxtwitter o vxtwitter al mismo objeto "article"
+// que usa el resto del panel, así todo lo de abajo funciona igual.
+function articleDesdeX(j, note){
+  var t=(j&&j.tweet)?j.tweet:j;
+  if(!t) throw new Error("sin tweet");
+  var texto=String(t.text||t.full_text||"").trim();
+  if(!texto && !(t.media||t.mediaURLs)) throw new Error("sin contenido");
+  var nombre=(t.author&&(t.author.name||t.author.screen_name))||t.user_name||"";
+  var handle=(t.author&&t.author.screen_name)||t.user_screen_name||"";
+  // Sacar el t.co del final, que en el texto no aporta nada
+  texto=texto.replace(/\s*https:\/\/t\.co\/\w+\s*$/,"").trim();
+  var art={ titulo:"", lede:"", autor:null, fechaTxt:"", parrafos:[], fotos:[], videos:[], ualter:null };
+  art.parrafos=texto.split(/\n{1,}/).map(function(s){return s.trim();}).filter(Boolean);
+  // Título: la primera frase, recortada. El resto queda como cuerpo.
+  var prim=art.parrafos[0]||("Post de @"+handle);
+  var corte=prim.match(/^[\s\S]{20,90}?[.!?…](\s|$)/);
+  art.titulo=clean(corte?corte[0]:prim).slice(0,90);
+  art.autor=handle?("@"+handle+(nombre?" · "+nombre:"")):(nombre||null);
+  var fch=t.created_at||t.date||(t.created_timestamp?t.created_timestamp*1000:null);
+  if(fch){ try{ art.fechaTxt=fmtFechaLarga(new Date(fch).toISOString()); }catch(e){ art.fechaTxt=String(fch); } }
+  // --- Fotos ---
+  var fotos=[];
+  if(t.media&&t.media.photos) t.media.photos.forEach(function(p){ if(p&&p.url) fotos.push({src:p.url, alt:""}); });
+  if(!fotos.length&&t.media&&t.media.all) t.media.all.forEach(function(p){ if(p&&p.type==="photo"&&p.url) fotos.push({src:p.url, alt:""}); });
+  if(!fotos.length&&t.media_extended) t.media_extended.forEach(function(p){ if(p&&p.type==="image"&&p.url) fotos.push({src:p.url, alt:""}); });
+  if(!fotos.length&&t.mediaURLs) t.mediaURLs.forEach(function(u){ if(/\.(jpg|jpeg|png|webp)/i.test(u)) fotos.push({src:u, alt:""}); });
+  // --- Videos ---
+  var vids=[];
+  function pushVid(u,poster){ if(u&&!vids.some(function(v){return v.src===u;})) vids.push({src:u, poster:poster||null}); }
+  if(t.media&&t.media.videos) t.media.videos.forEach(function(v){ if(v) pushVid(v.url, v.thumbnail_url); });
+  if(!vids.length&&t.media&&t.media.all) t.media.all.forEach(function(v){ if(v&&(v.type==="video"||v.type==="gif")) pushVid(v.url, v.thumbnail_url); });
+  if(!vids.length&&t.media_extended) t.media_extended.forEach(function(v){ if(v&&(v.type==="video"||v.type==="gif")) pushVid(v.url, v.thumbnail_url); });
+  if(!vids.length&&t.mediaURLs) t.mediaURLs.forEach(function(u){ if(/\.(mp4|m3u8)/i.test(u)) pushVid(u,null); });
+  // Si el post es un video, su portada sirve igual como foto
+  vids.forEach(function(v){ if(v.poster && !fotos.some(function(f){return f.src===v.poster;})) fotos.push({src:v.poster, alt:"Portada del video"}); });
+  art.fotos=fotos.slice(0,8);
+  art.videos=vids.filter(function(v){ return /\.(mp4|m4v|webm)(\?|$)/i.test(v.src); }).slice(0,4);
+  art._esX=true;
+  if(!art.parrafos.length) art.parrafos=["(El post no tiene texto)"];
+  return art;
+}
+function fetchPostDeX(note){
+  var id=idDeX(note.url);
+  if(!id) return Promise.reject(new Error("No pude identificar el post en ese link."));
+  var fuentes=[
+    "https://api.fxtwitter.com/status/"+id,
+    "https://api.vxtwitter.com/Twitter/status/"+id,
+    "https://api.allorigins.win/raw?url="+encodeURIComponent("https://api.fxtwitter.com/status/"+id)
+  ];
+  var i=0;
+  function intento(){
+    if(i>=fuentes.length){
+      return Promise.reject(new Error("No se pudo leer el post de X. El servicio que lo traduce puede estar caído, o el post es privado o fue borrado."));
+    }
+    var u=fuentes[i++];
+    return fetchJSON(u,10000)
+      .then(function(j){ return articleDesdeX(j, note); })
+      .catch(function(){ return intento(); });
+  }
+  return intento();
+}
+
 /* --- Nota completa vía proxy: texto + fotos + fecha, SIN IA --- */
 function fetchArticleViaProxy(note){
+  if(esPostDeX(note.url)) return fetchPostDeX(note);
   var cap={raw:null};
   // Estrategia 1: HTML CRUDO por proxies (en paralelo). Es lo mejor para fotos:
   // nos da el <meta og:image> real y el <article> con sus <figure>, así podemos
@@ -8184,7 +8271,7 @@ function fetchJina(url, cap){
 }
 // Parsea el markdown que devuelve jina: título, párrafos, fotos, fecha
 function parseArticleMarkdown(md, note){
-  var art={ titulo:note.titulo, lede:"", autor:null, fechaTxt:"", parrafos:[], fotos:[], ualter:null };
+  var art={ titulo:note.titulo, lede:"", autor:null, fechaTxt:"", parrafos:[], fotos:[], videos:[], ualter:null };
   var mTitle=md.match(/^Title:\s*(.+)$/m);
   if(mTitle) art.titulo=clean(mTitle[1].replace(/\s*\|\s*Clar[ií]n.*$/i,""));
   var mPub=md.match(/^Published Time:\s*(.+)$/m);
@@ -8330,7 +8417,7 @@ function splitUalter(text){
 function parseArticleHTML(html, note){
   var doc=null;
   try{ doc=new DOMParser().parseFromString(html,"text/html"); }catch(e){}
-  var art={ titulo:note.titulo, lede:"", autor:null, fechaTxt:"", parrafos:[], fotos:[] };
+  var art={ titulo:note.titulo, lede:"", autor:null, fechaTxt:"", parrafos:[], fotos:[], videos:[] };
   if(!doc || !doc.body){
     // fallback: texto plano crudo
     var plain=html.replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
@@ -8418,6 +8505,15 @@ function parseArticleHTML(html, note){
 
   order.forEach(function(id){ art.fotos.push({src:byId[id].src, alt:byId[id].alt}); });
   art.fotos = art.fotos.slice(0,8);
+
+  // --- Video declarado por la página (og:video), si lo hay ---
+  try{
+    var ogv=doc.querySelector('meta[property="og:video:secure_url"], meta[property="og:video:url"], meta[property="og:video"], meta[name="twitter:player:stream"]');
+    var vsrc=ogv&&ogv.getAttribute("content");
+    if(vsrc && /^https?:/i.test(vsrc) && /\.(mp4|m4v|webm)(\?|$)/i.test(vsrc)){
+      art.videos=[{src:vsrc, poster:(art.fotos[0]&&art.fotos[0].src)||null}];
+    }
+  }catch(e){}
 
   if(art.parrafos.length===0){
     var pe=new Error("No se pudo extraer el texto de la nota. Puede que Clarín cargue el contenido con JavaScript (no en el HTML) o que el proxy la haya bloqueado.");
@@ -8678,6 +8774,55 @@ function sendPhotoToStudio(src, alt, opts){
     });
   });
 }
+// Baja un video (por proxy si hace falta) y devuelve el blob.
+function videoToBlob(src){
+  var tries=[
+    src,
+    "https://api.allorigins.win/raw?url="+encodeURIComponent(src),
+    "https://corsproxy.io/?url="+encodeURIComponent(src)
+  ];
+  var i=0;
+  function next(){
+    if(i>=tries.length) return Promise.reject(new Error("no video"));
+    var u=tries[i++];
+    return fetch(u).then(function(r){ if(!r.ok) throw 0; return r.blob(); })
+      .then(function(b){ if(!b||b.size<2000) throw 0; return b; })
+      .catch(function(){ return next(); });
+  }
+  return next();
+}
+// Mete un video como card nueva, igual que si lo hubieras arrastrado.
+function sendVideoToStudio(src, epigrafe, opts){
+  opts=opts||{};
+  return videoToBlob(src).then(function(blob){
+    if(typeof cards==="undefined" || typeof mediaCache==="undefined")
+      throw new Error("editor no disponible");
+    var mbc=new Map();
+    cards.forEach(function(c){ if(mediaCache[c.id]) mbc.set(c, mediaCache[c.id]); });
+    var newCard={id:cards.length+1, tipo:'media', titulo:'', cuerpo:(epigrafe||''), mediaH:100, mediaW:100, anchor:'mc'};
+    cards.push(newCard);
+    if(typeof renumberCards==="function") renumberCards();
+    cards.forEach(function(c){ var m=mbc.get(c); if(m) mediaCache[c.id]=m; });
+    var tipo=(blob.type&&/^video\//.test(blob.type))?blob.type:"video/mp4";
+    var file=new File([blob], "video-x.mp4", {type:tipo});
+    return loadMediaFromFile(file, newCard.id).then(function(m){
+      if(!m){
+        // Si el navegador no puede abrir el video, deshacemos: nada de cards vacías.
+        var ix=cards.indexOf(newCard);
+        if(ix>=0){
+          cards.splice(ix,1);
+          if(typeof renumberCards==="function") renumberCards();
+          cards.forEach(function(c){ var mm=mbc.get(c); if(mm) mediaCache[c.id]=mm; });
+          if(typeof renderList==="function") renderList();
+        }
+        throw new Error("El navegador no pudo abrir ese video");
+      }
+      if(typeof renderList==="function") renderList();
+      if(!opts.silent && typeof selectCard==="function") selectCard(cards.length-1);
+      return m;
+    });
+  });
+}
 // Junta todas las fotos disponibles en el reservorio: de la nota abierta y de
 // cualquier nota que ya se haya abierto (guardan article.fotos).
 function collectReservorioPhotos(){
@@ -8840,7 +8985,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Reservorio Clarín <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v136</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v139</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
@@ -8872,9 +9017,9 @@ function renderLista(){
 
   // --- Importar por URL: pegar el link de cualquier nota y abrirla ---
   var urlbar=elem('<div class="cl-urlbar">'
-    + '<input type="url" class="cl-urlinput" placeholder="Pegá el link de una nota (Clarín u otro medio)…" autocomplete="off" spellcheck="false">'
+    + '<input type="url" class="cl-urlinput" placeholder="Pegá cualquier link: una nota, una web o un post de X…" autocomplete="off" spellcheck="false">'
     + '<button class="cl-urlgo">Extraer →</button>'
-    + '<div class="cl-urlhint">Traé cualquier nota por su URL, de Clarín o de otro sitio.</div>'
+    + '<div class="cl-urlhint">Notas de Clarín y de otros medios, páginas web en general, y posts de X (trae el texto, las fotos y el video).</div>'
     + '</div>');
   var urlInput=$(".cl-urlinput",urlbar), urlGo=$(".cl-urlgo",urlbar);
   function goUrl(){
@@ -8904,6 +9049,7 @@ function renderLista(){
   wrap.appendChild(urlbar);
 
   var scroll=elem('<div class="cl-scroll"></div>');
+  scroll.appendChild(elem('<div class="cl-seccion">Últimas de Clarín</div>'));
   var list=elem('<div class="cl-list"></div>');
   if(CL.loadingList){
     list.appendChild(elem('<div class="cl-empty">Cargando notas de Clarín…</div>'));
@@ -9063,8 +9209,31 @@ function renderNota(){
 
     var art=elem('<div class="cl-article"></div>');
     art.appendChild(elem('<h2>'+escH(a.titulo||n.titulo)+'</h2>'));
+    if(a.autor) art.appendChild(elem('<div class="cl-fecha">'+escH(a.autor)+'</div>'));
     if(a.fechaTxt) art.appendChild(elem('<div class="cl-fecha">'+escH(a.fechaTxt)+'</div>'));
     if(a.lede) art.appendChild(elem('<p class="cl-lede">'+escH(a.lede)+'</p>'));
+
+    // --- Video (posts de X, o páginas que declaran og:video) ---
+    var videos=(a.videos||[]).slice(0,4);
+    videos.forEach(function(v){
+      var vb=elem('<div class="cl-item"></div>');
+      vb.appendChild(elem('<div class="cl-lbl">Video</div>'));
+      vb.appendChild(elem('<video class="cl-video" src="'+escH(v.src)+'"'+(v.poster?' poster="'+escH(v.poster)+'"':'')+' controls playsinline preload="metadata"></video>'));
+      var bv=elem('<button class="cl-send">＋ Video como card nueva</button>');
+      bv.onclick=function(){
+        bv.disabled=true; bv.textContent="Bajando el video…";
+        sendVideoToStudio(v.src,"",{}).then(function(){
+          bv.textContent="✓ Video en el editor";
+          setTimeout(closePanel,800);
+        }).catch(function(err){
+          bv.disabled=false;
+          bv.textContent="No se pudo bajar — reintentar";
+          console.error(err);
+        });
+      };
+      vb.appendChild(bv);
+      art.appendChild(vb);
+    });
 
     // --- Carrusel de fotos con checklist ---
     if(fotos.length){
@@ -9160,7 +9329,7 @@ function renderNota(){
 function mountButton(){
   var hr=document.querySelector("header .hright");
   if(!hr){ return; }
-  var btn=elem('<button id="cl-openbtn">◆ Notas de Clarín</button>');
+  var btn=elem('<button id="cl-openbtn">◆ Traer contenido</button>');
   btn.onclick=openPanel;
   hr.insertBefore(btn, hr.firstChild);
 
