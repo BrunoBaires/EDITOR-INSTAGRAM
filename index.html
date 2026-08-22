@@ -114,7 +114,14 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 .wa-x{background:none;border:none;font-size:24px;line-height:1;cursor:pointer;color:var(--text3);padding:0 4px;}
 .wa-x:hover{color:var(--text);}
 .wa-body{padding:14px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;}
-.wa-ta{width:100%;min-height:300px;resize:vertical;border:1px solid var(--border);border-radius:4px;padding:12px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;line-height:1.55;color:var(--text);background:var(--bg);}
+.wa-wrap{position:relative;border:1px solid var(--border);border-radius:4px;background:var(--bg);overflow:hidden;}
+.wa-mirror{position:absolute;inset:0;z-index:0;overflow:hidden;pointer-events:none;white-space:pre-wrap;overflow-wrap:break-word;border:1px solid transparent;padding:12px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;line-height:1.55;color:var(--text);}
+.wa-ta{position:relative;z-index:1;display:block;width:100%;min-height:300px;resize:vertical;border:1px solid transparent;border-radius:4px;padding:12px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;line-height:1.55;color:transparent;caret-color:var(--text);background:transparent;}
+.wa-over{color:#c1121f;background:rgba(193,18,31,.10);}
+.wa-count{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text3);}
+.wa-count.over{color:#c1121f;font-weight:600;}
+.wa-sint{display:flex;align-items:center;gap:10px;}
+.wa-thumb{width:64px;height:80px;object-fit:cover;border:1px solid var(--border);border-radius:3px;background:var(--bg2);}
 .wa-opts{display:flex;align-items:center;gap:7px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;color:var(--text2);cursor:pointer;}
 .wa-note{font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;line-height:1.5;color:var(--text3);}
 .wa-foot{display:flex;gap:8px;justify-content:flex-end;align-items:center;padding:12px 18px;border-top:1px solid var(--border);background:var(--bg2);}
@@ -516,7 +523,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v137 «texto para WhatsApp»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v138 «texto para WhatsApp»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -725,7 +732,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v137 «texto para WhatsApp»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v138 «texto para WhatsApp»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -7486,11 +7493,16 @@ function cardToWhatsApp(card){
   return out.join('\n');
 }
 // Arma el texto completo del carrusel, listo para pegar en WhatsApp.
-function buildWhatsAppText(incluirSintesis){
-  return cards.filter(c=>incluirSintesis||!c.esSintesis)
-              .map(cardToWhatsApp).filter(t=>t.trim()).join('\n\n');
+// La síntesis va siempre primero: es el epígrafe de la foto que se manda arriba.
+function buildWhatsAppText(){
+  const sc=findSynthesisCard();
+  const orden=sc?[sc].concat(cards.filter(c=>c!==sc)):cards.slice();
+  return orden.map(cardToWhatsApp).filter(t=>t.trim()).join('\n\n');
 }
 function findSynthesisCard(){ return cards.find(c=>c&&c.esSintesis)||null; }
+// Tope de caracteres del epígrafe de una foto en WhatsApp (el duro es 1024; dejamos margen).
+const WA_MAX=1000;
+function escWA(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function waFallbackCopy(text,done){
   const ta=document.createElement('textarea');
   ta.value=text;ta.style.position='fixed';ta.style.top='-9999px';
@@ -7516,6 +7528,15 @@ function downloadSynthesisPNG(card){
     setStatus('PNG de la síntesis descargado ✓','');
   },'image/png');
 }
+// Lleva el foco del editor a la card de síntesis para poder editarla como cualquier otra.
+function irALaSintesis(){
+  const sc=findSynthesisCard(); if(!sc) return;
+  const i=cards.indexOf(sc);
+  sel=i;
+  if(typeof selectCard==='function') selectCard(i);
+  else { renderList(); renderEditor(cards[i]); drawCard(cards[i],1); }
+  setStatus('Card '+cards[i].id+': editala y volvé a «Texto WA» cuando esté lista','');
+}
 function openWhatsAppPanel(){
   if(!cards.length){ setStatus('No hay cards todavía','warn'); return; }
   const sc=findSynthesisCard();
@@ -7524,20 +7545,34 @@ function openWhatsAppPanel(){
   ov.innerHTML='<div class="wa-box">'+
     '<div class="wa-head"><span>Texto para WhatsApp</span><button class="wa-x" title="Cerrar">&times;</button></div>'+
     '<div class="wa-body">'+
-      '<textarea class="wa-ta" spellcheck="false"></textarea>'+
-      '<label class="wa-opts"><input type="checkbox" id="wa-inc"> Incluir también el texto de la card de síntesis</label>'+
+      '<div class="wa-wrap"><div class="wa-mirror" aria-hidden="true"></div><textarea class="wa-ta" spellcheck="false"></textarea></div>'+
+      '<div class="wa-count" id="wa-count"></div>'+
+      '<div class="wa-sint" id="wa-sint"></div>'+
       '<div class="wa-note" id="wa-note"></div>'+
     '</div>'+
     '<div class="wa-foot"><button class="btn-g" id="wa-png"></button><button class="btn-p" id="wa-copy">Copiar para WhatsApp</button></div>'+
   '</div>';
   document.body.appendChild(ov);
   const ta=ov.querySelector('.wa-ta');
-  const inc=ov.querySelector('#wa-inc');
   const note=ov.querySelector('#wa-note');
   const png=ov.querySelector('#wa-png');
-  const pinta=()=>{ ta.value=buildWhatsAppText(inc.checked); };
-  pinta();
-  inc.onchange=pinta;
+  const sint=ov.querySelector('#wa-sint');
+  const mirror=ov.querySelector('.wa-mirror');
+  const count=ov.querySelector('#wa-count');
+  // Marca en rojo lo que pasa del límite de epígrafe de WhatsApp.
+  const marca=()=>{
+    const v=ta.value, n=v.length;
+    mirror.innerHTML=escWA(v.slice(0,WA_MAX))+
+      (n>WA_MAX?'<span class="wa-over">'+escWA(v.slice(WA_MAX))+'</span>':'')+'\n';
+    count.textContent=n>WA_MAX
+      ? n+' / '+WA_MAX+' caracteres · te pasás por '+(n-WA_MAX)
+      : n+' / '+WA_MAX+' caracteres';
+    count.classList.toggle('over',n>WA_MAX);
+    mirror.scrollTop=ta.scrollTop;
+  };
+  ta.value=buildWhatsAppText(); marca();
+  ta.addEventListener('input',marca);
+  ta.addEventListener('scroll',()=>{ mirror.scrollTop=ta.scrollTop; });
   const close=()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
   ov.querySelector('.wa-x').onclick=close;
   ov.onclick=e=>{ if(e.target===ov) close(); };
@@ -7548,19 +7583,28 @@ function openWhatsAppPanel(){
   if(sc){
     png.textContent='⬇ PNG de la síntesis';
     png.onclick=()=>downloadSynthesisPNG(sc);
-    note.textContent='El PNG de la card de síntesis (card '+sc.id+') ya se descargó — mandalo primero y pegá el texto abajo.';
-    downloadSynthesisPNG(sc);   // va incluido por default
+    note.textContent='La síntesis es la card '+sc.id+' de la lista: se edita como cualquier otra. El PNG se baja cuando vos quieras.';
+    // Miniatura de la placa + acceso directo para editarla
+    sint.innerHTML='<img class="wa-thumb" alt="Card de síntesis">'+
+                   '<button class="btn-g" id="wa-edit">✎ Editar esta card</button>';
+    ov.querySelector('#wa-edit').onclick=()=>{ close(); irALaSintesis(); };
+    const img=ov.querySelector('.wa-thumb');
+    exportCardBlob(sc,function(blob){
+      if(!blob||!img.isConnected) return;
+      img.src=URL.createObjectURL(blob);
+      img.onload=()=>setTimeout(()=>URL.revokeObjectURL(img.src),30000);
+    },'image/png');
   }else{
     png.textContent='↯ Generar síntesis';
-    note.textContent='Todavía no hay card de síntesis. Generala acá y su PNG se descarga solo.';
+    note.textContent='Todavía no hay card de síntesis. Al generarla se suma al final de la lista de cards, para que la edites antes de exportarla.';
     png.onclick=async()=>{
       png.disabled=true;png.textContent='Sintetizando…';
       await addSynthesisCard();
-      if(findSynthesisCard()){ close(); openWhatsAppPanel(); }
+      if(findSynthesisCard()){ close(); irALaSintesis(); }
       else { png.disabled=false;png.textContent='↯ Generar síntesis'; }
     };
   }
-  setTimeout(()=>{ta.focus();ta.setSelectionRange(0,0);},50);
+  setTimeout(()=>{ta.focus();ta.setSelectionRange(0,0);ta.scrollTop=0;mirror.scrollTop=0;},50);
 }
 document.getElementById('wa-btn').onclick=openWhatsAppPanel;
 
@@ -7721,7 +7765,7 @@ document.getElementById('zip-btn').onclick=async()=>{
   if(!fotoN) zip.remove('fotos');
 
   // El texto para WhatsApp viaja dentro del ZIP, así no hay que armarlo dos veces.
-  try{ const _wa=buildWhatsAppText(false); if(_wa.trim()) zip.file('texto_whatsapp.txt', _wa); }catch(e){ console.error(e); }
+  try{ const _wa=buildWhatsAppText(); if(_wa.trim()) zip.file('texto_whatsapp.txt', _wa); }catch(e){ console.error(e); }
 
   btn.textContent='Generando ZIP…';
   setStatus('Generando ZIP…','working');
@@ -7761,7 +7805,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
-    ['v137','Texto para WhatsApp','Botón «Texto WA»: junta el texto de todas las cards en un solo bloque con las negritas y bullets ya convertidos a la sintaxis de WhatsApp, lo copia al portapapeles y descarga el PNG de la card de síntesis. La síntesis lleva siempre la volanta SÍNTESIS. El texto también viaja dentro del ZIP.'],
+    ['v138','Texto para WhatsApp','Botón «Texto WA»: junta el texto de todas las cards en un solo bloque, con las negritas y bullets ya convertidos a la sintaxis de WhatsApp, y lo copia al portapapeles. El texto arranca siempre por la síntesis, que es el epígrafe de la foto. Lo que pasa de 1000 caracteres (el tope del epígrafe) se marca en rojo. La card de síntesis se suma a la lista y se edita como cualquier otra; su PNG se baja cuando uno quiere. El texto también viaja dentro del ZIP.'],
     ['v136','Encuestas y cards a demanda','Formato Encuesta con ficha técnica y resultados en listado. Y opción «Las que hagan falta» en el selector: la cantidad de cards la define el contenido'],
     ['v135','Logo opcional','Se puede sacar el logo card por card, además del interruptor global de la barra inferior'],
     ['v134','Síntesis por dos vías','Síntesis vuelve como formato propio (para usarla sola) y además queda el botón Sumar síntesis, que la agrega sin regenerar lo ya hecho'],
