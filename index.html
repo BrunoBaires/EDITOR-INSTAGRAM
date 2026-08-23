@@ -556,7 +556,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v146 «capas a sangre»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v147 «templates completos»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -766,7 +766,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v146 «capas a sangre»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v147 «templates completos»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -7969,11 +7969,19 @@ function tplGuardarMios(lista){
   try{ localStorage.setItem(TPL_LS, JSON.stringify(lista)); return true; }
   catch(e){ setStatus('No se pudo guardar el template en este navegador','error'); return false; }
 }
+// Valores por defecto: una card que nunca tocaste tiene estos campos en
+// undefined, y si el template solo guardaba lo definido salía casi vacío.
+const TPL_DEF={cardBg:null, cardTextColor:'auto', frameW:0, frameColor:'#D94F1C',
+  numbered:false, titleSz:52, bodySz:52, titleFont:'fraunces', titleItalic:false,
+  bodyItalic:false, volantaColor:'#c1121f', logoVariant:'', logoOff:false,
+  logoPos:'tr', logoDX:0, logoDY:0, fixedDur:null};
 // Lee el estilo que hay puesto ahora mismo.
 function tplTomarEstilo(nombre){
   const base=cards[sel]||cards[0]||{};
   const comun={};
-  TPL_COMUN.forEach(k=>{ if(base[k]!==undefined) comun[k]=base[k]; });
+  TPL_COMUN.forEach(k=>{
+    comun[k] = (base[k]!==undefined) ? base[k] : (TPL_DEF[k]!==undefined?TPL_DEF[k]:null);
+  });
   const porTipo={};
   Object.keys(TPL_TIPO).forEach(tipo=>{
     const c=cards.filter(x=>x&&x.tipo===tipo)[0];
@@ -8747,6 +8755,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v147','Templates de estilo que guardaban de menos','Un template solo guardaba los campos que habías tocado a mano. Si armabas el look sobre una card recién generada, la mayoría de los valores seguían sin escribir y el template salía casi vacío: al aplicarlo no cambiaba nada. Ahora guarda el estilo completo, con los valores por defecto donde corresponde, así aplicarlo deja todas las cards igual de verdad.'],
     ['v146','Capas a sangre','Las capas ya no tienen un margen forzado: pueden llegar hasta el borde de la placa, que es lo que hace falta para un zócalo o un fondo a sangre. El tamaño llega hasta 300% y hay un botón «⤢ A toda la placa» que escala la capa hasta cubrirla entera respetando su proporción.'],
     ['v145','Capas detrás de la foto y con ajustes','Cada capa tiene ahora un botón «⤓ Detrás de la foto de la card»: la manda abajo de la imagen de fondo, así un video puede asomar por los huecos transparentes de una silueta recortada. Y las capas de imagen y video ganaron brillo, contraste, saturación y blanco y negro, los mismos ajustes que ya tenía la foto de fondo.'],
     ['v144','Capas: orden y un id que se repetía','Dos arreglos de las capas. Los identificadores podían salir iguales si agregabas dos elementos seguidos, y entonces compartían el archivo cacheado: una de las dos capas no se dibujaba. Y la lista mostraba primero la capa del fondo; ahora la de arriba de la lista es la que va adelante, como en cualquier editor, y las flechas siguen ese orden.'],
@@ -9932,7 +9941,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v146</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v147</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
