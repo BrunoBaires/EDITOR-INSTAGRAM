@@ -137,6 +137,11 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 .tpl-nuevo{display:flex;gap:8px;align-items:stretch;}
 .tpl-nuevo input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:var(--text);}
 .tpl-nuevo input:focus{border-color:#aaa;outline:none;}
+.tpl-tabs{display:flex;gap:4px;margin-bottom:6px;}
+.tpl-tab{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text2);padding:7px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:3px;}
+.tpl-tab.on{background:var(--text);border-color:var(--text);color:var(--white);font-weight:600;}
+.tplc-ruta{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:7px 10px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text);}
+.tplc-mini{width:34px;height:42px;object-fit:cover;border:1px solid var(--border);border-radius:2px;background:var(--bg2);flex-shrink:0;}
 .q-sel{display:flex;align-items:center;gap:2px;padding:2px 5px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;flex-shrink:0;}
 .q-btn{background:transparent;border:none;color:var(--text3);font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;padding:3px 6px;cursor:pointer;border-radius:5px;transition:all .12s;}
 .q-btn:hover{color:var(--text2);}
@@ -537,7 +542,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v141 «encuadre y pegado»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v142 «cards ilustradas»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -747,7 +752,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v141 «encuadre y pegado»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v142 «cards ilustradas»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1626,7 +1631,7 @@ function drawMedia(m,x,y,w,h,t_anim){
       const angle=te*Math.PI*0.25;
       cx=cl(bx+intensity*Math.cos(angle));cy=cl(by+intensity*0.6*Math.sin(angle));
     }
-    _cineGrade=true;
+    _cineGrade=(m.cineGrade!==false);   // el viraje cálido se puede apagar
   }
 
   if(m.kenBurns&&t_anim!==undefined&&m.type!=='video'){
@@ -4633,7 +4638,8 @@ function bestOutputSize(w, h){
 // ── Edición de imagen con OpenAI (gpt-image) ──────────────────────
 // Toma el dataURL de la card, lo manda a /v1/images/edits con el prompt,
 // y reemplaza la imagen de la card con el resultado. BYOK: usa la key OpenAI.
-async function editImageWithOpenAI(cardId, prompt){
+async function editImageWithOpenAI(cardId, prompt, opts){
+  opts=opts||{};
   const key=getOpenAIKey();
   if(!key) throw new Error('Cargá tu OpenAI key arriba (sk-…)');
   const m=mediaCache[cardId];
@@ -4653,6 +4659,8 @@ async function editImageWithOpenAI(cardId, prompt){
   fd.append('quality','high');
   fd.append('size', outSize);           // máxima resolución para esa orientación
   fd.append('output_format','png');     // PNG = sin pérdida (mejor que jpeg)
+  // Recorte de silueta: gpt-image devuelve el PNG con el fondo ya transparente
+  if(opts.transparente) fd.append('background','transparent');
   const resp=await fetch('https://api.openai.com/v1/images/edits',{
     method:'POST',
     headers:{ 'Authorization':'Bearer '+key },
@@ -5518,6 +5526,7 @@ function renderEditor(c){
             <button class="aiedit-mode active" data-mode="editorial">Estilo editorial</button>
             <button class="aiedit-mode" data-mode="editorial_plus">Editorial + comentario</button>
             <button class="aiedit-mode" data-mode="libre">Prompt libre</button>
+            <button class="aiedit-mode" data-mode="silueta" title="Borra el fondo y deja la figura recortada, con transparencia">✂ Recortar silueta</button>
           </div>
           <textarea id="aiedit-input" class="aiedit-input" placeholder="" style="display:none"></textarea>
           <button class="aiedit-run" id="aiedit-run">Aplicar edición IA</button>
@@ -5545,6 +5554,7 @@ function renderEditor(c){
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
             ${[['drift_right','→ Paneo derecha'],['drift_left','← Paneo izquierda'],['push_in','⊕ Empuje'],['pull_out','⊖ Alejamiento'],['diagonal','↗ Diagonal'],['vertical','↕ Vertical'],['orbital','↻ Orbital']].map(([v,l])=>`<button class="tipo-btn${(m.cinematicPreset||'drift_right')===v?' active':''}" data-cpreset="${v}" style="font-size:11px">${l}</button>`).join('')}
           </div>
+          <button class="tipo-btn${m.cineGrade!==false?' active':''}" id="cine-grade" style="width:100%;margin-top:6px">◐ Viraje cálido y viñeteado</button>
         </div>`:''}
       </div>`;
     }
@@ -6400,8 +6410,10 @@ function renderEditor(c){
         function applyMode(){
           el.querySelectorAll('.aiedit-mode').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
           if(mode==='editorial'){ input.style.display='none'; }
+          else if(mode==='silueta'){ input.style.display='block'; input.placeholder='Opcional: qué dejar recortado (ej: solo el presidente, sin el micrófono)…'; }
           else if(mode==='editorial_plus'){ input.style.display='block'; input.placeholder='Observación puntual (ej: bajá un poco las sombras, sacá el cartel del fondo)…'; }
           else { input.style.display='block'; input.placeholder='Escribí qué querés editar (ej: borrar la nube, cambiar el fondo a un cielo despejado)…'; }
+          runBtn.textContent = mode==='silueta' ? 'Recortar la silueta' : 'Aplicar edición IA';
         }
         el.querySelectorAll('.aiedit-mode').forEach(b=>{ b.onclick=()=>{ mode=b.dataset.mode; applyMode(); }; });
         applyMode();
@@ -6419,20 +6431,32 @@ function renderEditor(c){
           let prompt='';
           const extra=(input.value||'').trim();
           const GUARD=" Important: keep all faces, facial features, identity, body proportions, and composition exactly as in the original photograph — do not reshape or regenerate any person. ";
+          const esSilueta = mode==='silueta';
           if(mode==='editorial') prompt=EDITORIAL_PROMPT;
+          else if(esSilueta){
+            prompt='Cut out the main subject'+(extra?(' ('+extra+')'):'')+
+              ' and remove the background completely. Return the subject isolated on a fully transparent background, '+
+              'with clean, precise edges — including hair and thin details. Do not add any new background, shadow, '+
+              'outline, glow or color fill. '+GUARD;
+          }
           else if(mode==='editorial_plus') prompt=EDITORIAL_PROMPT+(extra?(' Additional photographic/artistic adjustment requested: '+extra+'.'):'')+GUARD;
           else { if(!extra){ statusEl.textContent='Escribí qué querés editar.'; statusEl.className='aiedit-status err'; return; } prompt=extra+GUARD; }
-          runBtn.disabled=true; runBtn.textContent='Editando… (~20-40s)';
+          runBtn.disabled=true; runBtn.textContent=esSilueta?'Recortando… (~20-40s)':'Editando… (~20-40s)';
           statusEl.textContent='Enviando a OpenAI…'; statusEl.className='aiedit-status work';
           try{
-            await editImageWithOpenAI(c.id, prompt);
-            statusEl.textContent='✓ Imagen editada';
+            await editImageWithOpenAI(c.id, prompt, {transparente:esSilueta});
+            if(esSilueta && cards[sel]){
+              // Una silueta pide fondo propio: pasa a modo "contain" para que se
+              // vea entera y no recortada por los bordes de la card.
+              const m3=mediaCache[c.id]; if(m3) m3.fitMode='contain';
+            }
+            statusEl.textContent=esSilueta?'✓ Silueta recortada':'✓ Imagen editada';
             statusEl.className='aiedit-status ok';
             renderList(); renderEditor(cards[sel]); redraw();
           }catch(err){
             statusEl.textContent='✗ '+(err.message||'Error');
             statusEl.className='aiedit-status err';
-            runBtn.disabled=false; runBtn.textContent='Aplicar edición IA';
+            runBtn.disabled=false; runBtn.textContent=esSilueta?'Recortar la silueta':'Aplicar edición IA';
           }
         };
       })();
@@ -6442,6 +6466,9 @@ function renderEditor(c){
       // ── Cinemático ──
       const cineBtn=el.querySelector('#cine-toggle');
       if(cineBtn){cineBtn.onclick=()=>{const m2=mediaCache[c.id];if(!m2)return;m2.cinematic=!m2.cinematic;if(m2.cinematic)m2.kenBurns=false;if(!m2.cinematicPreset)m2.cinematicPreset='drift_right';renderEditor(cards[sel]);if(!raf)play(cards[sel]);};};
+      {const cg=el.querySelector('#cine-grade');
+       if(cg) cg.onclick=()=>{ const m2=mediaCache[c.id]; if(!m2)return;
+         m2.cineGrade=(m2.cineGrade===false); renderEditor(cards[sel]); redraw(); };}
       el.querySelectorAll('[data-cpreset]').forEach(btn=>{
         btn.onclick=()=>{const m2=mediaCache[c.id];if(!m2)return;m2.cinematicPreset=btn.dataset.cpreset;el.querySelectorAll('[data-cpreset]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');if(!raf)play(cards[sel]);};
       });
@@ -7624,19 +7651,141 @@ function tplCargarEquipo(){
     })
     .catch(()=>{ TPL_EQUIPO=[]; return TPL_EQUIPO; });
 }
+// ── Cards modelo: la card entera, con su ilustración incrustada ──
+// Sirve para las placas que se repiten (una textual del presidente, por
+// ejemplo): traés el modelo y solo cambiás la frase.
+const TPL_CARD_LS='incertis_cards_modelo';
+const TPL_CARD_NO=new Set(['id','titulo','cuerpo','esSintesis','audioBg','audioBgSrc','_chartImgData']);
+function tplCardsMias(){
+  try{ const v=JSON.parse(localStorage.getItem(TPL_CARD_LS)||'[]'); return Array.isArray(v)?v:[]; }
+  catch(e){ return []; }
+}
+function tplCardsGuardar(l){
+  try{ localStorage.setItem(TPL_CARD_LS, JSON.stringify(l)); return true; }
+  catch(e){ setStatus('No entra en el navegador: la ilustración pesa demasiado','error'); return false; }
+}
+let TPL_CARDS_EQUIPO=[];
+// Achica la ilustración antes de guardarla, para que el modelo no pese megas.
+function tplAchicarImagen(dataUrl, maxLado){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const esc=Math.min(1, maxLado/Math.max(img.naturalWidth,img.naturalHeight));
+      if(esc>=1 && dataUrl.length<900000){ res(dataUrl); return; }
+      const cv=document.createElement('canvas');
+      cv.width=Math.round(img.naturalWidth*esc); cv.height=Math.round(img.naturalHeight*esc);
+      const g=cv.getContext('2d'); g.imageSmoothingQuality='high';
+      g.drawImage(img,0,0,cv.width,cv.height);
+      // PNG para no perder la transparencia de las siluetas
+      res(cv.toDataURL('image/png'));
+    };
+    img.onerror=()=>res(dataUrl);
+    img.src=dataUrl;
+  });
+}
+async function tplTomarCard(nombre, rutaVideo){
+  const c=cards[sel];
+  if(!c) throw new Error('No hay card seleccionada');
+  const copia={};
+  Object.keys(c).forEach(k=>{
+    if(k.charAt(0)==='_' || TPL_CARD_NO.has(k)) return;
+    copia[k]=JSON.parse(JSON.stringify(c[k]));
+  });
+  const t={ v:1, nombre:(nombre||'Sin nombre').slice(0,60), fecha:new Date().toISOString().slice(0,10),
+            card:copia, media:null, formato:currentFormat };
+  const m=mediaCache[c.id];
+  if(m){
+    const enc={type:m.type, zoom:m.zoom, cx:m.cx, cy:m.cy, fitMode:m.fitMode,
+               adjBright:m.adjBright, adjContrast:m.adjContrast, adjExposure:m.adjExposure,
+               adjSat:m.adjSat, adjRotate:m.adjRotate, fxBW:m.fxBW, fxGrain:m.fxGrain,
+               cinematic:m.cinematic, cinematicPreset:m.cinematicPreset,
+               kenBurns:m.kenBurns, kbIntensity:m.kbIntensity, kbDirection:m.kbDirection};
+    if(m.type==='img' && m.dataUrl && m.dataUrl.indexOf('data:')===0){
+      enc.dataUrl=await tplAchicarImagen(m.dataUrl, 1400);
+    } else if(m.type==='video'){
+      // Un video no entra en un JSON: se guarda la ruta a un archivo del repo.
+      if(!rutaVideo) throw new Error('Para un modelo con video hace falta la ruta del archivo en el repo');
+      enc.src=rutaVideo;
+    } else if(m.dataUrl && m.dataUrl.indexOf('data:')===0){
+      enc.dataUrl=m.dataUrl;
+    }
+    t.media=enc;
+  }
+  return t;
+}
+async function tplInsertarCard(t){
+  if(!t||!t.card){ return; }
+  const mbc=new Map();
+  cards.forEach(c=>{ if(mediaCache[c.id]) mbc.set(c, mediaCache[c.id]); });
+  const nueva=JSON.parse(JSON.stringify(t.card));
+  nueva.id=cards.length+1;
+  nueva.titulo=''; nueva.cuerpo='';   // el texto lo pone el usuario
+  cards.push(nueva);
+  renumberCards();
+  cards.forEach(c=>{ const m=mbc.get(c); if(m) mediaCache[c.id]=m; });
+  const em=t.media;
+  if(em){
+    try{
+      if(em.dataUrl){
+        await new Promise((res,rej)=>{
+          const img=new Image();
+          img.onload=()=>{
+            mediaCache[nueva.id]={type:'img', el:img, dataUrl:em.dataUrl, thumbUrl:em.dataUrl,
+              zoom:em.zoom||1, cx:em.cx!==undefined?em.cx:.5, cy:em.cy!==undefined?em.cy:.5};
+            Object.keys(em).forEach(k=>{ if(['type','dataUrl','src'].indexOf(k)<0 && em[k]!==undefined) mediaCache[nueva.id][k]=em[k]; });
+            res();
+          };
+          img.onerror=()=>rej(new Error('no se pudo abrir la ilustración'));
+          img.src=em.dataUrl;
+        });
+      } else if(em.src){
+        setStatus('Trayendo el video del modelo…','working');
+        const r=await fetch(em.src,{cache:'force-cache'});
+        if(!r.ok) throw new Error('no está '+em.src);
+        const blob=await r.blob();
+        const file=new File([blob], (em.src.split('/').pop()||'video.mp4'), {type:blob.type||'video/mp4'});
+        const mm=await loadMediaFromFile(file, nueva.id);
+        if(mm) Object.keys(em).forEach(k=>{ if(['type','dataUrl','src'].indexOf(k)<0 && em[k]!==undefined) mm[k]=em[k]; });
+      }
+    }catch(err){
+      console.error(err);
+      setStatus('La card se agregó, pero no se pudo traer su ilustración: '+err.message,'warn');
+    }
+  }
+  sel=cards.length-1;
+  selectCard(sel);
+  setStatus('Card «'+(t.nombre||'modelo')+'» agregada — escribí el texto','');
+}
+function tplCargarCardsEquipo(){
+  return fetch('cards-modelo.json',{cache:'no-store'})
+    .then(r=>{ if(!r.ok) throw new Error('404'); return r.json(); })
+    .then(j=>{ const l=Array.isArray(j)?j:(j&&Array.isArray(j.cards)?j.cards:[]); TPL_CARDS_EQUIPO=l.filter(t=>t&&t.nombre&&t.card); return TPL_CARDS_EQUIPO; })
+    .catch(()=>{ TPL_CARDS_EQUIPO=[]; return TPL_CARDS_EQUIPO; });
+}
 function openTemplatesPanel(){
   const ov=document.createElement('div');
   ov.className='wa-overlay';
   ov.innerHTML='<div class="wa-box">'+
     '<div class="wa-head"><span>Templates de estilo</span><button class="wa-x" title="Cerrar">&times;</button></div>'+
     '<div class="wa-body">'+
-      '<div class="tpl-sec">Del equipo</div><div id="tpl-equipo"></div>'+
-      '<div class="tpl-sec" style="margin-top:10px">Míos, en este navegador</div><div id="tpl-mios"></div>'+
-      '<div class="tpl-sec" style="margin-top:10px">Guardar el estilo que tenés puesto</div>'+
-      '<div class="tpl-nuevo"><input type="text" id="tpl-nom" placeholder="Ej: Breaking rojo, Clarín serif…" maxlength="60"><button class="btn-p" id="tpl-save">Guardar</button></div>'+
-      '<div class="wa-note">Un template guarda cómo se ven las cards (tipografías, tamaños, fondo, marco, logo, formato, FX), nunca los textos. Al aplicarlo, todas las cards del carrusel quedan con ese estilo.</div>'+
+      '<div class="tpl-tabs"><button class="tpl-tab on" data-tab="estilo">Estilo</button><button class="tpl-tab" data-tab="cards">Cards ilustradas</button></div>'+
+      '<div id="tpl-pane-estilo">'+
+        '<div class="tpl-sec">Del equipo</div><div id="tpl-equipo"></div>'+
+        '<div class="tpl-sec" style="margin-top:10px">Míos, en este navegador</div><div id="tpl-mios"></div>'+
+        '<div class="tpl-sec" style="margin-top:10px">Guardar el estilo que tenés puesto</div>'+
+        '<div class="tpl-nuevo"><input type="text" id="tpl-nom" placeholder="Ej: Breaking rojo, Clarín serif…" maxlength="60"><button class="btn-p" id="tpl-save">Guardar</button></div>'+
+        '<div class="wa-note">Un template de estilo guarda cómo se ven las cards (tipografías, tamaños, fondo, marco, logo, formato, FX), nunca los textos. Al aplicarlo, todas las cards del carrusel quedan con ese estilo.</div>'+
+      '</div>'+
+      '<div id="tpl-pane-cards" style="display:none">'+
+        '<div class="tpl-sec">Del equipo</div><div id="tplc-equipo"></div>'+
+        '<div class="tpl-sec" style="margin-top:10px">Mías, en este navegador</div><div id="tplc-mias"></div>'+
+        '<div class="tpl-sec" style="margin-top:10px">Guardar la card seleccionada como modelo</div>'+
+        '<div class="tpl-nuevo"><input type="text" id="tplc-nom" placeholder="Ej: Textual del presidente" maxlength="60"><button class="btn-p" id="tplc-save">Guardar</button></div>'+
+        '<input type="text" id="tplc-video" class="tplc-ruta" placeholder="Si la card tiene VIDEO: ruta del archivo en el repo, ej. media/presidente.webm">'+
+        '<div class="wa-note">Una card modelo se guarda entera —ilustración, volanta, crédito y estilo— con el texto vacío. Al insertarla, solo escribís la frase. Las imágenes viajan dentro del archivo; los videos no, así que el archivo tiene que estar en el repo y acá va su ruta.</div>'+
+      '</div>'+
     '</div>'+
-    '<div class="wa-foot"><button class="btn-g" id="tpl-import">↑ Importar .json</button><button class="btn-g" id="tpl-export">⬇ Bajar templates.json para el repo</button></div>'+
+    '<div class="wa-foot"><button class="btn-g" id="tpl-import">↑ Importar .json</button><button class="btn-g" id="tpl-export">⬇ Bajar el .json de esta pestaña</button></div>'+
   '</div>';
   document.body.appendChild(ov);
   const close=()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
@@ -7691,6 +7840,86 @@ function openTemplatesPanel(){
   pintarMios();
   tplCargarEquipo().then(pintarEquipo);
 
+  // ── Pestañas ──
+  const paneE=ov.querySelector('#tpl-pane-estilo'), paneC=ov.querySelector('#tpl-pane-cards');
+  ov.querySelectorAll('.tpl-tab').forEach(tb=>{
+    tb.onclick=()=>{
+      ov.querySelectorAll('.tpl-tab').forEach(x=>x.classList.toggle('on',x===tb));
+      const cards_=tb.dataset.tab==='cards';
+      paneE.style.display=cards_?'none':'';
+      paneC.style.display=cards_?'':'none';
+    };
+  });
+
+  // ── Cards ilustradas ──
+  const zonaCe=ov.querySelector('#tplc-equipo'), zonaCm=ov.querySelector('#tplc-mias');
+  const inpRuta=ov.querySelector('#tplc-video');
+  function filaCard(t, propia, idx){
+    const row=document.createElement('div');
+    row.className='tpl-row';
+    if(t.media&&t.media.dataUrl){
+      const th=document.createElement('img');
+      th.className='tplc-mini'; th.src=t.media.dataUrl; row.appendChild(th);
+    }
+    const nom=document.createElement('div');
+    nom.className='tpl-nom'; nom.textContent=t.nombre||'(sin nombre)';
+    const meta=document.createElement('span');
+    meta.className='tpl-meta';
+    meta.textContent=[(t.card&&t.card.tipo)||'', t.media?(t.media.src?'video':'imagen'):'sin ilustración'].filter(Boolean).join(' · ');
+    const bIns=document.createElement('button');
+    bIns.className='tpl-mini'; bIns.textContent='Insertar';
+    bIns.onclick=async()=>{ bIns.disabled=true; bIns.textContent='Insertando…'; try{ await tplInsertarCard(t); close(); }catch(e){ bIns.disabled=false; bIns.textContent='Insertar'; } };
+    row.appendChild(nom); row.appendChild(meta); row.appendChild(bIns);
+    if(propia){
+      const bEx=document.createElement('button');
+      bEx.className='tpl-mini'; bEx.textContent='Exportar';
+      bEx.onclick=()=>tplBajarArchivo(t,'card-'+(t.nombre||'modelo').replace(/[^\w\-]+/g,'-').toLowerCase()+'.json');
+      const bDel=document.createElement('button');
+      bDel.className='tpl-mini del'; bDel.textContent='Borrar';
+      bDel.onclick=()=>{ const l=tplCardsMias(); l.splice(idx,1); tplCardsGuardar(l); pintarCardsMias(); };
+      row.appendChild(bEx); row.appendChild(bDel);
+    }
+    return row;
+  }
+  function pintarCardsMias(){
+    const l=tplCardsMias();
+    zonaCm.innerHTML='';
+    if(!l.length){ zonaCm.appendChild(Object.assign(document.createElement('div'),{className:'tpl-vacio',textContent:'Todavía no guardaste ninguna.'})); return; }
+    l.forEach((t,i)=>{ zonaCm.appendChild(filaCard(t,true,i)); zonaCm.lastChild.style.marginBottom='6px'; });
+  }
+  function pintarCardsEquipo(){
+    zonaCe.innerHTML='';
+    if(!TPL_CARDS_EQUIPO.length){
+      zonaCe.appendChild(Object.assign(document.createElement('div'),{className:'tpl-vacio',
+        textContent:'No hay cards-modelo.json en el sitio todavía. Guardá una acá abajo, bajá el archivo y subilo al repo.'}));
+      return;
+    }
+    TPL_CARDS_EQUIPO.forEach(t=>{ zonaCe.appendChild(filaCard(t,false)); zonaCe.lastChild.style.marginBottom='6px'; });
+  }
+  zonaCe.innerHTML='<div class="tpl-vacio">Buscando cards del equipo…</div>';
+  pintarCardsMias();
+  tplCargarCardsEquipo().then(pintarCardsEquipo);
+
+  const inpC=ov.querySelector('#tplc-nom');
+  ov.querySelector('#tplc-save').onclick=async()=>{
+    const nombre=(inpC.value||'').trim();
+    if(!nombre){ inpC.focus(); setStatus('Ponele un nombre a la card modelo','warn'); return; }
+    if(!cards[sel]){ setStatus('No hay card seleccionada','warn'); return; }
+    const btn=ov.querySelector('#tplc-save');
+    btn.disabled=true; btn.textContent='Guardando…';
+    try{
+      const t=await tplTomarCard(nombre,(inpRuta.value||'').trim());
+      const l=tplCardsMias();
+      const ya=l.findIndex(x=>x&&x.nombre===nombre);
+      if(ya>=0) l[ya]=t; else l.push(t);
+      if(tplCardsGuardar(l)){ inpC.value=''; pintarCardsMias(); setStatus('Card modelo «'+nombre+'» guardada',''); }
+    }catch(e){
+      setStatus(e.message,'warn');
+    }
+    btn.disabled=false; btn.textContent='Guardar';
+  };
+  inpC.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ov.querySelector('#tplc-save').click(); } };
+
   const inp=ov.querySelector('#tpl-nom');
   ov.querySelector('#tpl-save').onclick=()=>{
     const nombre=(inp.value||'').trim();
@@ -7709,6 +7938,14 @@ function openTemplatesPanel(){
   inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ov.querySelector('#tpl-save').click(); } };
 
   ov.querySelector('#tpl-export').onclick=()=>{
+    const enCards=paneC.style.display!=='none';
+    if(enCards){
+      const todas=TPL_CARDS_EQUIPO.concat(tplCardsMias().filter(m=>!TPL_CARDS_EQUIPO.some(e=>e.nombre===m.nombre)));
+      if(!todas.length){ setStatus('No hay cards modelo para exportar','warn'); return; }
+      tplBajarArchivo(todas,'cards-modelo.json');
+      setStatus('cards-modelo.json listo: subilo al repo','');
+      return;
+    }
     const todos=TPL_EQUIPO.concat(tplMios().filter(m=>!TPL_EQUIPO.some(e=>e.nombre===m.nombre)));
     if(!todos.length){ setStatus('No hay templates para exportar','warn'); return; }
     tplBajarArchivo(todos,'templates.json');
@@ -7724,7 +7961,9 @@ function openTemplatesPanel(){
         try{
           const j=JSON.parse(fr.result);
           const nuevos=Array.isArray(j)?j:[j];
-          const l=tplMios();
+          // Si lo importado son cards modelo (traen .card), van a esa lista.
+          const sonCards=nuevos.some(t=>t&&t.card);
+          const l=sonCards?tplCardsMias():tplMios();
           let n=0;
           nuevos.forEach(t=>{
             if(!t||!t.nombre) return;
@@ -7732,7 +7971,11 @@ function openTemplatesPanel(){
             if(ya>=0) l[ya]=t; else l.push(t);
             n++;
           });
-          if(tplGuardarMios(l)){ pintarMios(); setStatus(n+' template'+(n!==1?'s':'')+' importado'+(n!==1?'s':''),''); }
+          const ok=sonCards?tplCardsGuardar(l):tplGuardarMios(l);
+          if(ok){
+            if(sonCards) pintarCardsMias(); else pintarMios();
+            setStatus(n+(sonCards?' card modelo':' template')+(n!==1?'s':'')+' importad'+(sonCards?'a':'o')+(n!==1?'s':''),'');
+          }
         }catch(e){ setStatus('Ese archivo no es un template válido','error'); }
       };
       fr.readAsText(f);
@@ -8095,6 +8338,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v142','Cards ilustradas y recorte de silueta','Templates ahora tiene dos pestañas. La nueva, «Cards ilustradas», guarda una card entera —ilustración, volanta, crédito, encuadre y estilo— con el texto vacío, para las placas que se repiten como las textuales. Las imágenes viajan dentro del JSON; los videos van por su ruta en el repo. Además, en Editar con IA hay un modo «✂ Recortar silueta»: manda la foto a gpt-image y la devuelve con el fondo transparente, sin salir del editor. Y el viraje cálido del cinemático ahora se puede apagar.'],
     ['v141','Arreglos de encuadre y pegado','Pegar una imagen sobre una card de texto ya no crea una card nueva: la convierte en el lugar y conserva el título y el cuerpo. El efecto cinemático dejó de pisar el encuadre manual y ya no anula el brillo, el contraste ni el enderezar. La rueda del mouse sobre la foto hace zoom. Y se arreglaron dos fallas que dejaban el canvas sin repintar: un ReferenceError en el soltar del arrastre y una animación que quedaba trabada después de exportar.'],
     ['v140','Templates de estilo','Botón «◇ Templates» en la lista de cards: guardás cómo se ven (tipografías, tamaños, fondo, marco, logo, formato de placa, FX) y lo aplicás sobre cualquier carrusel sin tocar los textos. Los propios quedan en el navegador; bajás templates.json, lo subís al repo y pasan a estar disponibles para todo el equipo. También se importan y exportan de a uno.'],
     ['v139','Traer contenido de cualquier lado','El panel deja de ser solo de Clarín: pegás el link de cualquier página web o de un post de X y trae el texto, las fotos y el video. Los posts de X pasan por fxtwitter/vxtwitter porque x.com no se deja leer por proxy. El video se suma como card nueva, igual que si lo arrastraras. El botón pasa a llamarse «Traer contenido».'],
@@ -9275,7 +9519,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v141</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v142</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
