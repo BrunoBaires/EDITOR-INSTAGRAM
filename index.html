@@ -556,7 +556,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v144 «capas»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v145 «capas al fondo»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -766,7 +766,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v144 «capas»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v145 «capas al fondo»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1089,6 +1089,13 @@ function creditOf(card){
 }
 // Fondo efectivo de la card: si no se eligió ninguno, blanco tiza.
 function cardBgOf(card){ return (card&&card.cardBg)||CHALK; }
+// Pinta el color de fondo y, encima, las capas marcadas "detrás de la foto".
+// Se usa en todos los tipos de card, así el orden vale para todos.
+function pintarFondo(card){
+  ctx.fillStyle=cardBgOf(card);
+  ctx.fillRect(0,0,W,H);
+  if(typeof drawCapas==='function') drawCapas(card,true);
+}
 
 
 // ════════════════════════════════
@@ -1765,7 +1772,7 @@ function drawSlotCaption(txt,x,y,w,h){
 }
 
 function drawVineta(card,t){
-  ctx.fillStyle=cardBgOf(card); ctx.fillRect(0,0,W,H);
+  pintarFondo(card);
   const chromeA=FX.fade?eo3(rm(t,0,.26)):1;
   const cA=FX.fade?eo3(rm(t,.05,.36)):1;
   const cDy=FX.rise?(1-eo3(rm(t,.05,.36)))*28:0;
@@ -2150,12 +2157,14 @@ function capaLineas(capa,anchoMax){
 }
 // Dibuja todas las capas de la card. Se llama desde drawChrome, así que
 // cubre los diez tipos de card de una sola vez.
-function drawCapas(card){
+function drawCapas(card, soloAtras){
   const L=capasDe(card);
-  card._capaBoxes=[];
+  if(!card._capaBoxes) card._capaBoxes=[];
   if(!L.length) return;
   const CC=(typeof getCardColors==='function')?getCardColors(card):{text:'#111'};
   L.forEach((capa,i)=>{
+    // Dos pasadas: primero las que van detrás de la foto, después el resto.
+    if(!!capa.atras !== !!soloAtras) return;
     const box=capaBox(card,capa);
     card._capaBoxes[i]=box;
     ctx.save();
@@ -2175,7 +2184,10 @@ function drawCapas(card){
       const listo=el&&(capa.k==='video'?el.videoWidth:el.naturalWidth);
       if(listo){
         if(capa.rot){ ctx.translate(box.x+box.w/2,box.y+box.h/2); ctx.rotate(capa.rot*Math.PI/180); ctx.translate(-(box.x+box.w/2),-(box.y+box.h/2)); }
+        const flt=mediaFilterString(capa);
+        if(flt) ctx.filter=flt;
         ctx.drawImage(el,box.x,box.y,box.w,box.h);
+        ctx.filter='none';
       }
     }
     ctx.restore();
@@ -2326,7 +2338,7 @@ function drawCover(card,t){
 
   // BG
   if(showBand){ ctx.fillStyle=accent; ctx.fillRect(0,0,W,H); }
-  else{ ctx.fillStyle=cardBgOf(card); ctx.fillRect(0,0,W,H); }
+  else{ pintarFondo(card); }
 
   // IMAGE — drawn first, text always on top
   if(m){
@@ -2510,7 +2522,7 @@ function drawAudioCard(card,t,m){
   const chromeA=FX.fade?eo3(rm(t,0,.28)):1;
   const style=card.waveStyle||'barras';
 
-  ctx.fillStyle=cardBgOf(card);ctx.fillRect(0,0,W,H);
+  pintarFondo(card);
 
   // Optional background image
   if(card.audioBg){
@@ -2936,7 +2948,7 @@ function drawMapa(card,t){
   const isFull = zoneW>=W-40 && zoneH>=H-40;
 
   // BG lino
-  ctx.fillStyle=cardBgOf(card);ctx.fillRect(0,0,W,H);
+  pintarFondo(card);
 
   if(m?.type==='map-img' && m.el){
     // Google Static Maps: una imagen única. Se dibuja "cover" sobre la zona.
@@ -3387,7 +3399,7 @@ function drawGrafico(card,t){
   const cA=FX.fade?eo3(rm(t,.05,.36)):1;
   const anim=FX.rise?eo3(rm(t,.08,.65)):1;
 
-  ctx.fillStyle=cardBgOf(card);ctx.fillRect(0,0,W,H);
+  pintarFondo(card);
 
   const data=card.chartData||[];
   const ctype=card.chartType||'bar';
@@ -3769,7 +3781,7 @@ function drawTabla(card,t){
   const CC=getCardColors(card);
   const chromeA=FX.fade?eo3(rm(t,0,.26)):1;
   const cA=FX.fade?eo3(rm(t,.05,.36)):1;
-  ctx.fillStyle=cardBgOf(card);ctx.fillRect(0,0,W,H);
+  pintarFondo(card);
 
   const rows=card.tableRows||[];   // [{sec?:'MEDIOCAMPISTAS', name, num, dato}]
   ctx.save();ctx.globalAlpha=cA;ctx.textAlign='left';
@@ -3994,7 +4006,7 @@ function blockFontFamily(b){
   return (FONT_BY_ID[id]&&FONT_BY_ID[id].css) || BLOCK_FONTS[id] || BLOCK_FONTS.franklin;
 }
 function drawLibre(card,t){
-  ctx.fillStyle=cardBgOf(card); ctx.fillRect(0,0,W,H);
+  pintarFondo(card);
   const chromeA=FX.fade?eo3(rm(t,0,.26)):1;
   const cA=FX.fade?eo3(rm(t,.05,.36)):1;
   const CC=getCardColors(card);
@@ -4055,6 +4067,7 @@ function drawLibre(card,t){
 
 function drawCard(card,t){
   _drawingCardId = card?card.id:null;
+  if(card){ card._capaBoxes=[]; card._capaHandle=null; }
   if(card.tipo==='cover'){drawCover(card,t);return;}
   if(card.tipo==='mapa'){drawMapa(card,t);return;}
   if(card.tipo==='nano'){drawNano(card,t);return;}
@@ -4064,7 +4077,7 @@ function drawCard(card,t){
   if(card.tipo==='libre'){drawLibre(card,t);return;}
   const m=mediaCache[card.id];
   if(m?.type==='audio'){drawAudioCard(card,t,m);return;}
-  ctx.fillStyle=cardBgOf(card);ctx.fillRect(0,0,W,H);
+  pintarFondo(card);
   const chromeA=FX.fade?eo3(rm(t,0,.26)):1;
   const cA=FX.fade?eo3(rm(t,.05,.36)):1;
   const cDy=FX.rise?(1-eo3(rm(t,.05,.36)))*28:0;
@@ -6380,8 +6393,19 @@ function renderEditor(c){
             <input type="range" id="capa-w" min="4" max="140" step="1" value="${g.w||45}">
             <label>Giro <b id="capa-rot-v">${g.rot||0}°</b></label>
             <input type="range" id="capa-rot" min="-45" max="45" step="1" value="${g.rot||0}">
+            <label>Brillo <b id="capa-bri-v">${g.adjBright===undefined?100:g.adjBright}%</b></label>
+            <input type="range" id="capa-bri" min="50" max="150" step="1" value="${g.adjBright===undefined?100:g.adjBright}">
+            <label>Contraste <b id="capa-con-v">${g.adjContrast===undefined?100:g.adjContrast}%</b></label>
+            <input type="range" id="capa-con" min="50" max="150" step="1" value="${g.adjContrast===undefined?100:g.adjContrast}">
+            <label>Saturación <b id="capa-sat-v">${g.adjSat===undefined?100:g.adjSat}%</b></label>
+            <input type="range" id="capa-sat" min="0" max="200" step="1" value="${g.adjSat===undefined?100:g.adjSat}">
+          </div>
+          <div style="display:flex;gap:4px;margin-top:5px">
+            <button class="tipo-btn${g.fxBW?' active':''}" id="capa-bw" style="flex:1">Blanco y negro</button>
+            <button class="tipo-btn" id="capa-adj-reset" style="flex:1">Reiniciar ajustes</button>
           </div>
         `}
+        <button class="tipo-btn${g.atras?' active':''}" id="capa-atras" style="width:100%;margin-top:6px" title="La manda detrás de la foto de fondo de la card">⤓ Detrás de la foto de la card</button>
         <div class="capa-grid" style="margin-top:5px">
           <label>Opacidad <b id="capa-op-v">${Math.round((g.op===undefined?1:g.op)*100)}%</b></label>
           <input type="range" id="capa-op" min="5" max="100" step="1" value="${Math.round((g.op===undefined?1:g.op)*100)}">
@@ -7385,6 +7409,9 @@ REGLAS IMPORTANTES:
     vivo('capa-rot',(q,v)=>{ q.rot=parseInt(v); const b=el.querySelector('#capa-rot-v'); if(b)b.textContent=v+'°'; });
     vivo('capa-op',(q,v)=>{ q.op=parseInt(v)/100; const b=el.querySelector('#capa-op-v'); if(b)b.textContent=v+'%'; });
     vivo('capa-color',(q,v)=>{ q.color=v; });
+    vivo('capa-bri',(q,v)=>{ q.adjBright=parseInt(v); const b=el.querySelector('#capa-bri-v'); if(b)b.textContent=v+'%'; });
+    vivo('capa-con',(q,v)=>{ q.adjContrast=parseInt(v); const b=el.querySelector('#capa-con-v'); if(b)b.textContent=v+'%'; });
+    vivo('capa-sat',(q,v)=>{ q.adjSat=parseInt(v); const b=el.querySelector('#capa-sat-v'); if(b)b.textContent=v+'%'; });
     {const sf=el.querySelector('#capa-font'); if(sf) sf.onchange=e=>{ const q=g(); if(!q)return; q.font=e.target.value;
       ensureFont(q.font,()=>repintar()); repintar(); };}
     toca('capa-bold',q=>{ q.weight=(q.weight==='400')?'700':'400'; });
@@ -7393,6 +7420,10 @@ REGLAS IMPORTANTES:
     toca('capa-sombra',q=>{ q.sombra=!q.sombra; });
     toca('capa-color-auto',q=>{ q.color=''; });
     toca('capa-reset',q=>{ q.dx=0; q.dy=0; });
+    toca('capa-bw',q=>{ q.fxBW=!q.fxBW; });
+    toca('capa-adj-reset',q=>{ q.adjBright=100; q.adjContrast=100; q.adjSat=100; q.fxBW=false; });
+    toca('capa-atras',q=>{ q.atras=!q.atras;
+      setStatus(q.atras?'La capa va detrás de la foto de la card':'La capa vuelve al frente',''); });
     el.querySelectorAll('[data-capaalign]').forEach(b=>{ b.onclick=()=>{ const q=g(); if(!q)return;
       q.align=b.dataset.capaalign; renderEditor(cards[sel]); repintar(); }; });
     el.querySelectorAll('[data-capaanchor]').forEach(cel=>{ cel.onclick=()=>{ const q=g(); if(!q)return;
@@ -8699,6 +8730,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v145','Capas detrás de la foto y con ajustes','Cada capa tiene ahora un botón «⤓ Detrás de la foto de la card»: la manda abajo de la imagen de fondo, así un video puede asomar por los huecos transparentes de una silueta recortada. Y las capas de imagen y video ganaron brillo, contraste, saturación y blanco y negro, los mismos ajustes que ya tenía la foto de fondo.'],
     ['v144','Capas: orden y un id que se repetía','Dos arreglos de las capas. Los identificadores podían salir iguales si agregabas dos elementos seguidos, y entonces compartían el archivo cacheado: una de las dos capas no se dibujaba. Y la lista mostraba primero la capa del fondo; ahora la de arriba de la lista es la que va adelante, como en cualquier editor, y las flechas siguen ese orden.'],
     ['v143','Capas: gráficos y textos libres','Cada card tiene ahora una pila de elementos encima del diseño. «＋ Imagen», «＋ Video» y «＋ Texto» en el panel de la card: los arrastrás sobre el preview y los escalás tirando del cuadrito azul de la esquina. Se apilan, se reordenan y cada uno tiene su ancla, opacidad y giro. Un zócalo es simplemente un elemento anclado abajo. Los textos libres suman a título, bajada y volanta: tienen su tipografía, cuerpo, color, alineación, mayúsculas y sombra. Y si pegás una imagen en una card que ya tiene foto de fondo, va como capa encima en vez de reemplazarla.'],
     ['v142','Cards ilustradas y recorte de silueta','Templates ahora tiene dos pestañas. La nueva, «Cards ilustradas», guarda una card entera —ilustración, volanta, crédito, encuadre y estilo— con el texto vacío, para las placas que se repiten como las textuales. Las imágenes viajan dentro del JSON; los videos van por su ruta en el repo. Además, en Editar con IA hay un modo «✂ Recortar silueta»: manda la foto a gpt-image y la devuelve con el fondo transparente, sin salir del editor. Y el viraje cálido del cinemático ahora se puede apagar.'],
@@ -9882,7 +9914,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v144</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v145</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
