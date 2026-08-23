@@ -537,7 +537,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v140 «templates de estilo»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v141 «encuadre y pegado»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -747,7 +747,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v140 «templates de estilo»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v141 «encuadre y pegado»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1605,33 +1605,28 @@ function drawMedia(m,x,y,w,h,t_anim){
   let cx=m.cx!==undefined?m.cx:.5,cy=m.cy!==undefined?m.cy:.5;
 
   // ── CINEMÁTICO ──
+  // El movimiento se calcula SOBRE el encuadre del usuario, no en lugar de él:
+  // cada preset desplaza a partir de m.cx/m.cy en vez de pisarlos con 0.5.
+  // Y no cortamos acá: seguimos por el pipeline normal para que brillo,
+  // contraste, exposición y enderezar sigan funcionando con el efecto puesto.
+  let _cineGrade=false;
   if(m.cinematic&&t_anim!==undefined&&m.type!=='video'){
     const preset=m.cinematicPreset||'drift_right';
     const te=eo3(Math.max(0,Math.min(1,t_anim)));
-    const intensity=0.06; // subtle — 6% travel
-    if(preset==='drift_right'){cx=0.5-intensity*0.5+intensity*te;cy=0.5;}
-    else if(preset==='drift_left'){cx=0.5+intensity*0.5-intensity*te;cy=0.5;}
-    else if(preset==='push_in'){zoom=(m.zoom||1)*(1+0.08*te);cx=m.cx||0.5;cy=m.cy||0.5;}
-    else if(preset==='pull_out'){zoom=(m.zoom||1)*(1.08-0.08*te);cx=m.cx||0.5;cy=m.cy||0.5;}
-    else if(preset==='diagonal'){cx=0.5-intensity*0.5+intensity*te;cy=0.5-intensity*0.3+intensity*0.6*te;}
-    else if(preset==='vertical'){cx=m.cx||0.5;cy=0.5-intensity*0.5+intensity*te;}
+    const intensity=0.06; // sutil — 6% de recorrido
+    const bx=cx, by=cy;   // encuadre elegido a mano
+    const cl=v=>Math.max(0,Math.min(1,v));
+    if(preset==='drift_right'){cx=cl(bx-intensity*0.5+intensity*te);cy=by;}
+    else if(preset==='drift_left'){cx=cl(bx+intensity*0.5-intensity*te);cy=by;}
+    else if(preset==='push_in'){zoom=(m.zoom||1)*(1+0.08*te);cx=bx;cy=by;}
+    else if(preset==='pull_out'){zoom=(m.zoom||1)*(1.08-0.08*te);cx=bx;cy=by;}
+    else if(preset==='diagonal'){cx=cl(bx-intensity*0.5+intensity*te);cy=cl(by-intensity*0.3+intensity*0.6*te);}
+    else if(preset==='vertical'){cx=bx;cy=cl(by-intensity*0.5+intensity*te);}
     else if(preset==='orbital'){
       const angle=te*Math.PI*0.25;
-      cx=0.5+intensity*Math.cos(angle);cy=0.5+intensity*0.6*Math.sin(angle);
+      cx=cl(bx+intensity*Math.cos(angle));cy=cl(by+intensity*0.6*Math.sin(angle));
     }
-    // Cinematic color grade — warm lift + slight desaturation applied as overlay
-    const bs=baseScale(m,w,h,srcW,srcH)*zoom;
-    const dw=srcW*bs,dh=srcH*bs;
-    ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
-    ctx.drawImage(el,x+(w-dw)*cx,y+(h-dh)*cy,dw,dh);
-    // Grade overlay: warm tint + vignette
-    const vignette=ctx.createRadialGradient(x+w/2,y+h/2,Math.min(w,h)*0.2,x+w/2,y+h/2,Math.max(w,h)*0.72);
-    vignette.addColorStop(0,'rgba(0,0,0,0)');vignette.addColorStop(1,'rgba(0,0,0,0.38)');
-    ctx.fillStyle=vignette;ctx.fillRect(x,y,w,h);
-    // Warm tint (very subtle)
-    ctx.fillStyle='rgba(255,210,160,0.06)';ctx.fillRect(x,y,w,h);
-    ctx.restore();
-    return;
+    _cineGrade=true;
   }
 
   if(m.kenBurns&&t_anim!==undefined&&m.type!=='video'){
@@ -1665,6 +1660,16 @@ function drawMedia(m,x,y,w,h,t_anim){
   ctx.drawImage(el,x+(w-dw)*cx,y+(h-dh)*cy,dw,dh);
   ctx.filter='none';
   ctx.restore();
+  // Viraje cinematográfico: viñeteado + luz cálida, encima de la foto ya corregida.
+  // Va después del restore para no heredar la rotación de "enderezar".
+  if(_cineGrade){
+    ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+    const vig=ctx.createRadialGradient(x+w/2,y+h/2,Math.min(w,h)*0.2,x+w/2,y+h/2,Math.max(w,h)*0.72);
+    vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,0,0.38)');
+    ctx.fillStyle=vig;ctx.fillRect(x,y,w,h);
+    ctx.fillStyle='rgba(255,210,160,0.06)';ctx.fillRect(x,y,w,h);
+    ctx.restore();
+  }
   drawTextureFX(m,x,y,w,h);
 }
 // ════════════════════════════════
@@ -3519,6 +3524,13 @@ function drawGrid(){
 let dragGuides=false;
 let _isExporting=false;      // en export no se dibujan avisos ni guías
 let _lastAnimT;              // t del frame de animación en curso (para redraw en vivo)
+// Repintado global. Ojo: el `redraw()` del panel es una closure local de
+// renderEditor y NO existe fuera de ella; llamarlo desde afuera tiraba
+// ReferenceError y abortaba el handler a mitad de camino.
+function repintar(){
+  if(!cards[sel]) return;
+  drawCard(cards[sel], raf ? (_lastAnimT!==undefined?_lastAnimT:.7) : .7);
+}
 function drawDragGuides(){
   const S=Math.round(W/216);
   ctx.save();
@@ -4263,7 +4275,7 @@ function play(card,onEnd){
   raf=requestAnimationFrame(loop);
 }
 async function recordCard(card){
-  if(raf)cancelAnimationFrame(raf);
+  if(raf){cancelAnimationFrame(raf);raf=null;}
   let dur=getCardDur(card);
   if(!isFinite(dur)||dur<=0) dur=BASE_DUR;   // blindaje: nunca grabar infinito
   dur=Math.min(dur, 600);                     // tope de 10 min por seguridad
@@ -4837,10 +4849,23 @@ let logoDrag=null;
 let mapDrag=null;
 let markDrag=null;
 let _wheelTimer=null;
-// Rueda del mouse = zoom del mapa (como en cualquier mapa online)
+// Rueda del mouse = zoom. En mapas cambia el nivel; sobre una foto, la acerca.
 canvas.addEventListener('wheel', e=>{
   const card=cards[sel];
-  if(!card || card.tipo!=='mapa' || card.mapLat===undefined) return;
+  if(!card) return;
+  // ── Zoom de la foto con la rueda, ahí mismo sobre el preview ──
+  if(card.tipo!=='mapa'){
+    const m=mediaCache[card.id];
+    if(!m || m.type==='audio') return;
+    e.preventDefault();
+    const paso = e.deltaY<0 ? 1.06 : 1/1.06;
+    m.zoom = Math.max(0.2, Math.min(6, (m.zoom||1)*paso));
+    syncSliders();
+    repintar();
+    setStatus('Zoom '+Math.round(m.zoom*100)+'%','');
+    return;
+  }
+  if(card.mapLat===undefined) return;
   e.preventDefault();
   const paso = e.deltaY<0 ? 1 : -1;
   const nuevo = Math.max(0, Math.min(19, (card.mapZoom||13)+paso));
@@ -4849,7 +4874,7 @@ canvas.addEventListener('wheel', e=>{
   // Feedback inmediato: se escala lo que ya está dibujado
   const m=mediaCache[card.id];
   if(m){ m._zoomPreview=(m._zoomPreview||1)*(paso>0?2:0.5); }
-  if(!raf) drawCard(card,.7);
+  repintar();
   setStatus('Zoom '+nuevo,'working');
   // Recarga diferida: espera a que dejes de girar
   clearTimeout(_wheelTimer);
@@ -4859,7 +4884,7 @@ canvas.addEventListener('wheel', e=>{
     await loadMapTiles(card);
     renderEditor(cards[sel]);
     setStatus('Zoom '+card.mapZoom,'');
-    if(!raf) drawCard(card,1);
+    repintar();
   }, 320);
 }, {passive:false});
 canvas.addEventListener('mousedown',e=>{
@@ -4932,7 +4957,7 @@ canvas.addEventListener('mousemove',e=>{
     // Coordenadas relativas (0..1): quedan fijas aunque cambie el zoom
     mk.x=Math.max(0.02,Math.min(0.98, markDrag.ox+(e.offsetX-markDrag.x)/CVW));
     mk.y=Math.max(0.02,Math.min(0.98, markDrag.oy+(e.offsetY-markDrag.y)/cvH()));
-    if(!raf)drawCard(c,.7);
+    repintar();
     return;
   }
   if(mapDrag){
@@ -4949,7 +4974,7 @@ canvas.addEventListener('mousemove',e=>{
     if(m0 && m0.tiles){
       m0._panX=dx; m0._panY=dy;
     }
-    if(!raf)drawCard(c,.7);
+    repintar();
     return;
   }
   if(logoDrag){
@@ -4957,7 +4982,7 @@ canvas.addEventListener('mousemove',e=>{
     const dx=(e.offsetX-logoDrag.x)*(W/CVW), dy=(e.offsetY-logoDrag.y)*(H/cvH());
     c.logoDX=Math.round(logoDrag.dx+dx);
     c.logoDY=Math.round(logoDrag.dy+dy);
-    if(!raf)drawCard(c,.7);
+    repintar();
     return;
   }
   const card=cards[sel];
@@ -4974,7 +4999,7 @@ canvas.addEventListener('mousemove',e=>{
       const _sx=(_dw>=b.w)?-1:1, _sy=(_dh>=b.h)?-1:1;
       sl.cx=Math.max(0,Math.min(1, vinDrag.cx + _sx*dx/Math.max(_rx,1)));
       sl.cy=Math.max(0,Math.min(1, vinDrag.cy + _sy*dy/Math.max(_ry,1)));
-      if(!raf)drawCard(card,.7);
+      repintar();
     }
     return;
   }
@@ -4982,7 +5007,7 @@ canvas.addEventListener('mousemove',e=>{
     const dx=(e.offsetX-textDrag.x)*(W/CVW), dy=(e.offsetY-textDrag.y)*(H/cvH());
     if(textDrag.which==='title'){ card.titleDX=Math.round(textDrag.dx+dx); card.titleDY=Math.round(textDrag.dy+dy); }
     else { card.bodyDX=Math.round(textDrag.dx+dx); card.bodyDY=Math.round(textDrag.dy+dy); }
-    if(!raf)drawCard(card,.7);
+    repintar();
     return;
   }
   if(!canvasDrag)return;
@@ -4998,7 +5023,7 @@ canvas.addEventListener('mousemove',e=>{
   const sx=(dw>=zoneW)?-1:1, sy=(dh>=zoneH)?-1:1;
   m.cx=Math.max(0,Math.min(1, canvasDrag.cx + sx*dx/Math.max(rx,1)));
   m.cy=Math.max(0,Math.min(1, canvasDrag.cy + sy*dy/Math.max(ry,1)));
-  if(!raf)drawCard(cards[sel],.7);syncSliders();
+  repintar();syncSliders();
 });
 
 // cursor "grab" cuando estás sobre un bloque de texto
@@ -5011,7 +5036,7 @@ canvas.addEventListener('mousemove',e=>{
 
 window.addEventListener('mouseup',()=>{
   const wasDragging = canvasDrag||textDrag||vinDrag;
-  if(markDrag){ markDrag=null; canvas.style.cursor=''; redraw(); }
+  if(markDrag){ markDrag=null; canvas.style.cursor=''; repintar(); }
   if(mapDrag){
     const c=cards[sel];
     const movio=mapDrag.moved;
@@ -5020,10 +5045,10 @@ window.addEventListener('mouseup',()=>{
       const m0=mediaCache[c.id];
       if(m0){ m0._panX=0; m0._panY=0; }
       setStatus('Actualizando mapa…','working');
-      loadMapTiles(c).then(()=>{ setStatus('',''); renderEditor(cards[sel]); redraw(); });
+      loadMapTiles(c).then(()=>{ setStatus('',''); renderEditor(cards[sel]); repintar(); });
     }
   }
-  if(logoDrag){ logoDrag=null; canvas.style.cursor=''; renderEditor(cards[sel]); redraw(); }
+  if(logoDrag){ logoDrag=null; canvas.style.cursor=''; renderEditor(cards[sel]); repintar(); }
   canvasDrag=null; textDrag=null; vinDrag=null; canvas.style.cursor='';
   if(wasDragging){ dragGuides=false; if(cards[sel]&&!raf) drawCard(cards[sel],.7); }
 });
@@ -5051,7 +5076,7 @@ canvas.addEventListener('drop',async e=>{
   await loadMediaFromFile(files[0],c.id);
   setStatus('Listo','');
   renderList();renderEditor(cards[sel]);
-  if(!raf)drawCard(cards[sel],.7);
+  repintar();
 });
 function syncSliders(){
   const m=mediaCache[cards[sel]?.id];if(!m)return;
@@ -7261,9 +7286,17 @@ document.getElementById('nav-next').onclick=()=>navigate(1);
 // ── Pegar imágenes con Ctrl/Cmd+V ──
 async function pasteImageFile(file){
   let card=cards[sel];
-  // Si no hay card apropiada, crear una media nueva.
-  if(!card || (card.tipo!=='media' && card.tipo!=='vineta' && card.tipo!=='cover')){
+  if(!card){
+    // No hay nada seleccionado: recién ahí creamos una card nueva.
     addCard('media'); card=cards[sel];
+  } else if(card.tipo!=='media' && card.tipo!=='vineta' && card.tipo!=='cover'){
+    // Sobre una card de texto la convertimos EN EL LUGAR, conservando título
+    // y cuerpo. Antes creaba una card nueva vacía y había que copiar los
+    // textos a mano.
+    card.tipo='media';
+    if(card.mediaW==null) card.mediaW=100;
+    if(card.mediaH==null) card.mediaH=100;
+    if(!card.anchor) card.anchor='mc';
   }
   if(card.tipo==='vineta'){
     // primer slot libre (o el 0)
@@ -7275,7 +7308,7 @@ async function pasteImageFile(file){
     setStatus('Pegando imagen…','working');
     await loadMediaFromFile(file,card.id);
   }
-  renderEditor(cards[sel]); renderList(); redraw();
+  renderEditor(cards[sel]); renderList(); repintar();
   setStatus('Imagen pegada','');
 }
 async function fetchUrlAsFile(url){
@@ -7327,14 +7360,14 @@ document.addEventListener('keydown',e=>{
     if(e.key==='ArrowUp')    c.logoDY=(c.logoDY||0)-paso;
     if(e.key==='ArrowDown')  c.logoDY=(c.logoDY||0)+paso;
     e.preventDefault();
-    redraw();
+    repintar();
     setStatus(`Logo ${c.logoDX||0},${c.logoDY||0} · Shift+flechas mueve · Alt afina · Shift+0 centra`,'');
     return;
   }
   // Shift+0: volver el logo a su lugar
   if(e.shiftKey && (e.key==='0'||e.key===')') && cards[sel]){
     cards[sel].logoDX=0; cards[sel].logoDY=0;
-    e.preventDefault(); redraw(); setStatus('Logo a su posición original','');
+    e.preventDefault(); repintar(); setStatus('Logo a su posición original','');
     return;
   }
   if(e.key==='ArrowLeft')navigate(-1);
@@ -7459,7 +7492,7 @@ document.getElementById('play-btn').onclick=()=>{
   }
 };;
 document.getElementById('png-btn').onclick=()=>{
-  if(!cards[sel])return;if(raf)cancelAnimationFrame(raf);
+  if(!cards[sel])return;if(raf){cancelAnimationFrame(raf);raf=null;}
   exportCardBlob(cards[sel], function(blob){
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
     a.download=`incertis_card_${cards[sel].id}_${String(currentFormat).replace(':','x')}_${exportQuality}.png`;a.click();
@@ -7776,7 +7809,7 @@ function waCopy(text){
 }
 function downloadSynthesisPNG(card){
   if(!card)return;
-  if(raf)cancelAnimationFrame(raf);
+  if(raf){cancelAnimationFrame(raf);raf=null;}
   exportCardBlob(card,function(blob){
     if(!blob)return;
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -8062,6 +8095,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v141','Arreglos de encuadre y pegado','Pegar una imagen sobre una card de texto ya no crea una card nueva: la convierte en el lugar y conserva el título y el cuerpo. El efecto cinemático dejó de pisar el encuadre manual y ya no anula el brillo, el contraste ni el enderezar. La rueda del mouse sobre la foto hace zoom. Y se arreglaron dos fallas que dejaban el canvas sin repintar: un ReferenceError en el soltar del arrastre y una animación que quedaba trabada después de exportar.'],
     ['v140','Templates de estilo','Botón «◇ Templates» en la lista de cards: guardás cómo se ven (tipografías, tamaños, fondo, marco, logo, formato de placa, FX) y lo aplicás sobre cualquier carrusel sin tocar los textos. Los propios quedan en el navegador; bajás templates.json, lo subís al repo y pasan a estar disponibles para todo el equipo. También se importan y exportan de a uno.'],
     ['v139','Traer contenido de cualquier lado','El panel deja de ser solo de Clarín: pegás el link de cualquier página web o de un post de X y trae el texto, las fotos y el video. Los posts de X pasan por fxtwitter/vxtwitter porque x.com no se deja leer por proxy. El video se suma como card nueva, igual que si lo arrastraras. El botón pasa a llamarse «Traer contenido».'],
     ['v138','Texto para WhatsApp','Botón «Texto WA»: junta el texto de todas las cards en un solo bloque, con las negritas y bullets ya convertidos a la sintaxis de WhatsApp, y lo copia al portapapeles. El texto arranca siempre por la síntesis, que es el epígrafe de la foto. Lo que pasa de 1000 caracteres (el tope del epígrafe) se marca en rojo. La card de síntesis se suma a la lista y se edita como cualquier otra; su PNG se baja cuando uno quiere. El texto también viaja dentro del ZIP.'],
@@ -8992,7 +9026,7 @@ function applyPhotoToCurrentCard(src, opts){
         mediaCache[c.id]={type:'img', el:img, dataUrl:dataUrl, thumbUrl:dataUrl, zoom:1, cx:.5, cy:.5};
         if(typeof selectCard==="function") selectCard(idx);   // re-selecciona y renderiza editor
         if(typeof renderList==="function") renderList();
-        if(typeof redraw==="function") redraw();              // repinta el canvas grande
+        if(typeof repintar==="function") repintar();          // repinta el canvas grande
         resolve(c);
       };
       img.onerror=function(){ reject(new Error("img")); };
@@ -9241,7 +9275,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v140</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v141</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
