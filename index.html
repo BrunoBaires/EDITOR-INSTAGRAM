@@ -214,6 +214,20 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 .aiedit-revert{width:100%;margin-top:6px;background:var(--bg);border:1px solid var(--border);color:var(--text2);padding:7px;font-family:'IBM Plex Sans',sans-serif;font-size:11px;cursor:pointer;border-radius:4px;}
 .aiedit-status{font-size:11px;margin-top:7px;min-height:14px;line-height:1.4;}
 .aiedit-status.work{color:var(--text3);} .aiedit-status.ok{color:#10a37f;} .aiedit-status.err{color:#ef4444;}
+.capa-list{display:flex;flex-direction:column;gap:3px;margin-bottom:6px;}
+.capa-row{display:flex;align-items:center;gap:5px;padding:4px 6px;border:1px solid var(--border);border-radius:3px;background:var(--bg);cursor:pointer;}
+.capa-row.on{border-color:var(--text);background:var(--bg2);}
+.capa-ico{width:16px;text-align:center;font-size:11px;color:var(--text3);flex-shrink:0;}
+.capa-nom{flex:1;min-width:0;font-size:11.5px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.capa-b{background:none;border:none;color:var(--text3);font-size:11px;cursor:pointer;padding:1px 4px;border-radius:2px;}
+.capa-b:hover{background:var(--bg2);color:var(--text);}
+.capa-b.del:hover{color:#ef4444;}
+.capa-edit{border:1px solid var(--border);border-radius:3px;padding:8px;background:var(--bg);}
+.capa-ta{width:100%;box-sizing:border-box;background:var(--white);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12.5px;padding:6px;outline:none;resize:vertical;margin-bottom:6px;}
+.capa-grid label{display:block;font-size:10px;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-top:4px;}
+.capa-grid label b{color:var(--text2);font-weight:600;letter-spacing:0;}
+.capa-grid input[type=range]{width:100%;}
+.capa-sel{width:100%;margin-top:5px;background:var(--white);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:5px;}
 .anchor-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;}
 .anchor-cell{aspect-ratio:1;border:1px solid var(--border);border-radius:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--bg);transition:all .12s;}
 .anchor-cell:hover{background:var(--bg2);border-color:#aaa;}
@@ -542,7 +556,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v142 «cards ilustradas»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v143 «capas»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -752,7 +766,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v142 «cards ilustradas»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v143 «capas»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -2041,7 +2055,171 @@ function drawCardNumber(card,dark){
   ctx.shadowBlur=0;
   ctx.restore();
 }
+
+// ════════════════════════════════
+// CAPAS: gráficos e textos libres encima de la card
+// card.capas = [ {id,k:'img'|'txt', anchor, dx,dy, ...} ]
+// Las imágenes guardan su dataURL en la capa (así viajan en los templates);
+// el elemento <img>/<video> vive aparte, en gfxCache, indexado por id de capa.
+// ════════════════════════════════
+function escapeHtml(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+const gfxCache={};
+let capaSel=null;            // índice de la capa seleccionada, o null
+function nuevaCapaId(){ return 'g'+Math.abs(Math.round(performance.now()*1000)).toString(36)+Math.abs(hashTxt(String(cards.length))).toString(36); }
+function hashTxt(t){ let h=0; for(let i=0;i<t.length;i++){ h=(h<<5)-h+t.charCodeAt(i)|0; } return h; }
+function capasDe(card){ if(!card) return []; if(!card.capas) card.capas=[]; return card.capas; }
+// Devuelve el <img>/<video> de una capa, creándolo la primera vez.
+function capaEl(capa){
+  if(!capa||!capa.src) return null;
+  const c=gfxCache[capa.id];
+  if(c){ if(c._src===capa.src) return c.el; if(c.el&&c.el.pause) try{c.el.pause();}catch(e){} }
+  if(capa.k==='video'){
+    const v=document.createElement('video');
+    v.src=capa.src; v.loop=true; v.muted=true; v.playsInline=true;
+    v.oncanplay=()=>{ v.play().catch(()=>{}); repintar(); };
+    gfxCache[capa.id]={el:v,_src:capa.src};
+    return v;
+  }
+  const img=new Image();
+  img.onload=()=>repintar();
+  img.src=capa.src;
+  gfxCache[capa.id]={el:img,_src:capa.src};
+  return img;
+}
+// Caja de la capa en coordenadas de canvas.
+function capaBox(card,capa){
+  const an=ANCHORS[capa.anchor||'mc']||ANCHORS.mc;
+  const marg=(card.frameW||0)+24;
+  if(capa.k==='txt'){
+    const anchoMax=Math.round(W*((capa.maxW||70)/100));
+    const lineas=capaLineas(capa,anchoMax);
+    const sz=capa.size||44;
+    const lh=Math.round(sz*(capa.lh||1.18));
+    const alto=Math.max(lh,lineas.length*lh);
+    let ancho=0;
+    ctx.save(); ctx.font=capaFont(capa);
+    lineas.forEach(l=>{ ancho=Math.max(ancho,ctx.measureText(l).width); });
+    ctx.restore();
+    ancho=Math.min(ancho,anchoMax)||10;
+    const x=marg+(W-2*marg-ancho)*an.x+(capa.dx||0);
+    const y=marg+(H-2*marg-alto)*an.y+(capa.dy||0);
+    return {x,y,w:ancho,h:alto,lineas,lh,sz};
+  }
+  const el=capaEl(capa);
+  const nw=el?(capa.k==='video'?el.videoWidth:el.naturalWidth):0;
+  const nh=el?(capa.k==='video'?el.videoHeight:el.naturalHeight):0;
+  const ancho=Math.round(W*((capa.w||40)/100));
+  const alto=(nw&&nh)?Math.round(ancho*nh/nw):Math.round(ancho*0.75);
+  const x=marg+(W-2*marg-ancho)*an.x+(capa.dx||0);
+  const y=marg+(H-2*marg-alto)*an.y+(capa.dy||0);
+  return {x,y,w:ancho,h:alto};
+}
+function capaFont(capa){
+  const f=(FONT_BY_ID[capa.font||'franklin']||{}).css||'"Libre Franklin"';
+  return (capa.italic?'italic ':'')+(capa.weight||'700')+' '+(capa.size||44)+'px '+f;
+}
+function capaLineas(capa,anchoMax){
+  const txt=(capa.caps?String(capa.text||'').toUpperCase():String(capa.text||''));
+  const out=[];
+  ctx.save(); ctx.font=capaFont(capa);
+  txt.split('\n').forEach(par=>{
+    const pal=par.split(' ');
+    let linea='';
+    pal.forEach(w=>{
+      const prueba=linea?linea+' '+w:w;
+      if(ctx.measureText(prueba).width>anchoMax && linea){ out.push(linea); linea=w; }
+      else linea=prueba;
+    });
+    out.push(linea);
+  });
+  ctx.restore();
+  return out;
+}
+// Dibuja todas las capas de la card. Se llama desde drawChrome, así que
+// cubre los diez tipos de card de una sola vez.
+function drawCapas(card){
+  const L=capasDe(card);
+  card._capaBoxes=[];
+  if(!L.length) return;
+  const CC=(typeof getCardColors==='function')?getCardColors(card):{text:'#111'};
+  L.forEach((capa,i)=>{
+    const box=capaBox(card,capa);
+    card._capaBoxes[i]=box;
+    ctx.save();
+    ctx.globalAlpha=(capa.op===undefined?1:capa.op);
+    if(capa.k==='txt'){
+      ctx.font=capaFont(capa);
+      ctx.fillStyle=capa.color||CC.text||'#111';
+      ctx.textBaseline='top';
+      const al=capa.align||'left';
+      ctx.textAlign=al;
+      const px=al==='center'?box.x+box.w/2:al==='right'?box.x+box.w:box.x;
+      if(capa.sombra){ ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=10; }
+      box.lineas.forEach((l,li)=>{ ctx.fillText(l,px,box.y+li*box.lh); });
+      ctx.shadowBlur=0;
+    } else {
+      const el=capaEl(capa);
+      const listo=el&&(capa.k==='video'?el.videoWidth:el.naturalWidth);
+      if(listo){
+        if(capa.rot){ ctx.translate(box.x+box.w/2,box.y+box.h/2); ctx.rotate(capa.rot*Math.PI/180); ctx.translate(-(box.x+box.w/2),-(box.y+box.h/2)); }
+        ctx.drawImage(el,box.x,box.y,box.w,box.h);
+      }
+    }
+    ctx.restore();
+    // Marco de selección + manija de escala (nunca en el export)
+    if(!_isExporting && capaSel===i && cards[sel]===card){
+      const S=Math.max(2,Math.round(W/540));
+      ctx.save();
+      ctx.strokeStyle='rgba(30,110,255,0.9)'; ctx.lineWidth=S; ctx.setLineDash([S*4,S*3]);
+      ctx.strokeRect(box.x,box.y,box.w,box.h);
+      ctx.setLineDash([]);
+      const hs=Math.max(14,Math.round(W/60));
+      ctx.fillStyle='rgba(30,110,255,0.95)';
+      ctx.fillRect(box.x+box.w-hs/2,box.y+box.h-hs/2,hs,hs);
+      ctx.fillStyle='#fff';
+      ctx.fillRect(box.x+box.w-hs/2+S*1.5,box.y+box.h-hs/2+S*1.5,hs-S*3,hs-S*3);
+      ctx.restore();
+      card._capaHandle={x:box.x+box.w-hs/2,y:box.y+box.h-hs/2,w:hs,h:hs};
+    }
+  });
+}
+// Hit-test: devuelve el índice de la capa tocada (la de más arriba gana)
+function hitCapa(card,cx,cy){
+  const B=card._capaBoxes||[];
+  for(let i=B.length-1;i>=0;i--){
+    const b=B[i];
+    if(b&&cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h) return i;
+  }
+  return -1;
+}
+function agregarCapaImagen(dataUrl, k){
+  const c=cards[sel]; if(!c) return null;
+  const L=capasDe(c);
+  const capa={id:nuevaCapaId(), k:k||'img', src:dataUrl, anchor:'bc', dx:0, dy:0, w:45, op:1};
+  L.push(capa);
+  capaSel=L.length-1;
+  renderEditor(cards[sel]); renderList(); repintar();
+  setStatus('Gráfico agregado — arrastralo sobre el preview','');
+  return capa;
+}
+function agregarCapaTexto(){
+  const c=cards[sel]; if(!c) return null;
+  const L=capasDe(c);
+  const capa={id:nuevaCapaId(), k:'txt', text:'Nuevo texto', anchor:'mc', dx:0, dy:0,
+              size:48, font:'franklin', weight:'700', italic:false, caps:false,
+              color:'', align:'left', maxW:70, lh:1.18, op:1};
+  L.push(capa);
+  capaSel=L.length-1;
+  renderEditor(cards[sel]); repintar();
+  setStatus('Texto agregado — arrastralo donde quieras','');
+  return capa;
+}
+
 function drawChrome(a,cardId,dark){
+  // Las capas van encima del texto de la card y debajo del pie y el logo.
+  {var _cc=null;
+   for(var _q=0;_q<cards.length;_q++){ if(cards[_q].id===cardId){ _cc=cards[_q]; break; } }
+   if(_cc) drawCapas(_cc);}
   if(!FX.chrome){
     // La numeración es independiente del pie: si el chrome está apagado,
     // igual se dibuja (es un dato de la placa dentro del carrusel).
@@ -4854,6 +5032,7 @@ function hitWhichText(card,cx,cy){
 }
 
 let logoDrag=null;
+let capaDrag=null, capaResize=null;
 let mapDrag=null;
 let markDrag=null;
 let _wheelTimer=null;
@@ -4898,6 +5077,27 @@ canvas.addEventListener('wheel', e=>{
 canvas.addEventListener('mousedown',e=>{
   const card=cards[sel]; if(!card) return;
   const cxC=e.offsetX*(W/CVW), cyC=e.offsetY*(H/cvH());
+  // ── Capas: primero la manija de escala, después el cuerpo del elemento ──
+  if(capaSel!==null && card._capaHandle){
+    const hh=card._capaHandle;
+    if(cxC>=hh.x-6&&cxC<=hh.x+hh.w+6&&cyC>=hh.y-6&&cyC<=hh.y+hh.h+6){
+      const capa=capasDe(card)[capaSel];
+      const box=card._capaBoxes[capaSel];
+      if(capa&&box){
+        capaResize={i:capaSel, x:e.offsetX, y:e.offsetY, w0:capa.w||45, sz0:capa.size||44, bw:box.w};
+        canvas.style.cursor='nwse-resize'; e.preventDefault(); return;
+      }
+    }
+  }
+  {const iC=hitCapa(card,cxC,cyC);
+   if(iC>=0){
+     const capa=capasDe(card)[iC];
+     if(capaSel!==iC){ capaSel=iC; renderEditor(cards[sel]); }
+     capaDrag={i:iC, x:e.offsetX, y:e.offsetY, dx:capa.dx||0, dy:capa.dy||0};
+     canvas.style.cursor='grabbing'; dragGuides=true; e.preventDefault(); repintar(); return;
+   }
+   if(capaSel!==null){ capaSel=null; renderEditor(cards[sel]); repintar(); }
+  }
   // ── Logo: si el click cae sobre el círculo, se arrastra libre ──
   if(card._logoXY){
     const lg=card._logoXY;
@@ -4953,6 +5153,26 @@ canvas.addEventListener('mousedown',e=>{
 });
 
 canvas.addEventListener('mousemove',e=>{
+  if(capaResize){
+    const card=cards[sel]; const capa=card?capasDe(card)[capaResize.i]:null;
+    if(capa){
+      const dx=(e.offsetX-capaResize.x)*(W/CVW);
+      const f=Math.max(0.15,(capaResize.bw+dx)/Math.max(1,capaResize.bw));
+      if(capa.k==='txt') capa.size=Math.max(12,Math.min(240,Math.round(capaResize.sz0*f)));
+      else capa.w=Math.max(4,Math.min(140,Math.round(capaResize.w0*f)));
+      repintar();
+    }
+    return;
+  }
+  if(capaDrag){
+    const card=cards[sel]; const capa=card?capasDe(card)[capaDrag.i]:null;
+    if(capa){
+      capa.dx=Math.round(capaDrag.dx+(e.offsetX-capaDrag.x)*(W/CVW));
+      capa.dy=Math.round(capaDrag.dy+(e.offsetY-capaDrag.y)*(H/cvH()));
+      repintar();
+    }
+    return;
+  }
   // Pista visual: en cards de mapa el cursor indica que se puede arrastrar.
   if(!mapDrag && !logoDrag && !textDrag && !canvasDrag){
     const _c=cards[sel];
@@ -5057,6 +5277,8 @@ window.addEventListener('mouseup',()=>{
     }
   }
   if(logoDrag){ logoDrag=null; canvas.style.cursor=''; renderEditor(cards[sel]); repintar(); }
+  if(capaDrag||capaResize){ capaDrag=null; capaResize=null; canvas.style.cursor='';
+    dragGuides=false; if(cards[sel]) renderEditor(cards[sel]); repintar(); }
   canvasDrag=null; textDrag=null; vinDrag=null; canvas.style.cursor='';
   if(wasDragging){ dragGuides=false; if(cards[sel]&&!raf) drawCard(cards[sel],.7); }
 });
@@ -6091,6 +6313,74 @@ function renderEditor(c){
     ${graficoSection}
     ${tablaSection}
     ${vinetaSection}
+    <div class="field" id="capas-field">
+      <label>Capas <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">gráficos y textos libres, encima de la card</span></label>
+      <div style="display:flex;gap:4px;margin-bottom:6px">
+        <button class="tipo-btn" id="capa-add-img" style="flex:1">＋ Imagen</button>
+        <button class="tipo-btn" id="capa-add-vid" style="flex:1">＋ Video</button>
+        <button class="tipo-btn" id="capa-add-txt" style="flex:1">＋ Texto</button>
+      </div>
+      <input type="file" id="capa-file" accept="image/*" style="display:none">
+      <input type="file" id="capa-vfile" accept="video/webm,video/mp4,video/*" style="display:none">
+      ${(c.capas&&c.capas.length)?`
+      <div class="capa-list">
+        ${c.capas.map((g,i)=>`
+          <div class="capa-row${capaSel===i?' on':''}" data-capa="${i}">
+            <span class="capa-ico">${g.k==='txt'?'T':g.k==='video'?'▶':'▣'}</span>
+            <span class="capa-nom">${g.k==='txt'?escapeHtml(String(g.text||'').slice(0,24)||'(vacío)'):(g.k==='video'?'Video':'Imagen')}</span>
+            <button class="capa-b" data-capaup="${i}" title="Subir en el orden">↑</button>
+            <button class="capa-b" data-capadown="${i}" title="Bajar en el orden">↓</button>
+            <button class="capa-b del" data-capadel="${i}" title="Borrar">✕</button>
+          </div>`).join('')}
+      </div>
+      ${capaSel!==null&&c.capas[capaSel]?(()=>{const g=c.capas[capaSel];return `
+      <div class="capa-edit">
+        ${g.k==='txt'?`
+          <textarea class="capa-ta" id="capa-text" rows="2" placeholder="Texto…">${escapeHtml(g.text||'')}</textarea>
+          <div class="capa-grid">
+            <label>Cuerpo <b id="capa-size-v">${g.size||48}</b></label>
+            <input type="range" id="capa-size" min="12" max="240" step="1" value="${g.size||48}">
+            <label>Ancho máx <b id="capa-maxw-v">${g.maxW||70}%</b></label>
+            <input type="range" id="capa-maxw" min="15" max="100" step="1" value="${g.maxW||70}">
+          </div>
+          <select id="capa-font" class="capa-sel">
+            ${FONT_LIBRARY.map(f=>`<option value="${f.id}"${(g.font||'franklin')===f.id?' selected':''}>${f.label}</option>`).join('')}
+          </select>
+          <div style="display:flex;gap:4px;margin-top:5px">
+            <button class="tipo-btn${g.weight==='400'?'':' active'}" id="capa-bold" style="flex:1">Negrita</button>
+            <button class="tipo-btn${g.italic?' active':''}" id="capa-ital" style="flex:1">Itálica</button>
+            <button class="tipo-btn${g.caps?' active':''}" id="capa-caps" style="flex:1">MAYÚS</button>
+          </div>
+          <div style="display:flex;gap:4px;margin-top:4px">
+            ${[['left','⇤'],['center','⇔'],['right','⇥']].map(([a,l])=>`<button class="tipo-btn${(g.align||'left')===a?' active':''}" data-capaalign="${a}" style="flex:1">${l}</button>`).join('')}
+            <button class="tipo-btn${g.sombra?' active':''}" id="capa-sombra" style="flex:1" title="Sombra para que se lea sobre una foto">◐</button>
+          </div>
+          <div style="display:flex;gap:5px;align-items:center;margin-top:5px">
+            <span style="font-size:10px;color:var(--text3)">Color</span>
+            <input type="color" id="capa-color" value="${g.color||'#111111'}" style="width:34px;height:24px;padding:0;border:1px solid var(--border);background:none">
+            <button class="tipo-btn" id="capa-color-auto" style="flex:1">Automático</button>
+          </div>
+        `:`
+          <div class="capa-grid">
+            <label>Tamaño <b id="capa-w-v">${g.w||45}%</b></label>
+            <input type="range" id="capa-w" min="4" max="140" step="1" value="${g.w||45}">
+            <label>Giro <b id="capa-rot-v">${g.rot||0}°</b></label>
+            <input type="range" id="capa-rot" min="-45" max="45" step="1" value="${g.rot||0}">
+          </div>
+        `}
+        <div class="capa-grid" style="margin-top:5px">
+          <label>Opacidad <b id="capa-op-v">${Math.round((g.op===undefined?1:g.op)*100)}%</b></label>
+          <input type="range" id="capa-op" min="5" max="100" step="1" value="${Math.round((g.op===undefined?1:g.op)*100)}">
+        </div>
+        <div style="font-size:10px;color:var(--text3);letter-spacing:2px;text-transform:uppercase;margin:7px 0 4px">Ancla</div>
+        <div class="anchor-grid">
+          ${['tl','tc','tr','ml','mc','mr','bl','bc','br'].map(a=>`<div class="anchor-cell${(g.anchor||'mc')===a?' active':''}" data-capaanchor="${a}"></div>`).join('')}
+        </div>
+        <button class="tipo-btn" id="capa-reset" style="width:100%;margin-top:5px">Volver al ancla</button>
+        <div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:6px">Arrastralo sobre el preview para moverlo, y tirá del cuadrito azul de la esquina para agrandarlo o achicarlo.</div>
+      </div>`;})():''}
+      `:'<div style="font-size:11px;color:var(--text3);line-height:1.4">Sumá una imagen recortada, un video con fondo transparente o un texto suelto, y ubicalos libremente sobre la card.</div>'}
+    </div>
     <div class="field"><label>Volanta <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">opcional · ángulo superior izquierdo</span></label><input type="text" id="f-v" value="${(c.volanta||'').replace(/"/g,'&quot;')}" placeholder="Ej: ENTREVISTA A CAPUTO" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:8px;outline:none"/></div>
     <div class="field"><label>Fecha <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">ángulo inferior derecho</span></label><input type="text" id="f-fecha" value="${(c.fecha||'').replace(/"/g,'&quot;')}" placeholder="Ej: 07.JUL.2026 (vacío = hoy)" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:8px;outline:none"/></div>
     <div class="field"><label>Crédito <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">ángulo inferior izquierdo · vacío = sin crédito</span></label><input type="text" id="f-credito" value="${(c.credito!==undefined?c.credito:'').replace(/"/g,'&quot;')}" placeholder="INCERTIS (por defecto) · ej: REUTERS, AFP" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:8px;outline:none"/>
@@ -7046,6 +7336,54 @@ REGLAS IMPORTANTES:
     });
   }
 
+  // ── Capas: gráficos y textos libres ──
+  {
+    const cc=cards[sel];
+    const L=()=>capasDe(cc);
+    const g=()=> (capaSel!==null? L()[capaSel] : null);
+    const bImg=el.querySelector('#capa-add-img'), bVid=el.querySelector('#capa-add-vid'),
+          bTxt=el.querySelector('#capa-add-txt'),
+          fImg=el.querySelector('#capa-file'), fVid=el.querySelector('#capa-vfile');
+    if(bImg&&fImg){ bImg.onclick=()=>fImg.click();
+      fImg.onchange=e=>{ const f=e.target.files[0]; if(!f)return;
+        const fr=new FileReader(); fr.onload=()=>agregarCapaImagen(fr.result,'img'); fr.readAsDataURL(f); e.target.value=''; }; }
+    if(bVid&&fVid){ bVid.onclick=()=>fVid.click();
+      fVid.onchange=e=>{ const f=e.target.files[0]; if(!f)return;
+        agregarCapaImagen(URL.createObjectURL(f),'video'); e.target.value=''; }; }
+    if(bTxt) bTxt.onclick=()=>agregarCapaTexto();
+    el.querySelectorAll('[data-capa]').forEach(r=>{
+      r.onclick=ev=>{ if(ev.target.closest('.capa-b')) return;
+        capaSel=parseInt(r.dataset.capa); renderEditor(cards[sel]); repintar(); };
+    });
+    el.querySelectorAll('[data-capaup]').forEach(b=>{ b.onclick=()=>{ const i=+b.dataset.capaup, A=L();
+      if(i>0){ [A[i-1],A[i]]=[A[i],A[i-1]]; capaSel=i-1; renderEditor(cards[sel]); repintar(); } }; });
+    el.querySelectorAll('[data-capadown]').forEach(b=>{ b.onclick=()=>{ const i=+b.dataset.capadown, A=L();
+      if(i<A.length-1){ [A[i+1],A[i]]=[A[i],A[i+1]]; capaSel=i+1; renderEditor(cards[sel]); repintar(); } }; });
+    el.querySelectorAll('[data-capadel]').forEach(b=>{ b.onclick=()=>{ const i=+b.dataset.capadel, A=L();
+      const q=A[i]; if(q&&gfxCache[q.id]) delete gfxCache[q.id];
+      A.splice(i,1); capaSel=A.length?Math.min(i,A.length-1):null; renderEditor(cards[sel]); renderList(); repintar(); }; });
+    const vivo=(id,fn)=>{ const n=el.querySelector('#'+id); if(n) n.oninput=e=>{ const q=g(); if(!q)return; fn(q,e.target.value); repintar(); }; };
+    const toca=(id,fn)=>{ const n=el.querySelector('#'+id); if(n) n.onclick=()=>{ const q=g(); if(!q)return; fn(q); renderEditor(cards[sel]); repintar(); }; };
+    vivo('capa-text',(q,v)=>{ q.text=v; const nm=el.querySelector('.capa-row.on .capa-nom'); if(nm) nm.textContent=String(v).slice(0,24)||'(vacío)'; });
+    vivo('capa-size',(q,v)=>{ q.size=parseInt(v); const b=el.querySelector('#capa-size-v'); if(b)b.textContent=v; });
+    vivo('capa-maxw',(q,v)=>{ q.maxW=parseInt(v); const b=el.querySelector('#capa-maxw-v'); if(b)b.textContent=v+'%'; });
+    vivo('capa-w',(q,v)=>{ q.w=parseInt(v); const b=el.querySelector('#capa-w-v'); if(b)b.textContent=v+'%'; });
+    vivo('capa-rot',(q,v)=>{ q.rot=parseInt(v); const b=el.querySelector('#capa-rot-v'); if(b)b.textContent=v+'°'; });
+    vivo('capa-op',(q,v)=>{ q.op=parseInt(v)/100; const b=el.querySelector('#capa-op-v'); if(b)b.textContent=v+'%'; });
+    vivo('capa-color',(q,v)=>{ q.color=v; });
+    {const sf=el.querySelector('#capa-font'); if(sf) sf.onchange=e=>{ const q=g(); if(!q)return; q.font=e.target.value;
+      ensureFont(q.font,()=>repintar()); repintar(); };}
+    toca('capa-bold',q=>{ q.weight=(q.weight==='400')?'700':'400'; });
+    toca('capa-ital',q=>{ q.italic=!q.italic; });
+    toca('capa-caps',q=>{ q.caps=!q.caps; });
+    toca('capa-sombra',q=>{ q.sombra=!q.sombra; });
+    toca('capa-color-auto',q=>{ q.color=''; });
+    toca('capa-reset',q=>{ q.dx=0; q.dy=0; });
+    el.querySelectorAll('[data-capaalign]').forEach(b=>{ b.onclick=()=>{ const q=g(); if(!q)return;
+      q.align=b.dataset.capaalign; renderEditor(cards[sel]); repintar(); }; });
+    el.querySelectorAll('[data-capaanchor]').forEach(cel=>{ cel.onclick=()=>{ const q=g(); if(!q)return;
+      q.anchor=cel.dataset.capaanchor; q.dx=0; q.dy=0; renderEditor(cards[sel]); repintar(); }; });
+  }
   const fv=document.getElementById('f-v'); if(fv){ fv.oninput=e=>{cards[sel].volanta=e.target.value;redraw();}; }
   // Crédito del pie: input libre + atajos (INCERTIS por defecto, vacío = sin crédito)
   const fcr=document.getElementById('f-credito');
@@ -7182,7 +7520,8 @@ async function runSinglePrompt(instruction){
   finally{const b=document.getElementById('free-btn');if(b)b.disabled=false;}
 }
 
-function selectCard(i){sel=i;renderList();renderEditor(cards[i]);play(cards[i]);updateNavBtns();updateGifEstimate();}
+function selectCard(i){
+  capaSel=null;sel=i;renderList();renderEditor(cards[i]);play(cards[i]);updateNavBtns();updateGifEstimate();}
 
 
 function deleteCard(i){
@@ -7313,6 +7652,14 @@ document.getElementById('nav-next').onclick=()=>navigate(1);
 // ── Pegar imágenes con Ctrl/Cmd+V ──
 async function pasteImageFile(file){
   let card=cards[sel];
+  // Si la card ya tiene su foto de fondo, la que pegás ahora va como capa
+  // encima: así se pueden apilar varias.
+  if(card && mediaCache[card.id] && card.tipo!=='vineta'){
+    const fr=new FileReader();
+    fr.onload=()=>{ agregarCapaImagen(fr.result,'img'); setStatus('Imagen agregada como capa — arrastrala','') ; };
+    fr.readAsDataURL(file);
+    return;
+  }
   if(!card){
     // No hay nada seleccionado: recién ahí creamos una card nueva.
     addCard('media'); card=cards[sel];
@@ -8338,6 +8685,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v143','Capas: gráficos y textos libres','Cada card tiene ahora una pila de elementos encima del diseño. «＋ Imagen», «＋ Video» y «＋ Texto» en el panel de la card: los arrastrás sobre el preview y los escalás tirando del cuadrito azul de la esquina. Se apilan, se reordenan y cada uno tiene su ancla, opacidad y giro. Un zócalo es simplemente un elemento anclado abajo. Los textos libres suman a título, bajada y volanta: tienen su tipografía, cuerpo, color, alineación, mayúsculas y sombra. Y si pegás una imagen en una card que ya tiene foto de fondo, va como capa encima en vez de reemplazarla.'],
     ['v142','Cards ilustradas y recorte de silueta','Templates ahora tiene dos pestañas. La nueva, «Cards ilustradas», guarda una card entera —ilustración, volanta, crédito, encuadre y estilo— con el texto vacío, para las placas que se repiten como las textuales. Las imágenes viajan dentro del JSON; los videos van por su ruta en el repo. Además, en Editar con IA hay un modo «✂ Recortar silueta»: manda la foto a gpt-image y la devuelve con el fondo transparente, sin salir del editor. Y el viraje cálido del cinemático ahora se puede apagar.'],
     ['v141','Arreglos de encuadre y pegado','Pegar una imagen sobre una card de texto ya no crea una card nueva: la convierte en el lugar y conserva el título y el cuerpo. El efecto cinemático dejó de pisar el encuadre manual y ya no anula el brillo, el contraste ni el enderezar. La rueda del mouse sobre la foto hace zoom. Y se arreglaron dos fallas que dejaban el canvas sin repintar: un ReferenceError en el soltar del arrastre y una animación que quedaba trabada después de exportar.'],
     ['v140','Templates de estilo','Botón «◇ Templates» en la lista de cards: guardás cómo se ven (tipografías, tamaños, fondo, marco, logo, formato de placa, FX) y lo aplicás sobre cualquier carrusel sin tocar los textos. Los propios quedan en el navegador; bajás templates.json, lo subís al repo y pasan a estar disponibles para todo el equipo. También se importan y exportan de a uno.'],
@@ -9519,7 +9867,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v142</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v143</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
