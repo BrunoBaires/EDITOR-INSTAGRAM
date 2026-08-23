@@ -6,6 +6,15 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,700&family=Archivo+Black&family=Libre+Franklin:ital,wght@0,700;0,800;1,700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,700;0,6..96,900;1,6..96,700&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script type="module">
+  // Cliente de Vercel Blob para subir archivos al almacén del equipo.
+  // Si no carga (sin red, o el proyecto todavía no tiene el store), el editor
+  // sigue funcionando igual: simplemente no ofrece subir.
+  try{
+    const m = await import('https://esm.sh/@vercel/blob@1/client');
+    window.__blobUpload = m.upload;
+  }catch(e){ console.warn('Almacén del equipo no disponible:', e && e.message); }
+</script>
 <!-- FFmpeg: solo se usa si el navegador no soporta grabar MP4 nativo (fallback
      WebM -> MP4). Se carga en diferido para no frenar el arranque. -->
 <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js" defer></script>
@@ -556,7 +565,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v147 «templates completos»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v150 «bajar video de X»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -766,7 +775,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v147 «templates completos»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v150 «bajar video de X»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -8100,14 +8109,48 @@ function tplAchicarImagen(dataUrl, maxLado){
     img.src=dataUrl;
   });
 }
+// Sube un archivo al almacén del equipo (Vercel Blob) y devuelve su URL
+// pública. Necesita api/upload.js en el repo y un Blob store en el proyecto.
+async function subirAlEquipo(file, onProgreso){
+  if(!window.__blobUpload) throw new Error('El almacén del equipo no está disponible en esta página');
+  const clave=(document.getElementById('gate-input')&&document.getElementById('gate-input').value)||'';
+  const limpio=String(file.name||'archivo').replace(/[^\w.\-]+/g,'-').toLowerCase();
+  const res=await window.__blobUpload('incertis/'+limpio, file, {
+    access:'public',
+    handleUploadUrl:'/api/upload',
+    clientPayload: JSON.stringify({clave:clave}),
+    onUploadProgress: onProgreso ? (p)=>onProgreso(Math.round(p.percentage||0)) : undefined
+  });
+  return res.url;
+}
+// Recupera el archivo original de una media cargada, para poder subirlo.
+async function archivoDeMedia(m, nombre){
+  if(!m||!m.dataUrl) return null;
+  const r=await fetch(m.dataUrl);
+  const blob=await r.blob();
+  return new File([blob], nombre||('media.'+((blob.type.split('/')[1]||'bin').replace('quicktime','mov'))), {type:blob.type});
+}
 async function tplTomarCard(nombre, rutaVideo){
   const c=cards[sel];
   if(!c) throw new Error('No hay card seleccionada');
+  const avisos=[];
   const copia={};
   Object.keys(c).forEach(k=>{
     if(k.charAt(0)==='_' || TPL_CARD_NO.has(k)) return;
     copia[k]=JSON.parse(JSON.stringify(c[k]));
   });
+  // Las capas de video que salen de un archivo local viven en una URL temporal
+  // del navegador: no sobreviven a guardar. Se sacan y se avisa.
+  if(Array.isArray(copia.capas)){
+    const antes=copia.capas.length;
+    copia.capas=copia.capas.filter(q=>!(q&&q.k==='video'&&String(q.src||'').indexOf('blob:')===0));
+    const fuera=antes-copia.capas.length;
+    if(fuera) avisos.push(fuera+' capa'+(fuera>1?'s':'')+' de video no entró'+(fuera>1?'ron':'')+' (subí el archivo al repo)');
+    // Achicar las imágenes de capa para que el modelo no pese megas
+    for(const q of copia.capas){
+      if(q&&q.k==='img'&&q.src&&q.src.indexOf('data:')===0) q.src=await tplAchicarImagen(q.src,1200);
+    }
+  }
   const t={ v:1, nombre:(nombre||'Sin nombre').slice(0,60), fecha:new Date().toISOString().slice(0,10),
             card:copia, media:null, formato:currentFormat };
   const m=mediaCache[c.id];
@@ -8120,14 +8163,17 @@ async function tplTomarCard(nombre, rutaVideo){
     if(m.type==='img' && m.dataUrl && m.dataUrl.indexOf('data:')===0){
       enc.dataUrl=await tplAchicarImagen(m.dataUrl, 1400);
     } else if(m.type==='video'){
-      // Un video no entra en un JSON: se guarda la ruta a un archivo del repo.
-      if(!rutaVideo) throw new Error('Para un modelo con video hace falta la ruta del archivo en el repo');
-      enc.src=rutaVideo;
+      // Un video no entra en un JSON. Si diste la ruta al archivo del repo, va;
+      // si no, el modelo se guarda igual pero sin el video.
+      if(rutaVideo) enc.src=rutaVideo;
+      else { avisos.push('el video de fondo no se guardó: poné su ruta en el repo para incluirlo'); }
     } else if(m.dataUrl && m.dataUrl.indexOf('data:')===0){
       enc.dataUrl=m.dataUrl;
     }
-    t.media=enc;
+    // Sin dataUrl ni src no hay nada que guardar de la media
+    if(enc.dataUrl||enc.src) t.media=enc;
   }
+  t._avisos=avisos;
   return t;
 }
 async function tplInsertarCard(t){
@@ -8198,7 +8244,10 @@ function openTemplatesPanel(){
         '<div class="tpl-sec" style="margin-top:10px">Mías, en este navegador</div><div id="tplc-mias"></div>'+
         '<div class="tpl-sec" style="margin-top:10px">Guardar la card seleccionada como modelo</div>'+
         '<div class="tpl-nuevo"><input type="text" id="tplc-nom" placeholder="Ej: Textual del presidente" maxlength="60"><button class="btn-p" id="tplc-save">Guardar</button></div>'+
-        '<input type="text" id="tplc-video" class="tplc-ruta" placeholder="Si la card tiene VIDEO: ruta del archivo en el repo, ej. media/presidente.webm">'+
+        '<div style="display:flex;gap:6px;align-items:stretch">'+
+          '<input type="text" id="tplc-video" class="tplc-ruta" placeholder="URL o ruta del video (se completa sola al subirlo)">'+
+          '<button class="btn-g" id="tplc-subir" style="white-space:nowrap">☁ Subir al equipo</button>'+
+        '</div>'+
         '<div class="wa-note">Una card modelo se guarda entera —ilustración, volanta, crédito y estilo— con el texto vacío. Al insertarla, solo escribís la frase. Las imágenes viajan dentro del archivo; los videos no, así que el archivo tiene que estar en el repo y acá va su ruta.</div>'+
       '</div>'+
     '</div>'+
@@ -8317,6 +8366,27 @@ function openTemplatesPanel(){
   pintarCardsMias();
   tplCargarCardsEquipo().then(pintarCardsEquipo);
 
+  {const bSub=ov.querySelector('#tplc-subir');
+   if(bSub) bSub.onclick=async()=>{
+     const c=cards[sel];
+     const m=c?mediaCache[c.id]:null;
+     if(!m||m.type!=='video'){ setStatus('Esta card no tiene un video de fondo para subir','warn'); return; }
+     if(!window.__blobUpload){ setStatus('El almacén del equipo todavía no está configurado en el sitio','error'); return; }
+     bSub.disabled=true; bSub.textContent='Subiendo…';
+     try{
+       const f=await archivoDeMedia(m, 'video-card.webm');
+       if(!f) throw new Error('no se pudo leer el video');
+       const url=await subirAlEquipo(f, pct=>{ bSub.textContent='Subiendo '+pct+'%'; });
+       inpRuta.value=url;
+       bSub.textContent='✓ Subido';
+       setStatus('Video en el almacén del equipo — ahora guardá la card modelo','');
+     }catch(err){
+       console.error(err);
+       bSub.textContent='☁ Subir al equipo'; bSub.disabled=false;
+       setStatus('No se pudo subir: '+(err.message||'error'),'error');
+     }
+   };}
+
   const inpC=ov.querySelector('#tplc-nom');
   ov.querySelector('#tplc-save').onclick=async()=>{
     const nombre=(inpC.value||'').trim();
@@ -8326,10 +8396,15 @@ function openTemplatesPanel(){
     btn.disabled=true; btn.textContent='Guardando…';
     try{
       const t=await tplTomarCard(nombre,(inpRuta.value||'').trim());
+      const avisos=t._avisos||[]; delete t._avisos;
       const l=tplCardsMias();
       const ya=l.findIndex(x=>x&&x.nombre===nombre);
       if(ya>=0) l[ya]=t; else l.push(t);
-      if(tplCardsGuardar(l)){ inpC.value=''; pintarCardsMias(); setStatus('Card modelo «'+nombre+'» guardada',''); }
+      if(tplCardsGuardar(l)){
+        inpC.value=''; pintarCardsMias();
+        setStatus(avisos.length ? ('Guardada, pero '+avisos.join(' · ')) : ('Card modelo «'+nombre+'» guardada'),
+                  avisos.length?'warn':'');
+      }
     }catch(e){
       setStatus(e.message,'warn');
     }
@@ -8755,6 +8830,9 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v150','Puente para bajar el video de X','El video de un post se veía en el panel pero no se podía traer al editor. Un <video> reproduce sin permiso de origen cruzado; fetch() lo necesita, y X no lo da. Ahora hay un puente propio, api/media, que baja el archivo del lado del servidor y lo devuelve con el permiso puesto. Los proxies públicos quedan de respaldo. También lo usan las fotos.'],
+    ['v149','Almacén de archivos del equipo','Botón «☁ Subir al equipo» en las cards ilustradas: manda el video a un almacén en la nube y deja su URL en el modelo, así la card le funciona a todos sin pasar archivos a mano. Necesita que el proyecto de Vercel tenga un Blob store y que el repo tenga api/upload.js y package.json. Si eso no está, el editor funciona igual y el botón avisa.'],
+    ['v148','Guardar cards con video ya no se traba','Antes, si la card tenía un video, guardarla como modelo fallaba salvo que pusieras la ruta del archivo en el repo. Ahora se guarda igual —con su volanta, su marco, su estilo y sus capas de imagen— y avisa que el video quedó afuera. Si después ponés la ruta, se incluye. Las capas de imagen de un modelo también se achican para que el archivo no pese de más.'],
     ['v147','Templates de estilo que guardaban de menos','Un template solo guardaba los campos que habías tocado a mano. Si armabas el look sobre una card recién generada, la mayoría de los valores seguían sin escribir y el template salía casi vacío: al aplicarlo no cambiaba nada. Ahora guarda el estilo completo, con los valores por defecto donde corresponde, así aplicarlo deja todas las cards igual de verdad.'],
     ['v146','Capas a sangre','Las capas ya no tienen un margen forzado: pueden llegar hasta el borde de la placa, que es lo que hace falta para un zócalo o un fondo a sangre. El tamaño llega hasta 300% y hay un botón «⤢ A toda la placa» que escala la capa hasta cubrirla entera respetando su proporción.'],
     ['v145','Capas detrás de la foto y con ajustes','Cada capa tiene ahora un botón «⤓ Detrás de la foto de la card»: la manda abajo de la imagen de fondo, así un video puede asomar por los huecos transparentes de una silueta recortada. Y las capas de imagen y video ganaron brillo, contraste, saturación y blanco y negro, los mismos ajustes que ya tenía la foto de fondo.'],
@@ -9733,6 +9811,10 @@ function sendPhotoToStudio(src, alt, opts){
 // Baja un video (por proxy si hace falta) y devuelve el blob.
 function videoToBlob(src){
   var tries=[
+    // 1º el puente propio del sitio (api/media). Es el único confiable para
+    // video: los proxies públicos se caen o cortan los archivos grandes.
+    "/api/media?url="+encodeURIComponent(src),
+    // 2º directo, por si el origen sí permite origen cruzado
     src,
     "https://api.allorigins.win/raw?url="+encodeURIComponent(src),
     "https://corsproxy.io/?url="+encodeURIComponent(src)
@@ -9836,6 +9918,7 @@ window.openVinetaReservorioPicker=openVinetaReservorioPicker;
 // baja imagen por proxy y devuelve dataURL
 function imgToDataURL(src){
   var tries=[
+    "/api/media?url="+encodeURIComponent(src),
     "https://api.allorigins.win/raw?url="+encodeURIComponent(src),
     "https://corsproxy.io/?url="+encodeURIComponent(src),
     src
@@ -9941,7 +10024,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v147</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v150</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
@@ -10185,6 +10268,7 @@ function renderNota(){
           bv.disabled=false;
           bv.textContent="No se pudo bajar — reintentar";
           console.error(err);
+          setStatus('El video no se pudo bajar. X no deja descargarlo desde el navegador: hace falta el puente api/media en el sitio.','warn');
         });
       };
       vb.appendChild(bv);
