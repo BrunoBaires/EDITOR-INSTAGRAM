@@ -556,7 +556,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v145 «capas al fondo»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v146 «capas a sangre»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -766,7 +766,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v145 «capas al fondo»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v146 «capas a sangre»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -2109,7 +2109,9 @@ function capaEl(capa){
 // Caja de la capa en coordenadas de canvas.
 function capaBox(card,capa){
   const an=ANCHORS[capa.anchor||'mc']||ANCHORS.mc;
-  const marg=(card.frameW||0)+24;
+  // Sin margen: una capa tiene que poder llegar hasta el borde de la placa
+  // (un zócalo o un fondo a sangre). El aire lo pone el usuario con dx/dy.
+  const marg=0;
   if(capa.k==='txt'){
     const anchoMax=Math.round(W*((capa.maxW||70)/100));
     const lineas=capaLineas(capa,anchoMax);
@@ -5185,7 +5187,7 @@ canvas.addEventListener('mousemove',e=>{
       const dx=(e.offsetX-capaResize.x)*(W/CVW);
       const f=Math.max(0.15,(capaResize.bw+dx)/Math.max(1,capaResize.bw));
       if(capa.k==='txt') capa.size=Math.max(12,Math.min(240,Math.round(capaResize.sz0*f)));
-      else capa.w=Math.max(4,Math.min(140,Math.round(capaResize.w0*f)));
+      else capa.w=Math.max(4,Math.min(300,Math.round(capaResize.w0*f)));
       repintar();
     }
     return;
@@ -6390,7 +6392,7 @@ function renderEditor(c){
         `:`
           <div class="capa-grid">
             <label>Tamaño <b id="capa-w-v">${g.w||45}%</b></label>
-            <input type="range" id="capa-w" min="4" max="140" step="1" value="${g.w||45}">
+            <input type="range" id="capa-w" min="4" max="300" step="1" value="${g.w||45}">
             <label>Giro <b id="capa-rot-v">${g.rot||0}°</b></label>
             <input type="range" id="capa-rot" min="-45" max="45" step="1" value="${g.rot||0}">
             <label>Brillo <b id="capa-bri-v">${g.adjBright===undefined?100:g.adjBright}%</b></label>
@@ -6414,7 +6416,10 @@ function renderEditor(c){
         <div class="anchor-grid">
           ${['tl','tc','tr','ml','mc','mr','bl','bc','br'].map(a=>`<div class="anchor-cell${(g.anchor||'mc')===a?' active':''}" data-capaanchor="${a}"></div>`).join('')}
         </div>
-        <button class="tipo-btn" id="capa-reset" style="width:100%;margin-top:5px">Volver al ancla</button>
+        <div style="display:flex;gap:4px;margin-top:5px">
+          <button class="tipo-btn" id="capa-reset" style="flex:1">Volver al ancla</button>
+          ${g.k!=='txt'?`<button class="tipo-btn" id="capa-full" style="flex:1" title="Que cubra toda la placa, a sangre">⤢ A toda la placa</button>`:''}
+        </div>
         <div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:6px">Arrastralo sobre el preview para moverlo, y tirá del cuadrito azul de la esquina para agrandarlo o achicarlo.</div>
       </div>`;})():''}
       `:'<div style="font-size:11px;color:var(--text3);line-height:1.4">Sumá una imagen recortada, un video con fondo transparente o un texto suelto, y ubicalos libremente sobre la card.</div>'}
@@ -7421,6 +7426,18 @@ REGLAS IMPORTANTES:
     toca('capa-color-auto',q=>{ q.color=''; });
     toca('capa-reset',q=>{ q.dx=0; q.dy=0; });
     toca('capa-bw',q=>{ q.fxBW=!q.fxBW; });
+    toca('capa-full',q=>{
+      // Escala la capa hasta tapar la placa entera, respetando su proporción.
+      const el=capaEl(q);
+      const nw=el?(q.k==='video'?el.videoWidth:el.naturalWidth):0;
+      const nh=el?(q.k==='video'?el.videoHeight:el.naturalHeight):0;
+      if(nw&&nh){
+        const necesarioW=100;
+        const necesarioH=(H/W)*100*(nw/nh);
+        q.w=Math.ceil(Math.max(necesarioW,necesarioH));
+      } else q.w=100;
+      q.anchor='mc'; q.dx=0; q.dy=0;
+    });
     toca('capa-adj-reset',q=>{ q.adjBright=100; q.adjContrast=100; q.adjSat=100; q.fxBW=false; });
     toca('capa-atras',q=>{ q.atras=!q.atras;
       setStatus(q.atras?'La capa va detrás de la foto de la card':'La capa vuelve al frente',''); });
@@ -8730,6 +8747,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v146','Capas a sangre','Las capas ya no tienen un margen forzado: pueden llegar hasta el borde de la placa, que es lo que hace falta para un zócalo o un fondo a sangre. El tamaño llega hasta 300% y hay un botón «⤢ A toda la placa» que escala la capa hasta cubrirla entera respetando su proporción.'],
     ['v145','Capas detrás de la foto y con ajustes','Cada capa tiene ahora un botón «⤓ Detrás de la foto de la card»: la manda abajo de la imagen de fondo, así un video puede asomar por los huecos transparentes de una silueta recortada. Y las capas de imagen y video ganaron brillo, contraste, saturación y blanco y negro, los mismos ajustes que ya tenía la foto de fondo.'],
     ['v144','Capas: orden y un id que se repetía','Dos arreglos de las capas. Los identificadores podían salir iguales si agregabas dos elementos seguidos, y entonces compartían el archivo cacheado: una de las dos capas no se dibujaba. Y la lista mostraba primero la capa del fondo; ahora la de arriba de la lista es la que va adelante, como en cualquier editor, y las flechas siguen ese orden.'],
     ['v143','Capas: gráficos y textos libres','Cada card tiene ahora una pila de elementos encima del diseño. «＋ Imagen», «＋ Video» y «＋ Texto» en el panel de la card: los arrastrás sobre el preview y los escalás tirando del cuadrito azul de la esquina. Se apilan, se reordenan y cada uno tiene su ancla, opacidad y giro. Un zócalo es simplemente un elemento anclado abajo. Los textos libres suman a título, bajada y volanta: tienen su tipografía, cuerpo, color, alineación, mayúsculas y sombra. Y si pegás una imagen en una card que ya tiene foto de fondo, va como capa encima en vez de reemplazarla.'],
@@ -9914,7 +9932,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v145</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v146</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
