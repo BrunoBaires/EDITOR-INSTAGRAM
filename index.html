@@ -556,7 +556,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v143 «capas»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v144 «capas»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -766,7 +766,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v143 «capas»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v144 «capas»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -2065,9 +2065,22 @@ function drawCardNumber(card,dark){
 function escapeHtml(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 const gfxCache={};
 let capaSel=null;            // índice de la capa seleccionada, o null
-function nuevaCapaId(){ return 'g'+Math.abs(Math.round(performance.now()*1000)).toString(36)+Math.abs(hashTxt(String(cards.length))).toString(36); }
+let _capaN=0;
+function nuevaCapaId(){ _capaN++; return 'g'+_capaN+'x'+Math.abs(Math.round(performance.now())).toString(36); }
 function hashTxt(t){ let h=0; for(let i=0;i<t.length;i++){ h=(h<<5)-h+t.charCodeAt(i)|0; } return h; }
-function capasDe(card){ if(!card) return []; if(!card.capas) card.capas=[]; return card.capas; }
+function capasDe(card){
+  if(!card) return [];
+  if(!card.capas) card.capas=[];
+  // Blindaje: si dos capas comparten id (o vienen sin id de un modelo
+  // duplicado), se pisarían el elemento cacheado y una no se dibujaría.
+  const vistos={};
+  card.capas.forEach(q=>{
+    if(!q) return;
+    if(!q.id || vistos[q.id]) q.id=nuevaCapaId();
+    vistos[q.id]=1;
+  });
+  return card.capas;
+}
 // Devuelve el <img>/<video> de una capa, creándolo la primera vez.
 function capaEl(capa){
   if(!capa||!capa.src) return null;
@@ -6323,15 +6336,16 @@ function renderEditor(c){
       <input type="file" id="capa-file" accept="image/*" style="display:none">
       <input type="file" id="capa-vfile" accept="video/webm,video/mp4,video/*" style="display:none">
       ${(c.capas&&c.capas.length)?`
+      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">La de arriba de la lista es la que va adelante</div>
       <div class="capa-list">
-        ${c.capas.map((g,i)=>`
+        ${c.capas.map((g,i)=>i).reverse().map(i=>{const g=c.capas[i];return `
           <div class="capa-row${capaSel===i?' on':''}" data-capa="${i}">
             <span class="capa-ico">${g.k==='txt'?'T':g.k==='video'?'▶':'▣'}</span>
             <span class="capa-nom">${g.k==='txt'?escapeHtml(String(g.text||'').slice(0,24)||'(vacío)'):(g.k==='video'?'Video':'Imagen')}</span>
-            <button class="capa-b" data-capaup="${i}" title="Subir en el orden">↑</button>
-            <button class="capa-b" data-capadown="${i}" title="Bajar en el orden">↓</button>
+            <button class="capa-b" data-capaup="${i}" title="Traer al frente">↑</button>
+            <button class="capa-b" data-capadown="${i}" title="Mandar atrás">↓</button>
             <button class="capa-b del" data-capadel="${i}" title="Borrar">✕</button>
-          </div>`).join('')}
+          </div>`;}).join('')}
       </div>
       ${capaSel!==null&&c.capas[capaSel]?(()=>{const g=c.capas[capaSel];return `
       <div class="capa-edit">
@@ -7356,9 +7370,9 @@ REGLAS IMPORTANTES:
         capaSel=parseInt(r.dataset.capa); renderEditor(cards[sel]); repintar(); };
     });
     el.querySelectorAll('[data-capaup]').forEach(b=>{ b.onclick=()=>{ const i=+b.dataset.capaup, A=L();
-      if(i>0){ [A[i-1],A[i]]=[A[i],A[i-1]]; capaSel=i-1; renderEditor(cards[sel]); repintar(); } }; });
-    el.querySelectorAll('[data-capadown]').forEach(b=>{ b.onclick=()=>{ const i=+b.dataset.capadown, A=L();
       if(i<A.length-1){ [A[i+1],A[i]]=[A[i],A[i+1]]; capaSel=i+1; renderEditor(cards[sel]); repintar(); } }; });
+    el.querySelectorAll('[data-capadown]').forEach(b=>{ b.onclick=()=>{ const i=+b.dataset.capadown, A=L();
+      if(i>0){ [A[i-1],A[i]]=[A[i],A[i-1]]; capaSel=i-1; renderEditor(cards[sel]); repintar(); } }; });
     el.querySelectorAll('[data-capadel]').forEach(b=>{ b.onclick=()=>{ const i=+b.dataset.capadel, A=L();
       const q=A[i]; if(q&&gfxCache[q.id]) delete gfxCache[q.id];
       A.splice(i,1); capaSel=A.length?Math.min(i,A.length-1):null; renderEditor(cards[sel]); renderList(); repintar(); }; });
@@ -8685,6 +8699,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v144','Capas: orden y un id que se repetía','Dos arreglos de las capas. Los identificadores podían salir iguales si agregabas dos elementos seguidos, y entonces compartían el archivo cacheado: una de las dos capas no se dibujaba. Y la lista mostraba primero la capa del fondo; ahora la de arriba de la lista es la que va adelante, como en cualquier editor, y las flechas siguen ese orden.'],
     ['v143','Capas: gráficos y textos libres','Cada card tiene ahora una pila de elementos encima del diseño. «＋ Imagen», «＋ Video» y «＋ Texto» en el panel de la card: los arrastrás sobre el preview y los escalás tirando del cuadrito azul de la esquina. Se apilan, se reordenan y cada uno tiene su ancla, opacidad y giro. Un zócalo es simplemente un elemento anclado abajo. Los textos libres suman a título, bajada y volanta: tienen su tipografía, cuerpo, color, alineación, mayúsculas y sombra. Y si pegás una imagen en una card que ya tiene foto de fondo, va como capa encima en vez de reemplazarla.'],
     ['v142','Cards ilustradas y recorte de silueta','Templates ahora tiene dos pestañas. La nueva, «Cards ilustradas», guarda una card entera —ilustración, volanta, crédito, encuadre y estilo— con el texto vacío, para las placas que se repiten como las textuales. Las imágenes viajan dentro del JSON; los videos van por su ruta en el repo. Además, en Editar con IA hay un modo «✂ Recortar silueta»: manda la foto a gpt-image y la devuelve con el fondo transparente, sin salir del editor. Y el viraje cálido del cinemático ahora se puede apagar.'],
     ['v141','Arreglos de encuadre y pegado','Pegar una imagen sobre una card de texto ya no crea una card nueva: la convierte en el lugar y conserva el título y el cuerpo. El efecto cinemático dejó de pisar el encuadre manual y ya no anula el brillo, el contraste ni el enderezar. La rueda del mouse sobre la foto hace zoom. Y se arreglaron dos fallas que dejaban el canvas sin repintar: un ReferenceError en el soltar del arrastre y una animación que quedaba trabada después de exportar.'],
@@ -9867,7 +9882,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v143</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v144</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
