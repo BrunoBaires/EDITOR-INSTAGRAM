@@ -7,6 +7,11 @@
 // Requiere que el proyecto tenga un Blob store conectado (Storage → Blob),
 // que es lo que crea la variable BLOB_READ_WRITE_TOKEN.
 
+// Corre como Edge Function. Sin esta línea, Vercel la trata como función
+// de Node, que usa otra forma de recibir el pedido y responder, y falla
+// con error 500.
+export const config = { runtime: 'edge' };
+
 import { handleUpload } from '@vercel/blob/client';
 
 // Lo que se acepta subir. Cualquier otra cosa se rechaza.
