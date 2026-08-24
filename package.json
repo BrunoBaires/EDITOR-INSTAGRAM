@@ -2,10 +2,11 @@
   "name": "editor-instagram",
   "private": true,
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "build": "echo \"Sitio estatico: no hay nada que compilar\""
   },
   "dependencies": {
-    "@vercel/blob": "^1.0.0"
+    "@vercel/blob": "^2.8.0"
   }
 }

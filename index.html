@@ -11,8 +11,11 @@
   // Si no carga (sin red, o el proyecto todavía no tiene el store), el editor
   // sigue funcionando igual: simplemente no ofrece subir.
   try{
-    const m = await import('https://esm.sh/@vercel/blob@1/client');
-    window.__blobUpload = m.upload;
+    const m = await import('https://esm.sh/@vercel/blob@2/client');
+    // uploadPresigned, no upload: el servidor ya no puede fabricar tokens de
+    // cliente (Vercel dejó de entregar BLOB_READ_WRITE_TOKEN), así que ahora
+    // devuelve una URL firmada y el navegador sube directo a ella.
+    window.__blobUpload = m.uploadPresigned || m.upload;
   }catch(e){ console.warn('Almacén del equipo no disponible:', e && e.message); }
 </script>
 <!-- FFmpeg: solo se usa si el navegador no soporta grabar MP4 nativo (fallback
@@ -568,7 +571,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v152 «modelos livianos»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v153 «almacén con OIDC»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -778,7 +781,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v152 «modelos livianos»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v153 «almacén con OIDC»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -8996,6 +8999,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v153','El almacén, conectado','Vercel cambió cómo se autentican los almacenes: dejó de entregar el token largo y pasó a credenciales que se renuevan solas (OIDC). El editor y sus funciones ahora usan ese sistema, y las subidas de ilustraciones y videos van por URL firmada en vez de token de cliente. Para el equipo no cambia nada, salvo que ahora funciona.'],
     ['v152','Ilustraciones y videos fuera del JSON','Las cards modelo ya no llevan la foto adentro del archivo compartido: la ilustración y el video se guardan como archivos en el almacén y el registro solo se queda con su dirección y una miniatura de unos pocos KB. Así el editor no baja todo el material cada vez que abre, y la lista puede crecer a cientos de cards sin volverse pesada. El video ya no pide poner la ruta a mano: se sube solo al guardar.'],
     ['v151','Templates compartidos de verdad','Se acabó exportar y subir JSONs a mano. Los templates y las cards modelo se guardan en un almacén compartido: apretás Guardar y en ese momento le quedan disponibles a todo el equipo. Cada uno manda solo el suyo, así dos personas guardando a la vez no se pisan. Borrar también borra para todos. Si el almacén no está montado, el editor sigue funcionando como antes, leyendo del repo y guardando en el navegador, y lo dice en el panel.'],
     ['v150','Puente para bajar el video de X','El video de un post se veía en el panel pero no se podía traer al editor. Un <video> reproduce sin permiso de origen cruzado; fetch() lo necesita, y X no lo da. Ahora hay un puente propio, api/media, que baja el archivo del lado del servidor y lo devuelve con el permiso puesto. Los proxies públicos quedan de respaldo. También lo usan las fotos.'],
@@ -10192,7 +10196,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v152</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v153</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
