@@ -549,6 +549,10 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 (function(){
   // Contraseña de acceso. Cambiala por la que quieras.
   var INCERTIS_PASS = "incertis2026";
+  // El almacén del equipo la necesita para aceptar lo que se guarda. Se toma
+  // de acá y no de lo que se haya tipeado, porque cuando la sesión ya está
+  // validada el cuadro de contraseña ni siquiera aparece y queda vacío.
+  window.__incertisPass = INCERTIS_PASS;
   var gate=document.getElementById("incertis-gate");
   var input=document.getElementById("gate-input");
   var btn=document.getElementById("gate-btn");
@@ -571,7 +575,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v153 «almacén con OIDC»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v154 «guardar de verdad»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -781,7 +785,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v153 «almacén con OIDC»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v154 «guardar de verdad»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -7977,6 +7981,14 @@ const TPL_TIPO={
 };
 let TPL_EQUIPO=[];   // los que vienen del almacén del equipo (o del repo)
 let TPL_STORE_OK=null;   // null = todavía no sabemos si hay almacén
+// La clave que el almacén exige para aceptar un guardado. Viene de la propia
+// página (la misma del acceso), no del cuadro de texto: al recargar, la sesión
+// ya está validada, el cuadro no se muestra y su valor queda vacío. Ese era el
+// motivo por el que los templates se guardaban solo en el navegador.
+function claveEquipo(){
+  var g=document.getElementById('gate-input');
+  return window.__incertisPass || (g&&g.value) || '';
+}
 // Lee una colección del almacén compartido. Si no está montado, devuelve null
 // y el editor cae al archivo del repo, como venía funcionando.
 async function storeLeer(coleccion){
@@ -7992,7 +8004,7 @@ async function storeLeer(coleccion){
 // Guarda UN template en el almacén. Manda solo ese, no la lista entera, para
 // que dos personas guardando a la vez no se borren lo del otro.
 async function storeGuardar(coleccion,item){
-  const clave=(document.getElementById('gate-input')&&document.getElementById('gate-input').value)||'';
+  const clave=claveEquipo();
   const r=await fetch('/api/store?c='+coleccion,{
     method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({item:item, clave:clave})
@@ -8002,7 +8014,7 @@ async function storeGuardar(coleccion,item){
   return j.lista||[];
 }
 async function storeBorrar(coleccion,nombre){
-  const clave=(document.getElementById('gate-input')&&document.getElementById('gate-input').value)||'';
+  const clave=claveEquipo();
   const r=await fetch('/api/store?c='+coleccion,{
     method:'POST', headers:{'Content-Type':'application/json'},
     body:JSON.stringify({borrar:nombre, clave:clave})
@@ -8160,7 +8172,7 @@ function tplAchicarImagen(dataUrl, maxLado){
 // pública. Necesita api/upload.js en el repo y un Blob store en el proyecto.
 async function subirAlEquipo(file, onProgreso){
   if(!window.__blobUpload) throw new Error('El almacén del equipo no está disponible en esta página');
-  const clave=(document.getElementById('gate-input')&&document.getElementById('gate-input').value)||'';
+  const clave=claveEquipo();
   const limpio=String(file.name||'archivo').replace(/[^\w.\-]+/g,'-').toLowerCase();
   const res=await window.__blobUpload('incertis/'+limpio, file, {
     access:'public',
@@ -8999,6 +9011,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v154','Los templates llegan al equipo','Guardar publicaba solo en el navegador de cada uno. La clave que el almacén pide para aceptar un guardado se leía del cuadro de contraseña, pero al recargar la sesión ya está validada, ese cuadro no aparece y su valor queda vacío: el almacén rechazaba el guardado y el editor caía a la copia local. Ahora la clave se toma de la propia página, así que guardar publica siempre.'],
     ['v153','El almacén, conectado','Vercel cambió cómo se autentican los almacenes: dejó de entregar el token largo y pasó a credenciales que se renuevan solas (OIDC). El editor y sus funciones ahora usan ese sistema, y las subidas de ilustraciones y videos van por URL firmada en vez de token de cliente. Para el equipo no cambia nada, salvo que ahora funciona.'],
     ['v152','Ilustraciones y videos fuera del JSON','Las cards modelo ya no llevan la foto adentro del archivo compartido: la ilustración y el video se guardan como archivos en el almacén y el registro solo se queda con su dirección y una miniatura de unos pocos KB. Así el editor no baja todo el material cada vez que abre, y la lista puede crecer a cientos de cards sin volverse pesada. El video ya no pide poner la ruta a mano: se sube solo al guardar.'],
     ['v151','Templates compartidos de verdad','Se acabó exportar y subir JSONs a mano. Los templates y las cards modelo se guardan en un almacén compartido: apretás Guardar y en ese momento le quedan disponibles a todo el equipo. Cada uno manda solo el suyo, así dos personas guardando a la vez no se pisan. Borrar también borra para todos. Si el almacén no está montado, el editor sigue funcionando como antes, leyendo del repo y guardando en el navegador, y lo dice en el panel.'],
@@ -10196,7 +10209,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v153</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v154</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
