@@ -10,19 +10,31 @@
 // Guardar manda UN template, no la lista entera: así dos personas que guardan
 // al mismo tiempo no se pisan lo del otro.
 //
-// Escrita como función de Node (req, res), que es la forma que Vercel usa por
-// defecto en la carpeta /api de un sitio estático.
+// AUTENTICACIÓN. Vercel ya no entrega el token largo BLOB_READ_WRITE_TOKEN
+// cuando conectás un store: usa OIDC, que da credenciales que se renuevan
+// solas. Y —esto es lo que costó encontrar— dentro de una función el token
+// OIDC NO viene en process.env: viene en el encabezado x-vercel-oidc-token
+// del pedido. Por eso hay que leerlo de ahí y pasárselo a la librería junto
+// con el id del store.
 //
-// Ojo con los import: si @vercel/blob se importa arriba de todo y falla al
-// cargar (no instalada, versión que no corresponde), la función se cae ANTES de
-// llegar al try y Vercel devuelve el 500 genérico —FUNCTION_INVOCATION_FAILED—
-// sin decir por qué. Por eso la librería se carga adentro del try, con import()
-// dinámico: así cualquier problema vuelve como texto legible.
+// La librería se carga con import() dinámico adentro del try: si se importa
+// arriba de todo y falla, la función se cae antes del try y Vercel devuelve un
+// 500 mudo (FUNCTION_INVOCATION_FAILED) sin decir por qué.
 
 const COLECCIONES = {
   templates: 'store/templates.json',
   cards: 'store/cards-modelo.json'
 };
+
+// Credenciales, en el orden en que conviene probarlas.
+function credenciales(req) {
+  const h = (req && req.headers) || {};
+  const oidc = h['x-vercel-oidc-token'] || process.env.VERCEL_OIDC_TOKEN;
+  const storeId = process.env.BLOB_STORE_ID;
+  if (oidc && storeId) return { oidcToken: oidc, storeId };
+  if (process.env.BLOB_READ_WRITE_TOKEN) return { token: process.env.BLOB_READ_WRITE_TOKEN };
+  return {};
+}
 
 let _blob = null;
 async function blob() {
@@ -30,9 +42,9 @@ async function blob() {
   return _blob;
 }
 
-async function leer(ruta) {
+async function leer(ruta, cred) {
   const { list } = await blob();
-  const { blobs } = await list({ prefix: ruta, limit: 1 });
+  const { blobs } = await list({ ...cred, prefix: ruta, limit: 1 });
   const b = blobs.find(x => x.pathname === ruta);
   if (!b) return [];
   const r = await fetch(b.url + '?t=' + Date.now(), { cache: 'no-store' });
@@ -41,9 +53,10 @@ async function leer(ruta) {
   return Array.isArray(j) ? j : [];
 }
 
-async function escribir(ruta, lista) {
+async function escribir(ruta, lista, cred) {
   const { put } = await blob();
   await put(ruta, JSON.stringify(lista, null, 2), {
+    ...cred,
     access: 'public',
     contentType: 'application/json',
     addRandomSuffix: false,
@@ -63,8 +76,10 @@ export default async function handler(req, res) {
       return;
     }
 
+    const cred = credenciales(req);
+
     if (req.method === 'GET') {
-      res.status(200).json(await leer(ruta));
+      res.status(200).json(await leer(ruta, cred));
       return;
     }
 
@@ -79,11 +94,11 @@ export default async function handler(req, res) {
         return;
       }
 
-      const lista = await leer(ruta);
+      const lista = await leer(ruta, cred);
 
       if (body.borrar) {
         const quedan = lista.filter(t => t && t.nombre !== body.borrar);
-        await escribir(ruta, quedan);
+        await escribir(ruta, quedan, cred);
         res.status(200).json({ ok: true, total: quedan.length, lista: quedan });
         return;
       }
@@ -97,7 +112,7 @@ export default async function handler(req, res) {
       const i = lista.findIndex(t => t && t.nombre === item.nombre);
       if (i >= 0) lista[i] = item; else lista.push(item);
 
-      await escribir(ruta, lista);
+      await escribir(ruta, lista, cred);
       res.status(200).json({ ok: true, total: lista.length, lista });
       return;
     }
@@ -106,10 +121,11 @@ export default async function handler(req, res) {
   } catch (e) {
     // El mensaje real va en la respuesta, para poder diagnosticar sin logs.
     try {
+      const cred = credenciales(req);
       res.status(500).json({
         error: String((e && e.message) || e),
         donde: (e && e.stack) ? String(e.stack).split('\n').slice(0, 4).join(' | ') : null,
-        hayToken: !!process.env.BLOB_READ_WRITE_TOKEN
+        credencial: cred.oidcToken ? 'oidc' : (cred.token ? 'token' : 'ninguna')
       });
     } catch (e2) {
       res.statusCode = 500;
