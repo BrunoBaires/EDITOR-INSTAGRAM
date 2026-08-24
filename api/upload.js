@@ -1,40 +1,32 @@
-// Ruta que autoriza las subidas al almacén de archivos del equipo.
+// Ruta que autoriza las subidas de archivos al almacén del equipo.
 //
 // El archivo NO pasa por acá: el navegador lo manda directo a Vercel Blob.
-// Esta función solo entrega el permiso para hacerlo, y por eso puede aceptar
-// videos grandes sin chocar con el límite de 4,5 MB de las funciones.
+// Esta función solo entrega el permiso, y por eso puede aceptar videos
+// grandes sin chocar con el límite de tamaño de las funciones.
 //
-// Requiere que el proyecto tenga un Blob store conectado (Storage → Blob),
-// que es lo que crea la variable BLOB_READ_WRITE_TOKEN.
+// Escrita como función de Node (req, res), igual que store.js. La librería se
+// carga con import() dinámico adentro del try, para que un problema al cargarla
+// vuelva como mensaje legible y no como un 500 sin explicación.
 
-// Corre como Edge Function. Sin esta línea, Vercel la trata como función
-// de Node, que usa otra forma de recibir el pedido y responder, y falla
-// con error 500.
-export const config = { runtime: 'edge' };
-
-import { handleUpload } from '@vercel/blob/client';
-
-// Lo que se acepta subir. Cualquier otra cosa se rechaza.
 const TIPOS = [
   'image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif',
   'video/webm', 'video/mp4', 'video/quicktime'
 ];
 
-export default async function handler(request) {
-  if (request.method !== 'POST') {
-    return Response.json({ error: 'Método no permitido' }, { status: 405 });
-  }
-
-  const body = await request.json();
-
+export default async function handler(req, res) {
   try {
-    const jsonResponse = await handleUpload({
+    if (req.method !== 'POST') {
+      res.status(405).json({ error: 'Método no permitido' });
+      return;
+    }
+
+    const { handleUpload } = await import('@vercel/blob/client');
+    const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+
+    const respuesta = await handleUpload({
       body,
-      request,
+      request: req,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
-        // Puerta simple: el editor manda la misma clave que usa para entrar.
-        // Se compara contra una variable de entorno del proyecto, así la
-        // clave real nunca viaja dentro del HTML público.
         const esperada = process.env.EDITOR_UPLOAD_KEY;
         if (esperada) {
           let dada = null;
@@ -44,16 +36,23 @@ export default async function handler(request) {
         return {
           allowedContentTypes: TIPOS,
           addRandomSuffix: true,
-          maximumSizeInBytes: 60 * 1024 * 1024   // 60 MB por archivo
+          maximumSizeInBytes: 60 * 1024 * 1024
         };
       },
       onUploadCompleted: async () => {
-        // No hay base de datos que actualizar: la URL vuelve al editor y se
-        // guarda dentro del propio modelo de card.
+        // Nada que hacer: la URL vuelve al editor y se guarda en el modelo.
       }
     });
-    return Response.json(jsonResponse);
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 400 });
+    res.status(200).json(respuesta);
+  } catch (e) {
+    try {
+      res.status(400).json({
+        error: String((e && e.message) || e),
+        hayToken: !!process.env.BLOB_READ_WRITE_TOKEN
+      });
+    } catch (e2) {
+      res.statusCode = 500;
+      res.end('Error: ' + String((e && e.message) || e));
+    }
   }
 }
