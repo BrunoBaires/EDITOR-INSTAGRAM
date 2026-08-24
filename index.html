@@ -146,6 +146,9 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 .tpl-nuevo{display:flex;gap:8px;align-items:stretch;}
 .tpl-nuevo input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:13px;color:var(--text);}
 .tpl-nuevo input:focus{border-color:#aaa;outline:none;}
+.tpl-estado{flex:1;font-family:'IBM Plex Sans',sans-serif;font-size:11px;color:var(--text3);}
+.tpl-estado.ok{color:#10a37f;}
+.tpl-estado.off{color:#c1121f;}
 .tpl-tabs{display:flex;gap:4px;margin-bottom:6px;}
 .tpl-tab{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text2);padding:7px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:3px;}
 .tpl-tab.on{background:var(--text);border-color:var(--text);color:var(--white);font-weight:600;}
@@ -565,7 +568,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v150 «bajar video de X»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v152 «modelos livianos»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -775,7 +778,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v150 «bajar video de X»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v152 «modelos livianos»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -7969,7 +7972,42 @@ const TPL_TIPO={
   vineta:['vinCount'],
   libre:['libreVAlign']
 };
-let TPL_EQUIPO=[];   // los que vienen del repo
+let TPL_EQUIPO=[];   // los que vienen del almacén del equipo (o del repo)
+let TPL_STORE_OK=null;   // null = todavía no sabemos si hay almacén
+// Lee una colección del almacén compartido. Si no está montado, devuelve null
+// y el editor cae al archivo del repo, como venía funcionando.
+async function storeLeer(coleccion){
+  try{
+    const r=await fetch('/api/store?c='+coleccion,{cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(!Array.isArray(j)) throw new Error('respuesta inesperada');
+    TPL_STORE_OK=true;
+    return j;
+  }catch(e){ TPL_STORE_OK=false; return null; }
+}
+// Guarda UN template en el almacén. Manda solo ese, no la lista entera, para
+// que dos personas guardando a la vez no se borren lo del otro.
+async function storeGuardar(coleccion,item){
+  const clave=(document.getElementById('gate-input')&&document.getElementById('gate-input').value)||'';
+  const r=await fetch('/api/store?c='+coleccion,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({item:item, clave:clave})
+  });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+  return j.lista||[];
+}
+async function storeBorrar(coleccion,nombre){
+  const clave=(document.getElementById('gate-input')&&document.getElementById('gate-input').value)||'';
+  const r=await fetch('/api/store?c='+coleccion,{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({borrar:nombre, clave:clave})
+  });
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+  return j.lista||[];
+}
 function tplMios(){
   try{ const v=JSON.parse(localStorage.getItem(TPL_LS)||'[]'); return Array.isArray(v)?v:[]; }
   catch(e){ return []; }
@@ -8068,6 +8106,12 @@ function tplBajarArchivo(obj, nombreArchivo){
 }
 // templates.json vive al lado del index.html, así que no hay CORS ni proxy.
 function tplCargarEquipo(){
+  return storeLeer('templates').then(l=>{
+    if(l){ TPL_EQUIPO=l.filter(t=>t&&t.nombre); return TPL_EQUIPO; }
+    return tplCargarEquipoDelRepo();
+  });
+}
+function tplCargarEquipoDelRepo(){
   return fetch('templates.json',{cache:'no-store'})
     .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
     .then(j=>{
@@ -8130,6 +8174,52 @@ async function archivoDeMedia(m, nombre){
   const blob=await r.blob();
   return new File([blob], nombre||('media.'+((blob.type.split('/')[1]||'bin').replace('quicktime','mov'))), {type:blob.type});
 }
+// Miniatura mínima para que la lista muestre algo sin bajar el archivo entero.
+function tplMiniatura(dataUrl){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      const e=Math.min(1,120/Math.max(img.naturalWidth,img.naturalHeight));
+      const cv=document.createElement('canvas');
+      cv.width=Math.max(1,Math.round(img.naturalWidth*e));
+      cv.height=Math.max(1,Math.round(img.naturalHeight*e));
+      cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+      // WebP conserva la transparencia de las siluetas y pesa una fracción
+      // de lo que pesaría en PNG. Si el navegador no lo soporta, cae a PNG.
+      let out=cv.toDataURL('image/webp',0.55);
+      if(out.indexOf('data:image/webp')!==0) out=cv.toDataURL('image/png');
+      res(out);
+    };
+    img.onerror=()=>res(null);
+    img.src=dataUrl;
+  });
+}
+// Manda un dataURL al almacén y devuelve su URL. Si no hay almacén, null.
+// Baja una URL y la vuelve dataURL. Prueba directo y, si el origen no da
+// permiso, pasa por el puente propio del sitio.
+async function urlADataUrl(url){
+  const intentos=[url, '/api/media?url='+encodeURIComponent(url)];
+  for(const u of intentos){
+    try{
+      const r=await fetch(u,{cache:'force-cache'});
+      if(!r.ok) continue;
+      const blob=await r.blob();
+      if(!blob||blob.size<10) continue;
+      return await new Promise((res,rej)=>{
+        const fr=new FileReader(); fr.onload=()=>res(fr.result); fr.onerror=rej; fr.readAsDataURL(blob);
+      });
+    }catch(e){}
+  }
+  throw new Error('no se pudo traer la ilustración');
+}
+async function subirDataUrl(dataUrl, nombre){
+  if(!window.__blobUpload || TPL_STORE_OK===false) return null;
+  const r=await fetch(dataUrl);
+  const blob=await r.blob();
+  const ext=(blob.type.split('/')[1]||'bin').replace('jpeg','jpg').replace('quicktime','mov');
+  const f=new File([blob], (nombre||'archivo')+'.'+ext, {type:blob.type});
+  return await subirAlEquipo(f);
+}
 async function tplTomarCard(nombre, rutaVideo){
   const c=cards[sel];
   if(!c) throw new Error('No hay card seleccionada');
@@ -8146,9 +8236,15 @@ async function tplTomarCard(nombre, rutaVideo){
     copia.capas=copia.capas.filter(q=>!(q&&q.k==='video'&&String(q.src||'').indexOf('blob:')===0));
     const fuera=antes-copia.capas.length;
     if(fuera) avisos.push(fuera+' capa'+(fuera>1?'s':'')+' de video no entró'+(fuera>1?'ron':'')+' (subí el archivo al repo)');
-    // Achicar las imágenes de capa para que el modelo no pese megas
+    // Las imágenes de capa: al almacén si lo hay, y en el JSON solo la URL.
+    // Si no hay almacén, se embeben achicadas como antes.
     for(const q of copia.capas){
-      if(q&&q.k==='img'&&q.src&&q.src.indexOf('data:')===0) q.src=await tplAchicarImagen(q.src,1200);
+      if(!(q&&q.k==='img'&&q.src&&q.src.indexOf('data:')===0)) continue;
+      const chica=await tplAchicarImagen(q.src,1400);
+      let url=null;
+      try{ url=await subirDataUrl(chica,'capa'); }catch(e){ console.error(e); }
+      if(url){ q.src=url; }
+      else { q.src=await tplAchicarImagen(chica,1200); }
     }
   }
   const t={ v:1, nombre:(nombre||'Sin nombre').slice(0,60), fecha:new Date().toISOString().slice(0,10),
@@ -8161,12 +8257,23 @@ async function tplTomarCard(nombre, rutaVideo){
                cinematic:m.cinematic, cinematicPreset:m.cinematicPreset,
                kenBurns:m.kenBurns, kbIntensity:m.kbIntensity, kbDirection:m.kbDirection};
     if(m.type==='img' && m.dataUrl && m.dataUrl.indexOf('data:')===0){
-      enc.dataUrl=await tplAchicarImagen(m.dataUrl, 1400);
+      const chica=await tplAchicarImagen(m.dataUrl, 1400);
+      enc.thumb=await tplMiniatura(chica);
+      let url=null;
+      try{ url=await subirDataUrl(chica,'ilustracion'); }catch(e){ console.error(e); }
+      if(url) enc.src=url;                     // el JSON guarda la URL, no la foto
+      else enc.dataUrl=chica;                  // sin almacén, se embebe como antes
     } else if(m.type==='video'){
-      // Un video no entra en un JSON. Si diste la ruta al archivo del repo, va;
-      // si no, el modelo se guarda igual pero sin el video.
-      if(rutaVideo) enc.src=rutaVideo;
-      else { avisos.push('el video de fondo no se guardó: poné su ruta en el repo para incluirlo'); }
+      // El video va al almacén. Si no hay almacén, queda la ruta que hayas
+      // puesto a mano; y si no hay ninguna de las dos, se avisa.
+      if(m.dataUrl && TPL_STORE_OK!==false && window.__blobUpload){
+        try{
+          const f=await archivoDeMedia(m,'video-modelo.webm');
+          if(f) enc.src=await subirAlEquipo(f);
+        }catch(e){ console.error(e); }
+      }
+      if(!enc.src && rutaVideo) enc.src=rutaVideo;
+      if(!enc.src) avisos.push('el video no se pudo guardar: hace falta el almacén del equipo');
     } else if(m.dataUrl && m.dataUrl.indexOf('data:')===0){
       enc.dataUrl=m.dataUrl;
     }
@@ -8189,6 +8296,13 @@ async function tplInsertarCard(t){
   const em=t.media;
   if(em){
     try{
+      // Una ilustración guardada en el almacén viaja como URL: se trae y se
+      // convierte a dato local, así el canvas puede exportarla sin problemas
+      // de origen cruzado.
+      if(!em.dataUrl && em.src && /\.(png|jpe?g|webp|gif|avif)(\?|$)/i.test(em.src)){
+        setStatus('Trayendo la ilustración…','working');
+        em.dataUrl=await urlADataUrl(em.src);
+      }
       if(em.dataUrl){
         await new Promise((res,rej)=>{
           const img=new Image();
@@ -8220,6 +8334,12 @@ async function tplInsertarCard(t){
   setStatus('Card «'+(t.nombre||'modelo')+'» agregada — escribí el texto','');
 }
 function tplCargarCardsEquipo(){
+  return storeLeer('cards').then(l=>{
+    if(l){ TPL_CARDS_EQUIPO=l.filter(t=>t&&t.nombre&&t.card); return TPL_CARDS_EQUIPO; }
+    return tplCargarCardsDelRepo();
+  });
+}
+function tplCargarCardsDelRepo(){
   return fetch('cards-modelo.json',{cache:'no-store'})
     .then(r=>{ if(!r.ok) throw new Error('404'); return r.json(); })
     .then(j=>{ const l=Array.isArray(j)?j:(j&&Array.isArray(j.cards)?j.cards:[]); TPL_CARDS_EQUIPO=l.filter(t=>t&&t.nombre&&t.card); return TPL_CARDS_EQUIPO; })
@@ -8251,7 +8371,7 @@ function openTemplatesPanel(){
         '<div class="wa-note">Una card modelo se guarda entera —ilustración, volanta, crédito y estilo— con el texto vacío. Al insertarla, solo escribís la frase. Las imágenes viajan dentro del archivo; los videos no, así que el archivo tiene que estar en el repo y acá va su ruta.</div>'+
       '</div>'+
     '</div>'+
-    '<div class="wa-foot"><button class="btn-g" id="tpl-import">↑ Importar .json</button><button class="btn-g" id="tpl-export">⬇ Bajar el .json de esta pestaña</button></div>'+
+    '<div class="wa-foot"><span class="tpl-estado" id="tpl-estado"></span><button class="btn-g" id="tpl-import">↑ Importar .json</button><button class="btn-g" id="tpl-export">⬇ Bajar el .json</button></div>'+
   '</div>';
   document.body.appendChild(ov);
   const close=()=>{ if(ov.parentNode) ov.parentNode.removeChild(ov); };
@@ -8281,7 +8401,12 @@ function openTemplatesPanel(){
       const bDel=document.createElement('button');
       bDel.className='tpl-mini del'; bDel.textContent='Borrar'; bDel.title='Borrar este template';
       bDel.onclick=()=>{
+        const nom=t.nombre;
         const l=tplMios(); l.splice(idx,1); tplGuardarMios(l); pintarMios();
+        if(TPL_STORE_OK) storeBorrar('templates',nom).then(lista=>{
+          TPL_EQUIPO=lista.filter(x=>x&&x.nombre); pintarEquipo();
+          setStatus('«'+nom+'» borrado también para el equipo','');
+        }).catch(()=>{});
       };
       row.appendChild(bEx); row.appendChild(bDel);
     }
@@ -8297,14 +8422,22 @@ function openTemplatesPanel(){
     zonaEq.innerHTML='';
     if(!TPL_EQUIPO.length){
       zonaEq.appendChild(Object.assign(document.createElement('div'),{className:'tpl-vacio',
-        textContent:'No hay templates.json en el sitio todavía. Guardá uno acá abajo, bajá el archivo y subilo al repo: a partir de ahí lo ve todo el equipo.'}));
+        textContent: TPL_STORE_OK ? 'Todavía no hay ninguno. El primero que guardes acá abajo queda disponible para todo el equipo al instante.'
+                                  : 'No hay templates.json en el sitio. Guardá uno, bajá el archivo y subilo al repo.'}));
       return;
     }
     TPL_EQUIPO.forEach(t=>{ zonaEq.appendChild(fila(t,false)); zonaEq.lastChild.style.marginBottom='6px'; });
   }
+  const estado=ov.querySelector('#tpl-estado');
+  function pintarEstado(){
+    if(!estado) return;
+    if(TPL_STORE_OK===true){ estado.textContent='● Almacén del equipo conectado'; estado.className='tpl-estado ok'; }
+    else if(TPL_STORE_OK===false){ estado.textContent='● Sin almacén: lo que guardes queda solo en este navegador'; estado.className='tpl-estado off'; }
+    else { estado.textContent=''; }
+  }
   zonaEq.innerHTML='<div class="tpl-vacio">Buscando templates del equipo…</div>';
   pintarMios();
-  tplCargarEquipo().then(pintarEquipo);
+  tplCargarEquipo().then(()=>{ pintarEquipo(); pintarEstado(); });
 
   // ── Pestañas ──
   const paneE=ov.querySelector('#tpl-pane-estilo'), paneC=ov.querySelector('#tpl-pane-cards');
@@ -8323,15 +8456,18 @@ function openTemplatesPanel(){
   function filaCard(t, propia, idx){
     const row=document.createElement('div');
     row.className='tpl-row';
-    if(t.media&&t.media.dataUrl){
+    const miniSrc=(t.media&&(t.media.thumb||t.media.dataUrl))||null;
+    if(miniSrc){
       const th=document.createElement('img');
-      th.className='tplc-mini'; th.src=t.media.dataUrl; row.appendChild(th);
+      th.className='tplc-mini'; th.src=miniSrc; row.appendChild(th);
     }
     const nom=document.createElement('div');
     nom.className='tpl-nom'; nom.textContent=t.nombre||'(sin nombre)';
     const meta=document.createElement('span');
     meta.className='tpl-meta';
-    meta.textContent=[(t.card&&t.card.tipo)||'', t.media?(t.media.src?'video':'imagen'):'sin ilustración'].filter(Boolean).join(' · ');
+    const queTiene = !t.media ? 'sin ilustración'
+      : (/\.(mp4|webm|m4v|mov)(\?|$)/i.test(t.media.src||'') ? 'video' : 'imagen');
+    meta.textContent=[(t.card&&t.card.tipo)||'', queTiene].filter(Boolean).join(' · ');
     const bIns=document.createElement('button');
     bIns.className='tpl-mini'; bIns.textContent='Insertar';
     bIns.onclick=async()=>{ bIns.disabled=true; bIns.textContent='Insertando…'; try{ await tplInsertarCard(t); close(); }catch(e){ bIns.disabled=false; bIns.textContent='Insertar'; } };
@@ -8342,7 +8478,14 @@ function openTemplatesPanel(){
       bEx.onclick=()=>tplBajarArchivo(t,'card-'+(t.nombre||'modelo').replace(/[^\w\-]+/g,'-').toLowerCase()+'.json');
       const bDel=document.createElement('button');
       bDel.className='tpl-mini del'; bDel.textContent='Borrar';
-      bDel.onclick=()=>{ const l=tplCardsMias(); l.splice(idx,1); tplCardsGuardar(l); pintarCardsMias(); };
+      bDel.onclick=()=>{
+        const nom=t.nombre;
+        const l=tplCardsMias(); l.splice(idx,1); tplCardsGuardar(l); pintarCardsMias();
+        if(TPL_STORE_OK) storeBorrar('cards',nom).then(lista=>{
+          TPL_CARDS_EQUIPO=lista.filter(x=>x&&x.nombre&&x.card); pintarCardsEquipo();
+          setStatus('«'+nom+'» borrada también para el equipo','');
+        }).catch(()=>{});
+      };
       row.appendChild(bEx); row.appendChild(bDel);
     }
     return row;
@@ -8357,14 +8500,15 @@ function openTemplatesPanel(){
     zonaCe.innerHTML='';
     if(!TPL_CARDS_EQUIPO.length){
       zonaCe.appendChild(Object.assign(document.createElement('div'),{className:'tpl-vacio',
-        textContent:'No hay cards-modelo.json en el sitio todavía. Guardá una acá abajo, bajá el archivo y subilo al repo.'}));
+        textContent: TPL_STORE_OK ? 'Todavía no hay ninguna. La primera que guardes queda disponible para todo el equipo al instante.'
+                                  : 'No hay cards-modelo.json en el sitio. Guardá una, bajá el archivo y subilo al repo.'}));
       return;
     }
     TPL_CARDS_EQUIPO.forEach(t=>{ zonaCe.appendChild(filaCard(t,false)); zonaCe.lastChild.style.marginBottom='6px'; });
   }
   zonaCe.innerHTML='<div class="tpl-vacio">Buscando cards del equipo…</div>';
   pintarCardsMias();
-  tplCargarCardsEquipo().then(pintarCardsEquipo);
+  tplCargarCardsEquipo().then(()=>{ pintarCardsEquipo(); pintarEstado(); });
 
   {const bSub=ov.querySelector('#tplc-subir');
    if(bSub) bSub.onclick=async()=>{
@@ -8402,8 +8546,22 @@ function openTemplatesPanel(){
       if(ya>=0) l[ya]=t; else l.push(t);
       if(tplCardsGuardar(l)){
         inpC.value=''; pintarCardsMias();
-        setStatus(avisos.length ? ('Guardada, pero '+avisos.join(' · ')) : ('Card modelo «'+nombre+'» guardada'),
-                  avisos.length?'warn':'');
+        if(TPL_STORE_OK===false){
+          setStatus(avisos.length ? ('Guardada acá, pero '+avisos.join(' · ')) : ('Card modelo «'+nombre+'» guardada (solo en este navegador)'),
+                    avisos.length?'warn':'');
+        }else{
+          btn.textContent='Publicando…';
+          try{
+            const lista=await storeGuardar('cards',t);
+            TPL_CARDS_EQUIPO=lista.filter(x=>x&&x.nombre&&x.card);
+            pintarCardsEquipo();
+            setStatus(avisos.length ? ('Publicada al equipo, pero '+avisos.join(' · '))
+                                    : ('Card modelo «'+nombre+'» publicada al equipo'),
+                      avisos.length?'warn':'');
+          }catch(err){
+            setStatus('Guardada acá, pero no se pudo publicar: '+err.message,'warn');
+          }
+        }
       }
     }catch(e){
       setStatus(e.message,'warn');
@@ -8421,11 +8579,19 @@ function openTemplatesPanel(){
     const t=tplTomarEstilo(nombre);
     const ya=l.findIndex(x=>x&&x.nombre===nombre);
     if(ya>=0) l[ya]=t; else l.push(t);
-    if(tplGuardarMios(l)){
-      inp.value='';
-      pintarMios();
-      setStatus('Template «'+nombre+'» guardado','');
-    }
+    if(!tplGuardarMios(l)) return;
+    inp.value='';
+    pintarMios();
+    if(TPL_STORE_OK===false){ setStatus('Template «'+nombre+'» guardado (solo en este navegador)',''); return; }
+    const btn=ov.querySelector('#tpl-save');
+    btn.disabled=true; btn.textContent='Publicando…';
+    storeGuardar('templates',t).then(lista=>{
+      TPL_EQUIPO=lista.filter(x=>x&&x.nombre);
+      pintarEquipo();
+      setStatus('Template «'+nombre+'» guardado y publicado al equipo','');
+    }).catch(err=>{
+      setStatus('Guardado acá, pero no se pudo publicar: '+err.message,'warn');
+    }).then(()=>{ btn.disabled=false; btn.textContent='Guardar'; });
   };
   inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); ov.querySelector('#tpl-save').click(); } };
 
@@ -8830,6 +8996,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v152','Ilustraciones y videos fuera del JSON','Las cards modelo ya no llevan la foto adentro del archivo compartido: la ilustración y el video se guardan como archivos en el almacén y el registro solo se queda con su dirección y una miniatura de unos pocos KB. Así el editor no baja todo el material cada vez que abre, y la lista puede crecer a cientos de cards sin volverse pesada. El video ya no pide poner la ruta a mano: se sube solo al guardar.'],
+    ['v151','Templates compartidos de verdad','Se acabó exportar y subir JSONs a mano. Los templates y las cards modelo se guardan en un almacén compartido: apretás Guardar y en ese momento le quedan disponibles a todo el equipo. Cada uno manda solo el suyo, así dos personas guardando a la vez no se pisan. Borrar también borra para todos. Si el almacén no está montado, el editor sigue funcionando como antes, leyendo del repo y guardando en el navegador, y lo dice en el panel.'],
     ['v150','Puente para bajar el video de X','El video de un post se veía en el panel pero no se podía traer al editor. Un <video> reproduce sin permiso de origen cruzado; fetch() lo necesita, y X no lo da. Ahora hay un puente propio, api/media, que baja el archivo del lado del servidor y lo devuelve con el permiso puesto. Los proxies públicos quedan de respaldo. También lo usan las fotos.'],
     ['v149','Almacén de archivos del equipo','Botón «☁ Subir al equipo» en las cards ilustradas: manda el video a un almacén en la nube y deja su URL en el modelo, así la card le funciona a todos sin pasar archivos a mano. Necesita que el proyecto de Vercel tenga un Blob store y que el repo tenga api/upload.js y package.json. Si eso no está, el editor funciona igual y el botón avisa.'],
     ['v148','Guardar cards con video ya no se traba','Antes, si la card tenía un video, guardarla como modelo fallaba salvo que pusieras la ruta del archivo en el repo. Ahora se guarda igual —con su volanta, su marco, su estilo y sus capas de imagen— y avisa que el video quedó afuera. Si después ponés la ruta, se incluye. Las capas de imagen de un modelo también se achican para que el archivo no pese de más.'],
@@ -10024,7 +10192,7 @@ function renderPanel(){
   overlay.innerHTML="";
   var box=elem('<div id="cl-box"></div>');
   // header
-  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v150</span></span><button class="cl-x">×</button></div>');
+  var head=elem('<div class="cl-head"><span class="cl-title">◆ Traer contenido <span style="font-size:9px;color:#22a06b;letter-spacing:1px">v152</span></span><button class="cl-x">×</button></div>');
   $(".cl-x",head).onclick=closePanel;
   box.appendChild(head);
 
