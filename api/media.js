@@ -18,6 +18,8 @@ const PERMITIDOS = [
   'abs.twimg.com',
   'api.fxtwitter.com',
   'api.vxtwitter.com',
+  'blob.vercel-storage.com',
+  'public.blob.vercel-storage.com',
   'images.clarin.com',
   'www.clarin.com',
   'clarin.com'
