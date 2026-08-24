@@ -13,6 +13,11 @@
 //
 // Requiere un Blob store conectado al proyecto (crea BLOB_READ_WRITE_TOKEN).
 
+// Corre como Edge Function. Sin esta línea, Vercel la trata como función
+// de Node, que usa otra forma de recibir el pedido y responder, y falla
+// con error 500.
+export const config = { runtime: 'edge' };
+
 import { put, list } from '@vercel/blob';
 
 const COLECCIONES = { templates: 'store/templates.json', cards: 'store/cards-modelo.json' };
