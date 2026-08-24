@@ -12,6 +12,10 @@ export default async function handler(req, res) {
     BLOB_WEBHOOK_PUBLIC_KEY: !!process.env.BLOB_WEBHOOK_PUBLIC_KEY,
     BLOB_READ_WRITE_TOKEN: !!process.env.BLOB_READ_WRITE_TOKEN,
     EDITOR_UPLOAD_KEY: !!process.env.EDITOR_UPLOAD_KEY,
+    // Para probar la clave sin revelarla: /api/diag?k=loquesea
+    claveProbada: (req.query && req.query.k) ? true : false,
+    claveCoincide: (req.query && req.query.k)
+      ? (req.query.k === process.env.EDITOR_UPLOAD_KEY) : null,
     // El token OIDC no vive en process.env dentro de una función:
     // Vercel lo manda en este encabezado.
     VERCEL_OIDC_TOKEN_env: !!process.env.VERCEL_OIDC_TOKEN,
