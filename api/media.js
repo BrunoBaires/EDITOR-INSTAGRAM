@@ -6,10 +6,14 @@
 // podía DESCARGARLO. Esta función lo baja del lado del servidor y lo devuelve
 // con el permiso puesto.
 //
-// Corre como Edge Function para poder ir pasando el archivo de a pedazos, sin
-// juntarlo entero en memoria ni chocar con el límite de tamaño de respuesta.
+// Corre como función de Node, igual que el resto de /api. (Antes era una Edge
+// Function; desde que el proyecto declara @vercel/blob como dependencia, el
+// empaquetador de Edge intenta meter módulos de Node acá adentro y el build
+// falla. Node no tiene ese problema.)
+//
+// El archivo se va pasando de a pedazos, sin juntarlo entero en memoria.
 
-export const config = { runtime: 'edge' };
+import { Readable } from 'node:stream';
 
 // Solo estos dominios. Si no, sería un proxy abierto para cualquiera.
 const PERMITIDOS = [
@@ -34,11 +38,11 @@ function permitido(u) {
   }
 }
 
-export default async function handler(request) {
-  const url = new URL(request.url).searchParams.get('url');
+export default async function handler(req, res) {
+  const url = req.query && req.query.url;
 
-  if (!url) return new Response('Falta el parámetro url', { status: 400 });
-  if (!permitido(url)) return new Response('Dominio no permitido', { status: 403 });
+  if (!url) { res.status(400).send('Falta el parámetro url'); return; }
+  if (!permitido(url)) { res.status(403).send('Dominio no permitido'); return; }
 
   let upstream;
   try {
@@ -50,20 +54,34 @@ export default async function handler(request) {
       }
     });
   } catch (e) {
-    return new Response('No se pudo alcanzar el origen: ' + e.message, { status: 502 });
+    res.status(502).send('No se pudo alcanzar el origen: ' + ((e && e.message) || e));
+    return;
   }
 
   if (!upstream.ok) {
-    return new Response('El origen respondió ' + upstream.status, { status: upstream.status });
+    res.status(upstream.status).send('El origen respondió ' + upstream.status);
+    return;
   }
 
-  // Se devuelve el cuerpo tal cual, en streaming, con el permiso de origen.
-  return new Response(upstream.body, {
-    status: 200,
-    headers: {
-      'Content-Type': upstream.headers.get('content-type') || 'application/octet-stream',
-      'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'public, max-age=3600'
-    }
-  });
+  res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  const largo = upstream.headers.get('content-length');
+  if (largo) res.setHeader('Content-Length', largo);
+
+  if (!upstream.body) { res.status(204).end(); return; }
+
+  // Se va escribiendo a medida que llega, en vez de acumularlo en memoria.
+  try {
+    await new Promise((ok, mal) => {
+      const flujo = Readable.fromWeb(upstream.body);
+      flujo.on('error', mal);
+      res.on('error', mal);
+      res.on('close', ok);
+      flujo.pipe(res);
+    });
+  } catch (e) {
+    if (!res.headersSent) res.status(502).send('Se cortó la descarga: ' + ((e && e.message) || e));
+    else res.end();
+  }
 }
