@@ -163,6 +163,9 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 .ilus-extra{width:100%;min-height:44px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;line-height:1.45;padding:7px 8px;resize:vertical;outline:none;margin-bottom:7px;}
 .ilus-extra:focus{border-color:#aaa;}
 .ilus-fila{display:flex;gap:5px;align-items:center;margin-top:6px;}
+.ilus-fondo{display:flex;gap:4px;margin-bottom:7px;}
+.ilus-guardados{font-size:10px;color:var(--text3);margin-top:6px;line-height:1.4;}
+.ilus-err{font-size:11px;line-height:1.4;padding:6px 8px;border-radius:4px;background:rgba(217,79,28,0.10);border:1px solid rgba(217,79,28,0.45);color:#c04315;font-weight:600;}
 .ilus-form{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px;}
 .ilus-form input[type=text]{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 8px;outline:none;}
 .ilus-form textarea{width:100%;min-height:96px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;line-height:1.5;padding:7px 8px;resize:vertical;outline:none;}
@@ -594,7 +597,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v155 «el texto no se mueve»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v156 «recortar o no recortar»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -804,7 +807,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v155 «el texto no se mueve»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v156 «recortar o no recortar»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -906,6 +909,15 @@ const ILUS_BASE=[
     desc:'Un solo trazo de contorno, poquísimo detalle, aire de viñeta de revista.',
     transparente:true,
     prompt:"Redraw this photograph as a single-panel magazine spot illustration: one continuous contour line of even weight, drawn with a loose slightly wobbling hand rather than a mechanical stroke. Very low detail — the silhouette, the essential folds of the clothing, and only the few facial lines needed to carry the expression. No colour, no fill, no shading, no hatching: the shapes stay empty inside."
+  },
+  {
+    // Escena documental completa: por eso viene SIN recorte de fondo. El fondo
+    // es parte del recurso (profundidad por superposición y masas de color).
+    id:'editorial-linea',
+    nombre:'Editorial · línea calcada',
+    desc:'Contorno fino uniforme tipo rotring, color plano desaturado, escena documental con encuadre imperfecto. Cómic adulto editorial.',
+    transparente:false,
+    prompt:"Redraw this photograph as a figurative editorial illustration built from traced line. Thin, uniform technical-pen contours of even weight throughout, like a rotring. Naturalistic anatomy, slightly simplified. Flat desaturated colour, and shadows reduced to minimal graphic masses rather than modelled shading. No gradients, no visible brush strokes, no digital texture, no grain, no glow. Keep the documentary composition of the source photograph: imperfect framing, figures partly cropped by the edge of the frame, and depth built through overlap, perspective and large flat areas of colour. Clean, sober and extremely precise — the register of adult American editorial comics."
   }
 ];
 // Prompts propios: viven en el almacén del equipo (colección 'ilustraciones') y,
@@ -5990,7 +6002,10 @@ function renderEditor(c){
           <div class="aiedit-head"><span>✎ Ilustrar la foto</span><span class="aiedit-sub">guarda el parecido</span></div>
           <select id="ilus-sel" class="ilus-sel"></select>
           <div class="ilus-desc" id="ilus-desc"></div>
-          <label class="ilus-chk"><input type="checkbox" id="ilus-trans"/> Fondo recortado (transparente)</label>
+          <div class="ilus-fondo">
+            <button class="tipo-btn" id="ilus-recorta" style="flex:1;font-size:11px">✂ Recortar fondo</button>
+            <button class="tipo-btn" id="ilus-norecorta" style="flex:1;font-size:11px">▣ No recortar fondo</button>
+          </div>
           <textarea id="ilus-extra" class="ilus-extra" placeholder="Ajuste puntual, opcional: solo el busto, sacá el micrófono, más contraste…"></textarea>
           <button class="aiedit-run" id="ilus-run">Ilustrar</button>
           <div class="ilus-fila">
@@ -5998,10 +6013,15 @@ function renderEditor(c){
             <button class="tpl-mini" id="ilus-editar" style="display:none">✎ Editar</button>
             <button class="tpl-mini del" id="ilus-borrar" style="display:none">Borrar</button>
           </div>
+          <div class="ilus-guardados" id="ilus-guardados"></div>
           <div class="ilus-form" id="ilus-form" style="display:none">
             <input type="text" id="ilus-nom" placeholder="Nombre del estilo (ej: Acuarela suave)" maxlength="48"/>
             <textarea id="ilus-txt" placeholder="Prompt, preferentemente en inglés. Describí el trazo, el color y el nivel de detalle; el parecido de la persona y el recorte del fondo los agrega el editor."></textarea>
-            <label class="ilus-chk"><input type="checkbox" id="ilus-ntrans" checked/> Este estilo va con fondo recortado</label>
+            <div class="ilus-fondo">
+              <button class="tipo-btn" id="ilus-nrecorta" style="flex:1;font-size:11px">✂ Recorta el fondo</button>
+              <button class="tipo-btn" id="ilus-nnorecorta" style="flex:1;font-size:11px">▣ Conserva el fondo</button>
+            </div>
+            <div class="ilus-err" id="ilus-error" style="display:none"></div>
             <div class="ilus-fila">
               <button class="tpl-mini" id="ilus-base">Partir del estilo elegido</button>
               <button class="tpl-mini" id="ilus-cancel">Cancelar</button>
@@ -7054,14 +7074,43 @@ function renderEditor(c){
       (function(){
         const blk=el.querySelector('#ilus-block'); if(!blk) return;
         const selEl=el.querySelector('#ilus-sel'), descEl=el.querySelector('#ilus-desc');
-        const transEl=el.querySelector('#ilus-trans'), extraEl=el.querySelector('#ilus-extra');
+        const extraEl=el.querySelector('#ilus-extra');
+        const bRec=el.querySelector('#ilus-recorta'), bNoRec=el.querySelector('#ilus-norecorta');
         const runEl=el.querySelector('#ilus-run'), stEl=el.querySelector('#ilus-status');
+        const cntEl=el.querySelector('#ilus-guardados');
         const bNuevo=el.querySelector('#ilus-nuevo'), bEditar=el.querySelector('#ilus-editar'), bBorrar=el.querySelector('#ilus-borrar');
         const form=el.querySelector('#ilus-form'), nomEl=el.querySelector('#ilus-nom'), txtEl=el.querySelector('#ilus-txt');
-        const ntransEl=el.querySelector('#ilus-ntrans');
+        const bNRec=el.querySelector('#ilus-nrecorta'), bNNoRec=el.querySelector('#ilus-nnorecorta');
+        const errEl=el.querySelector('#ilus-error');
         const bSave=el.querySelector('#ilus-save'), bCancel=el.querySelector('#ilus-cancel'), bBase=el.querySelector('#ilus-base');
-        let editando=null;   // id del prompt propio que se está editando
+        let editando=null;    // id del prompt propio que se está editando
+        let recorta=true;     // recortar el fondo en la próxima ilustración
+        let nRecorta=true;    // el estilo que se está guardando recorta el fondo
 
+        function decir(txt,clase){ stEl.textContent=txt||''; stEl.className='aiedit-status'+(clase?' '+clase:''); }
+        function errorForm(txt){
+          errEl.textContent=txt||'';
+          errEl.style.display=txt?'block':'none';
+        }
+        function pintarFondoBtns(){
+          bRec.classList.toggle('active',recorta);
+          bNoRec.classList.toggle('active',!recorta);
+        }
+        function pintarFondoNuevo(){
+          bNRec.classList.toggle('active',nRecorta);
+          bNNoRec.classList.toggle('active',!nRecorta);
+        }
+        bRec.onclick=()=>{ recorta=true;  pintarFondoBtns(); };
+        bNoRec.onclick=()=>{ recorta=false; pintarFondoBtns(); };
+        bNRec.onclick=()=>{ nRecorta=true;  pintarFondoNuevo(); };
+        bNNoRec.onclick=()=>{ nRecorta=false; pintarFondoNuevo(); };
+
+        function contar(){
+          const n=ilusMios().length, e=ILUS_EQUIPO.length;
+          cntEl.textContent = n||e
+            ? ('Prompts propios: '+n+' en este navegador'+(e?(' · '+e+' del equipo'):''))
+            : 'Todavía no guardaste ninguno propio.';
+        }
         function pintarLista(idSel){
           const todos=ilusTodos();
           const casa=todos.filter(x=>!x.propio), propios=todos.filter(x=>x.propio);
@@ -7071,89 +7120,124 @@ function renderEditor(c){
           const elegir=idSel||window.__ilusUltimo||casa[0].id;
           selEl.value=elegir;
           if(!selEl.value) selEl.value=casa[0].id;
-          pintarDesc();
+          pintarDesc(); contar();
         }
         function pintarDesc(){
           const x=ilusPorId(selEl.value);
           window.__ilusUltimo=selEl.value;
           descEl.textContent=x.desc||'';
-          transEl.checked=!!x.transparente;
+          recorta=!!x.transparente;      // cada estilo trae su default; se puede cambiar
+          pintarFondoBtns();
           const esPropio=!!x.propio;
           bEditar.style.display=esPropio?'':'none';
           bBorrar.style.display=esPropio?'':'none';
         }
         selEl.onchange=pintarDesc;
         pintarLista();
-        // Traer los del equipo y refrescar la lista cuando lleguen.
-        if(!ILUS_EQUIPO.length){ ilusCargarEquipo().then(()=>{ if(selEl.isConnected) pintarLista(selEl.value); }); }
+        // Los del equipo se piden una sola vez por sesión, no en cada render.
+        if(!window.__ilusPedidos){
+          window.__ilusPedidos=true;
+          ilusCargarEquipo().then(()=>{ if(selEl.isConnected) pintarLista(selEl.value); });
+        }
+        // Si quedó un borrador a medio escribir, se recupera al volver a la card.
+        if(window.__ilusBorrador && (window.__ilusBorrador.nombre||window.__ilusBorrador.prompt)){
+          const b=window.__ilusBorrador;
+          form.style.display='flex';
+          nomEl.value=b.nombre||''; txtEl.value=b.prompt||'';
+          nRecorta=b.transparente!==false; editando=b.editando||null;
+          pintarFondoNuevo();
+        }
+        function guardarBorrador(){
+          window.__ilusBorrador={nombre:nomEl.value, prompt:txtEl.value, transparente:nRecorta, editando:editando};
+        }
+        nomEl.oninput=guardarBorrador; txtEl.oninput=guardarBorrador;
 
         runEl.onclick=async()=>{
           const x=ilusPorId(selEl.value);
-          if(!x.prompt){ stEl.textContent='Ese estilo no tiene prompt.'; stEl.className='aiedit-status err'; return; }
-          const p=ilusPrompt(x, extraEl.value, transEl.checked);
+          if(!x.prompt){ decir('Ese estilo no tiene prompt.','err'); return; }
+          const p=ilusPrompt(x, extraEl.value, recorta);
           runEl.disabled=true; runEl.textContent='Ilustrando… (~20-40s)';
-          stEl.textContent='Enviando a OpenAI…'; stEl.className='aiedit-status work';
+          decir('Enviando a OpenAI…','work');
           try{
-            await editImageWithOpenAI(c.id, p, {transparente:transEl.checked});
-            if(transEl.checked){ const m3=mediaCache[c.id]; if(m3) m3.fitMode='contain'; }
-            stEl.textContent='✓ '+x.nombre; stEl.className='aiedit-status ok';
+            await editImageWithOpenAI(c.id, p, {transparente:recorta});
+            if(recorta){ const m3=mediaCache[c.id]; if(m3) m3.fitMode='contain'; }
+            decir('✓ '+x.nombre,'ok');
             renderList(); renderEditor(cards[sel]); redraw();
           }catch(err){
-            stEl.textContent='✗ '+(err.message||'Error'); stEl.className='aiedit-status err';
+            decir('✗ '+(err.message||'Error'),'err');
             runEl.disabled=false; runEl.textContent='Ilustrar';
           }
         };
 
         function abrirForm(base){
           form.style.display='flex';
+          errorForm('');
           nomEl.value=base?base.nombre:'';
           txtEl.value=base?base.prompt:'';
-          ntransEl.checked=base?!!base.transparente:true;
+          nRecorta=base?!!base.transparente:true;
+          pintarFondoNuevo();
           editando=(base&&base.propio)?base.id:null;
+          guardarBorrador();
           nomEl.focus();
         }
         bNuevo.onclick=()=>abrirForm(null);
         bEditar.onclick=()=>abrirForm(ilusPorId(selEl.value));
-        bBase.onclick=()=>{ const x=ilusPorId(selEl.value); txtEl.value=x.prompt||''; if(!nomEl.value) nomEl.value=x.nombre+' (mío)'; ntransEl.checked=!!x.transparente; };
-        bCancel.onclick=()=>{ form.style.display='none'; editando=null; };
-        bSave.onclick=async()=>{
+        bBase.onclick=()=>{
+          const x=ilusPorId(selEl.value);
+          txtEl.value=x.prompt||'';
+          if(!nomEl.value.trim()) nomEl.value=x.nombre+' (mío)';
+          nRecorta=!!x.transparente; pintarFondoNuevo(); errorForm(''); guardarBorrador();
+        };
+        bCancel.onclick=()=>{ form.style.display='none'; editando=null; errorForm(''); window.__ilusBorrador=null; };
+
+        function guardar(){
           const nombre=(nomEl.value||'').trim(), prompt=(txtEl.value||'').trim();
-          if(!nombre){ nomEl.focus(); stEl.textContent='Ponele un nombre al estilo.'; stEl.className='aiedit-status err'; return; }
-          if(prompt.length<20){ txtEl.focus(); stEl.textContent='El prompt es muy corto: describí trazo, color y detalle.'; stEl.className='aiedit-status err'; return; }
+          // Los avisos van DENTRO del formulario: el status de abajo se perdía
+          // de vista en el panel y parecía que el botón no hacía nada.
+          if(!nombre){ errorForm('Falta el nombre del estilo.'); nomEl.focus(); return; }
+          if(prompt.length<20){ errorForm('El prompt es muy corto. Describí trazo, color y nivel de detalle.'); txtEl.focus(); return; }
+          errorForm('');
           const item={ id: editando||('u-'+Math.abs(hashTxt(nombre)).toString(36)),
-                       nombre:nombre, prompt:prompt, transparente:!!ntransEl.checked,
-                       desc:'Prompt propio', fecha:new Date().toISOString().slice(0,10) };
-          // Siempre queda una copia en este navegador; después se publica.
+                       nombre:nombre, prompt:prompt, transparente:!!nRecorta,
+                       desc:'Prompt propio'+(nRecorta?' · recorta el fondo':' · conserva el fondo'),
+                       fecha:new Date().toISOString().slice(0,10) };
+          // 1) Guardado local: es el que manda. Si esto falla, se avisa fuerte.
           const l=ilusMios(); const ya=l.findIndex(z=>z&&z.id===item.id);
           if(ya>=0) l[ya]=item; else l.push(item);
-          ilusGuardarMios(l);
-          form.style.display='none'; editando=null;
+          if(!ilusGuardarMios(l)){
+            errorForm('Este navegador no dejó guardar (¿modo privado o almacenamiento lleno?). Copiá el prompt antes de cerrar.');
+            return;
+          }
+          form.style.display='none'; editando=null; window.__ilusBorrador=null;
           pintarLista(item.id);
-          bSave.disabled=true; stEl.textContent='Publicando al equipo…'; stEl.className='aiedit-status work';
-          try{
-            const lista=await storeGuardar('ilustraciones', item);
+          decir('✓ «'+nombre+'» guardado — ya está en la lista de arriba','ok');
+          // 2) Publicación al equipo: si no sale, el prompt YA está guardado.
+          bSave.disabled=true;
+          storeGuardar('ilustraciones', item).then(lista=>{
             ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&z.prompt);
             pintarLista(item.id);
-            stEl.textContent='✓ «'+nombre+'» disponible para todo el equipo'; stEl.className='aiedit-status ok';
-          }catch(err){
-            stEl.textContent='Guardado en este navegador (el almacén no respondió)'; stEl.className='aiedit-status';
-          }
-          bSave.disabled=false;
-        };
+            decir('✓ «'+nombre+'» guardado y publicado para todo el equipo','ok');
+          }).catch(()=>{
+            decir('✓ «'+nombre+'» guardado acá. Al equipo no llegó: el almacén no respondió.','ok');
+          }).then(()=>{ bSave.disabled=false; });
+        }
+        bSave.onclick=guardar;
+        nomEl.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); guardar(); } };
+
         bBorrar.onclick=async()=>{
           const x=ilusPorId(selEl.value); if(!x.propio) return;
           const l=ilusMios().filter(z=>z&&z.id!==x.id);
           ilusGuardarMios(l);
           ILUS_EQUIPO=ILUS_EQUIPO.filter(z=>z&&(z.id||('u-'+hashTxt(z.nombre)))!==x.id);
           pintarLista(ILUS_BASE[0].id);
-          stEl.textContent='Borrando para el equipo…'; stEl.className='aiedit-status work';
+          decir('Borrando para el equipo…','work');
           try{
             const lista=await storeBorrar('ilustraciones', x.nombre);
             ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&z.prompt);
             pintarLista(ILUS_BASE[0].id);
-            stEl.textContent='«'+x.nombre+'» borrado'; stEl.className='aiedit-status';
+            decir('«'+x.nombre+'» borrado');
           }catch(err){
-            stEl.textContent='Borrado acá; en el equipo sigue disponible'; stEl.className='aiedit-status';
+            decir('Borrado acá; en el equipo sigue disponible');
           }
         };
       })();
@@ -9405,6 +9489,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v156','Recortar o no recortar','El fondo de la ilustración ahora se elige con dos botones, «Recortar fondo» y «No recortar fondo»: cada estilo trae su default y se puede cambiar en el momento. Suma un cuarto estilo de la casa, editorial de línea calcada tipo rotring con color plano desaturado, que conserva el fondo porque la escena es parte del recurso. Y se arregló el guardado de prompts propios: los avisos de «falta el nombre» aparecían al pie del panel, fuera de vista, y parecía que el botón no hacía nada. Ahora van dentro del formulario, el guardado local es lo que manda (el almacén del equipo es un extra que ya no puede hacerlo fracasar), hay un contador de prompts guardados y el borrador sobrevive si cambiás de card.'],
     ['v155','El texto no se mueve','Escribir una bajada corría el título hacia arriba y, si era larga, lo empujaba fuera de la placa sin manera de recuperarlo. Ahora cada bloque tiene su coordenada propia: se fija donde está y solo se mueve si lo arrastrás. Las posiciones se guardan en el template, así un colaborador reemplaza el texto y la placa no se desarma. Suma un botón para traer al cuadro lo que se haya ido. Las fotos se arrastran 1:1 con el mouse y sin tope: ya se pueden sacar de cuadro para abajo, que antes era imposible. Y hay un menú de ilustraciones (línea con color plano, crosshatching en blanco y negro, línea simple de viñeta) al que se le pueden sumar prompts propios, compartidos con todo el equipo.'],
     ['v154','Los templates llegan al equipo','Guardar publicaba solo en el navegador de cada uno. La clave que el almacén pide para aceptar un guardado se leía del cuadro de contraseña, pero al recargar la sesión ya está validada, ese cuadro no aparece y su valor queda vacío: el almacén rechazaba el guardado y el editor caía a la copia local. Ahora la clave se toma de la propia página, así que guardar publica siempre.'],
     ['v153','El almacén, conectado','Vercel cambió cómo se autentican los almacenes: dejó de entregar el token largo y pasó a credenciales que se renuevan solas (OIDC). El editor y sus funciones ahora usan ese sistema, y las subidas de ilustraciones y videos van por URL firmada en vez de token de cliente. Para el equipo no cambia nada, salvo que ahora funciona.'],
