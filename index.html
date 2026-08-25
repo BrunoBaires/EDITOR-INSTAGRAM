@@ -152,6 +152,25 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 .tpl-estado{flex:1;font-family:'IBM Plex Sans',sans-serif;font-size:11px;color:var(--text3);}
 .tpl-estado.ok{color:#10a37f;}
 .tpl-estado.off{color:#c1121f;}
+/* ── Ilustraciones a partir de fotos (v155) ── */
+.ilus-block{margin-top:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;}
+.ilus-sel{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 8px;outline:none;cursor:pointer;}
+.ilus-sel:focus{border-color:#aaa;}
+.ilus-desc{font-size:10.5px;color:var(--text3);line-height:1.45;margin:5px 0 7px;}
+/* Especificidad extra: si no, `.field label` lo pone en versalitas espaciadas. */
+.ilus-chk,.field .ilus-chk,.ilus-form .ilus-chk{display:flex;align-items:center;gap:7px;font-size:11px;line-height:1.35;color:var(--text2);cursor:pointer;margin-bottom:7px;text-transform:none;letter-spacing:0;font-weight:400;}
+.ilus-chk input{flex-shrink:0;margin:0;}
+.ilus-extra{width:100%;min-height:44px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;line-height:1.45;padding:7px 8px;resize:vertical;outline:none;margin-bottom:7px;}
+.ilus-extra:focus{border-color:#aaa;}
+.ilus-fila{display:flex;gap:5px;align-items:center;margin-top:6px;}
+.ilus-form{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:6px;}
+.ilus-form input[type=text]{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 8px;outline:none;}
+.ilus-form textarea{width:100%;min-height:96px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;line-height:1.5;padding:7px 8px;resize:vertical;outline:none;}
+/* ── Posición fija de los textos (v155) ── */
+.pos-estado{font-family:'IBM Plex Sans',sans-serif;font-size:11px;line-height:1.4;padding:6px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg);color:var(--text2);}
+.pos-estado.fija{border-color:#22a06b;color:#1a7a52;background:rgba(34,160,107,0.07);}
+.pos-estado.auto{border-color:#c8a028;color:#8a6d10;background:rgba(240,200,60,0.10);}
+.pos-alerta{font-family:'IBM Plex Sans',sans-serif;font-size:11px;line-height:1.4;padding:6px 8px;border-radius:4px;margin-bottom:6px;background:rgba(217,79,28,0.10);border:1px solid rgba(217,79,28,0.45);color:#c04315;font-weight:600;}
 .tpl-tabs{display:flex;gap:4px;margin-bottom:6px;}
 .tpl-tab{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text2);padding:7px 10px;font-family:'IBM Plex Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:3px;}
 .tpl-tab.on{background:var(--text);border-color:var(--text);color:var(--white);font-weight:600;}
@@ -575,7 +594,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v154 «guardar de verdad»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v155 «el texto no se mueve»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -785,7 +804,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v154 «guardar de verdad»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v155 «el texto no se mueve»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -858,6 +877,78 @@ const getOpenAIKey=()=>{var e=document.getElementById('openai-key');return e?e.v
 // Prompt editorial base (estilo documental NYT/Reuters/NatGeo)
 // Prompt editorial base (estilo documental NYT/Reuters/NatGeo)
 const EDITORIAL_PROMPT="Apply ONLY a photographic color-grade and tonal treatment to this exact photograph. This is a non-destructive edit: preserve the original composition, framing, and every subject completely unchanged. Do NOT alter, redraw, regenerate, reshape, or reinterpret any faces, facial features, facial expressions, head shape, body proportions, poses, hands, clothing, objects, text, or background structures. Keep every person's identity and likeness perfectly intact and recognizable — same face, same features, same geometry, pixel-for-pixel in structure. The ONLY changes allowed are photographic and artistic: refine the natural light as captured with deeper blacks, controlled highlights, soft contrast, rich microtexture, restrained color saturation, realistic and accurate skin tones, subtle tonal separation, and crisp detail. Avoid HDR, excessive clarity, cinematic color grading, orange/teal looks, glow effects, artificial depth of field, or exaggerated vibrance. The result must look like the SAME photograph, simply color-graded as an award-winning documentary news photograph published by The New York Times Magazine, Reuters, or National Geographic: natural, immersive, believable, and emotionally powerful through realism rather than effects.";
+// ══════════════════════════════════════════════════════════
+// ILUSTRACIONES A PARTIR DE FOTOS (v155)
+// Tres estilos de la casa + los que sume cada uno. Están pensados para que la
+// persona siga siendo reconocible: se simplifica el dibujo, nunca la cara.
+// Los prompts van en inglés porque gpt-image responde bastante mejor así.
+// ══════════════════════════════════════════════════════════
+const ILUS_PARECIDO=" Preserve the pose, the framing and the person's likeness exactly: same head shape, same facial features, same proportions, same expression, instantly recognisable as the same person. Simplify the rendering, never the identity. Do not caricature, do not beautify, do not change age, weight or ethnicity. No text, no caption, no signature, no border, no watermark.";
+const ILUS_RECORTE=" Drop the background completely: return only the illustrated subject on a fully transparent background, with clean precise edges including hair and thin details. Do not add any scenery, drop shadow, outline glow or colour fill behind the subject.";
+const ILUS_BASE=[
+  {
+    id:'linea-color',
+    nombre:'Línea + color plano',
+    desc:'Contorno calcado y color plano realista, sin degradés. Fondo recortado.',
+    transparente:true,
+    prompt:"Redraw this photograph as a clean vector-style illustration. Trace the real contours of the subject with an even, confident ink line of uniform weight, then fill the shapes with flat, opaque areas of colour: no gradients, no airbrushing, no texture, no visible brush strokes. Keep the colours true to the photograph — realistic skin tones, the real colours of the clothing — simplified into two or three flat tones per shape, with one slightly darker flat tone carrying the shadow side."
+  },
+  {
+    id:'crosshatch',
+    nombre:'Blanco y negro · crosshatching',
+    desc:'Plumín: la sombra se construye con tramas cruzadas. Dibujo simplificado.',
+    transparente:true,
+    prompt:"Redraw this photograph as a black-and-white pen-and-ink drawing. Build every value out of hatching and cross-hatching in fine parallel strokes: denser where the photograph is dark, sparser where it is light, bare paper for the highlights. Pure black ink only — no grey wash, no halftone dots, no digital shading, no colour. Simplify aggressively: keep only the lines that carry the form and drop incidental detail and busy texture."
+  },
+  {
+    id:'vineta',
+    nombre:'Línea simple · viñeta',
+    desc:'Un solo trazo de contorno, poquísimo detalle, aire de viñeta de revista.',
+    transparente:true,
+    prompt:"Redraw this photograph as a single-panel magazine spot illustration: one continuous contour line of even weight, drawn with a loose slightly wobbling hand rather than a mechanical stroke. Very low detail — the silhouette, the essential folds of the clothing, and only the few facial lines needed to carry the expression. No colour, no fill, no shading, no hatching: the shapes stay empty inside."
+  }
+];
+// Prompts propios: viven en el almacén del equipo (colección 'ilustraciones') y,
+// como respaldo, en este navegador. Mismo mecanismo que los templates.
+const ILUS_LS='incertis_ilustraciones';
+let ILUS_EQUIPO=[];
+function ilusMios(){
+  try{ const v=JSON.parse(localStorage.getItem(ILUS_LS)||'[]'); return Array.isArray(v)?v:[]; }
+  catch(e){ return []; }
+}
+function ilusGuardarMios(l){
+  try{ localStorage.setItem(ILUS_LS, JSON.stringify(l)); return true; }
+  catch(e){ return false; }
+}
+// Todos los estilos disponibles, sin repetir por nombre.
+function ilusTodos(){
+  const out=ILUS_BASE.slice();
+  const vistos={};
+  ILUS_BASE.forEach(x=>{vistos[x.id]=1;});
+  ILUS_EQUIPO.concat(ilusMios()).forEach(x=>{
+    if(!x||!x.nombre) return;
+    const id=x.id||('u-'+hashTxt(x.nombre));
+    if(vistos[id]) return; vistos[id]=1;
+    out.push({id:id, nombre:x.nombre, desc:x.desc||'Prompt propio', transparente:!!x.transparente, prompt:x.prompt||'', propio:true});
+  });
+  return out;
+}
+function ilusPorId(id){ return ilusTodos().filter(x=>x.id===id)[0]||ILUS_BASE[0]; }
+function ilusCargarEquipo(){
+  return storeLeer('ilustraciones').then(l=>{
+    ILUS_EQUIPO = l ? l.filter(x=>x&&x.nombre&&x.prompt) : [];
+    return ILUS_EQUIPO;
+  }).catch(()=>{ ILUS_EQUIPO=[]; return ILUS_EQUIPO; });
+}
+// Arma el prompt final: estilo + ajuste puntual + guardas de parecido/recorte.
+function ilusPrompt(estilo, extra, transparente){
+  var p=String(estilo&&estilo.prompt||'').trim();
+  if(extra && extra.trim()) p+=' Additional instruction: '+extra.trim()+'.';
+  p+=ILUS_PARECIDO;
+  if(transparente) p+=ILUS_RECORTE;
+  return p;
+}
+
 const getMedio=()=>''; // removed — footer uses Incertis branding
 const setStatus=(txt,mode='')=>{
   document.getElementById('stxt').textContent=txt;
@@ -1064,6 +1155,7 @@ function autoSig(card,m){
   return [card.id, card.mediaW, card.mediaH, card.anchor, card.scrimInt,
           card.titleSz, card.bodySz, (card.titulo||'').length, (card.cuerpo||'').length,
           card.titleDY, card.bodyDY,
+          card.titXY?(card.titXY.x+','+card.titXY.y):'', card.bajXY?(card.bajXY.x+','+card.bajXY.y):'',
           m?m.dataUrl:'', m?m.zoom:'', m?m.cx:'', m?m.cy:'', m?m.fitMode:'',
           m?m.adjBright:'', m?m.adjContrast:'', m?m.adjExposure:'', m?m.fxBW:''
          ].join('|');
@@ -1445,6 +1537,75 @@ function richTextHeight(raw,maxW,sz,lh){
 
 const ANCHORS={tl:{x:0,y:0},tc:{x:.5,y:0},tr:{x:1,y:0},ml:{x:0,y:.5},mc:{x:.5,y:.5},mr:{x:1,y:.5},bl:{x:0,y:1},bc:{x:.5,y:1},br:{x:1,y:1}};
 
+// ══════════════════════════════════════════════════════════
+// POSICIÓN FIJA DE LOS TEXTOS (v155)
+// Antes el título y la bajada se apilaban en flujo: al escribir una bajada
+// larga, el título se corría solo y podía irse fuera de cuadro sin manera de
+// recuperarlo. Ahora cada bloque tiene su coordenada propia en la placa:
+// se congela la primera vez que se dibuja (en el mismo lugar donde estaba,
+// así nada se mueve de golpe) y a partir de ahí SOLO cambia si la arrastrás.
+// Es lo que permite dejar una placa armada y que un colaborador reemplace el
+// texto sin que se desarme nada.
+//   card.titXY = {x,y}   posición del título en la placa
+//   card.bajXY = {x,y}   posición de la bajada
+//   card.textoAuto=true  vuelve al comportamiento viejo (se reacomoda solo)
+// El dibujo no cambia: seguimos pintando en el flujo y trasladando el canvas
+// por la diferencia entre la posición fija y la del flujo.
+// ══════════════════════════════════════════════════════════
+function deltaTexto(card, clave, xFlujo, yFlujo){
+  var k    = (clave==='tit') ? 'titXY'   : 'bajXY';
+  var kDel = (clave==='tit') ? '_titDelta' : '_bajDelta';
+  var kFlu = (clave==='tit') ? '_titFlujo' : '_bajFlujo';
+  var mx   = (clave==='tit') ? (card.titleDX||0) : (card.bodyDX||0);
+  var my   = (clave==='tit') ? (card.titleDY||0) : (card.bodyDY||0);
+  // Dónde caería el bloque por flujo: lo necesita el arrastre para saber de
+  // dónde parte cuando la card todavía está en modo automático.
+  card[kFlu]={x:xFlujo, y:yFlujo};
+  // Modo automático: se comporta como siempre (flujo + arrastre relativo).
+  if(card.textoAuto===true){
+    card[kDel]={dx:mx,dy:my};
+    return {dx:mx, dy:my, x:xFlujo+mx, y:yFlujo+my, fija:false};
+  }
+  if(!card[k] || typeof card[k].y!=='number'){
+    // Primera vez: se congela donde el texto está HOY, arrastre viejo incluido.
+    // El clamp rescata las cards que ya venían con el título fuera de cuadro.
+    card[k]={ x: Math.round(Math.max(-W*0.5, Math.min(W*1.2, xFlujo+mx))),
+              y: Math.round(Math.max(50,     Math.min(H-40,  yFlujo+my))) };
+    // Migrado: los deltas viejos ya viven dentro de la coordenada.
+    if(clave==='tit'){ card.titleDX=0; card.titleDY=0; }
+    else             { card.bodyDX=0;  card.bodyDY=0;  }
+  }
+  var d={dx:card[k].x-xFlujo, dy:card[k].y-yFlujo, x:card[k].x, y:card[k].y, fija:true};
+  card[kDel]={dx:d.dx, dy:d.dy};
+  return d;
+}
+// Devuelve el bloque de texto a la posición que le tocaría por flujo.
+function soltarTexto(card, clave){
+  if(!card) return;
+  if(clave==='tit' || clave==='ambos'){ delete card.titXY; card.titleDX=0; card.titleDY=0; }
+  if(clave==='baj' || clave==='ambos'){ delete card.bajXY; card.bodyDX=0;  card.bodyDY=0;  }
+}
+// Rescate: trae a la vista cualquier bloque que se haya ido de la placa.
+function rescatarTextos(card){
+  if(!card) return 0;
+  var n=0;
+  ['titXY','bajXY'].forEach(function(k){
+    var p=card[k]; if(!p) return;
+    var nx=Math.max(20, Math.min(W-120, p.x));
+    var ny=Math.max(80, Math.min(H-80,  p.y));
+    if(nx!==p.x || ny!==p.y){ p.x=nx; p.y=ny; n++; }
+  });
+  return n;
+}
+// ¿Este bloque quedó fuera de la placa? (para avisar en el panel)
+function textoFueraDeCuadro(card){
+  if(!card) return false;
+  return ['titXY','bajXY'].some(function(k){
+    var p=card[k]; if(!p) return false;
+    return p.x<-40 || p.x>W-40 || p.y<20 || p.y>H-20;
+  });
+}
+
 // Familia tipográfica del título según la card.
 // Opciones: 'fraunces' (default) | 'archivo' | 'franklin' | 'bodoni'
 // Biblioteca curada de fuentes editoriales. grupo/label/css/google/ital.
@@ -1702,7 +1863,10 @@ function drawMedia(m,x,y,w,h,t_anim){
     ctx.scale(over,over);
     ctx.translate(-ccx,-ccy);
   }
-  ctx.drawImage(el,x+(w-dw)*cx,y+(h-dh)*cy,dw,dh);
+  // Desplazamiento libre en píxeles (v155): el arrastre suma acá, sin tope.
+  // cx/cy quedan como encuadre base; offX/offY son el corrimiento a mano, y
+  // permiten sacar la foto todo lo que haga falta fuera de la zona.
+  ctx.drawImage(el,x+(w-dw)*cx+(m.offX||0),y+(h-dh)*cy+(m.offY||0),dw,dh);
   ctx.filter='none';
   ctx.restore();
   // Viraje cinematográfico: viñeteado + luz cálida, encima de la foto ya corregida.
@@ -1754,7 +1918,7 @@ function drawSlotImage(slot,x,y,w,h,r){
       const bs=baseScale({fitMode:(slot.fitMode||'cover')},w,h,srcW,srcH)*zoom;
       const dw=srcW*bs, dh=srcH*bs;
       var _flt=mediaFilterString(slot); if(_flt) ctx.filter=_flt;
-      ctx.drawImage(el, x+(w-dw)*cx, y+(h-dh)*cy, dw, dh);
+      ctx.drawImage(el, x+(w-dw)*cx+(slot.offX||0), y+(h-dh)*cy+(slot.offY||0), dw, dh);
       ctx.filter='none';
     }
   } else {
@@ -1835,7 +1999,7 @@ function drawVineta(card,t){
     const tSz=card.titleSz||52;
     const tLH=Math.round(tSz*1.14);
     const _famV=titleFontFamily(card), _wtV=titleFontWeight(card);
-    ctx.save(); ctx.translate(_titdx,_titdy);
+    ctx.save(); var _dTv=deltaTexto(card,'tit',M,ty); ctx.translate(_dTv.dx,_dTv.dy);
     ctx.font=`${_wtV} ${tSz}px ${_famV}`; ctx.letterSpacing='-0.5px';
     ctx.fillStyle=CC.text; ctx.textAlign='left';
     const tl=wrapTitle(card.titulo, W-M*2, tSz, _famV, _wtV);
@@ -1846,7 +2010,7 @@ function drawVineta(card,t){
     ty += tl.length*tLH + Math.round(tSz*0.55);
   }
   if(card.cuerpo){
-    ctx.save(); ctx.translate(_boddx,_boddy);
+    ctx.save(); var _dBv=deltaTexto(card,'baj',M,ty); ctx.translate(_dBv.dx,_dBv.dy);
     const endY=drawRichText(card.cuerpo, M, ty, W-M*2, bSz, bLH, CC.body, CC.text, card.bodyItalic);
     ctx.restore();
     card._bodyBox={x:M, y:ty-bSz, w:W-M*2, h:(endY-ty)+bSz};
@@ -3136,7 +3300,7 @@ function drawMapa(card,t){
     const _bdx=card.bodyDX||0,  _bdy=card.bodyDY||0;
 
     if(card.titulo){
-      ctx.save(); ctx.translate(_tdx,_tdy);
+      ctx.save(); var _dTm=deltaTexto(card,'tit',M,ty); ctx.translate(_dTm.dx,_dTm.dy);
       ctx.font=`${titleFontWeight(card)} ${tSz}px ${titleFontFamily(card)}`;ctx.letterSpacing='-0.5px';
       ctx.fillStyle=_mapTxt;
       if(textOverMap){ ctx.shadowColor=_mapHalo+'0.45)'; ctx.shadowBlur=Math.round(tSz*0.16); }
@@ -3159,7 +3323,7 @@ function drawMapa(card,t){
       const _bTxt  = _bodyBlack ? '#0a0a0a' : '#ffffff';
       const _bBody = _bodyBlack ? PAL.body : 'rgba(255,255,255,0.90)';
       const _bHalo = _bodyBlack ? 'rgba(255,255,255,' : 'rgba(0,0,0,';
-      ctx.save(); ctx.translate(_bdx,_bdy);
+      ctx.save(); var _dBm=deltaTexto(card,'baj',M,ty); ctx.translate(_dBm.dx,_dBm.dy);
       if(textOverMap){ ctx.shadowColor=_bHalo+'0.42)'; ctx.shadowBlur=Math.round(bSz*0.14); }
       // drawRichText: soporta **negrita** //itálica// ==resaltado== como el resto
       const endY=drawRichText(card.cuerpo, M, ty, W-M*2, bSz, bLH, _bBody, _bTxt, card.bodyItalic);
@@ -3819,7 +3983,7 @@ function drawTabla(card,t){
   if(card.titulo){
     ctx.font=`${titleFontWeight(card)} ${tSz}px ${titleFontFamily(card)}`;ctx.letterSpacing='-1px';ctx.fillStyle=CC.text;
     const tl=wrapTitle(card.titulo,W-M*2,tSz,titleFontFamily(card),titleFontWeight(card));
-    ctx.save();ctx.translate(_titdx,_titdy);
+    ctx.save();var _dTt=deltaTexto(card,'tit',M,y);ctx.translate(_dTt.dx,_dTt.dy);
     tl.forEach((l,i)=>ctx.fillText(l,M,y+i*tLH));
     ctx.restore();
     card._titleBox={x:M,y:y-tLH,w:W-M*2,h:tl.length*tLH+20};
@@ -3836,7 +4000,7 @@ function drawTabla(card,t){
     // Antes usaba CC.meta (#8a8680) y quedaba gris, desalineada del sistema.
     ctx.font=`400 ${stSz}px "IBM Plex Sans"`;ctx.letterSpacing='0px';ctx.fillStyle=CC.body;
     const sl=wrap(card.cuerpo,W-M*2);
-    ctx.save();ctx.translate(_boddx,_boddy);
+    ctx.save();var _dBt=deltaTexto(card,'baj',M,y+28);ctx.translate(_dBt.dx,_dBt.dy);
     sl.forEach((l,i)=>ctx.fillText(l,M,y+28+i*stLH));
     ctx.restore();
     card._bodyBox={x:M,y:y+28-stSz,w:W-M*2,h:sl.length*stLH+stSz*0.4};
@@ -4148,6 +4312,11 @@ function drawCard(card,t){
       const bl=card.cuerpo?wrap(card.cuerpo,W-M*2):[];
       const totalH=tl.length*tLH+(bl.length?32+bl.length*bLH:0);
       let ty=H-114-60-totalH;
+      // Posición fija del título: se resuelve ACÁ porque el degradé y la medición
+      // de brillo tienen que seguir al texto donde realmente está, no donde
+      // caería por flujo (si no, la sombra queda en un lado y el título en otro).
+      const _dTfb=deltaTexto(card,'tit',M,ty);
+      const tyReal=ty+_dTfb.dy;
       // Degradé inferior (estilo editorial, como las placas de Clarín/WaPo):
       // una sola rampa suave desde ~50% de alto hasta el pie, que oscurece la foto
       // y hace legible la tipografía SIN taparla. Regulable con "Sombra".
@@ -4167,7 +4336,7 @@ function drawCard(card,t){
         if(card._autoSig===_sig && card._autoBlack!==undefined){
           _fbBlack=card._autoBlack;
         } else {
-          _fbBlack = zoneIsLight(0, Math.max(0,ty-tLH), W, Math.min(H-Math.max(0,ty-tLH), totalH+tLH*2));
+          _fbBlack = zoneIsLight(0, Math.max(0,tyReal-tLH), W, Math.min(H-Math.max(0,tyReal-tLH), totalH+tLH*2));
           card._autoSig=_sig; card._autoBlack=_fbBlack;
         }
       }
@@ -4177,7 +4346,7 @@ function drawCard(card,t){
       var _scrim = (card.scrimInt!==undefined?card.scrimInt:55)/100;  // 0..1
       if(_scrim>0){
         ctx.save();
-        var gTop=Math.min(ty-tLH*0.6, H*0.50);      // arranca arriba del texto
+        var gTop=Math.min(tyReal-tLH*0.6, H*0.50);  // arranca arriba del texto
         if(!isFinite(gTop)||gTop<0) gTop=H*0.50;
         var _sc = _fbBlack ? '255,255,255' : '0,0,0';
         var gg=ctx.createLinearGradient(0,gTop,0,H);
@@ -4194,7 +4363,7 @@ function drawCard(card,t){
       // La sombra acompaña: negra detrás del texto blanco, blanca detrás del negro.
       const _fbShadow= _fbBlack ? 'rgba(255,255,255,' : 'rgba(0,0,0,';
       if(tl.length){
-        ctx.save();ctx.translate(_titdx,_titdy);
+        ctx.save();ctx.translate(_dTfb.dx,_dTfb.dy);
         // Halo sutil SIEMPRE (no depende de la sombra): despega el texto del
         // fondo aunque el degradé esté en 0, sin ensuciar la foto.
         ctx.shadowColor=_fbShadow+(0.30+0.35*_scrim).toFixed(3)+')';
@@ -4204,9 +4373,11 @@ function drawCard(card,t){
         ctx.restore();
         card._titleBox={x:M,y:ty,w:W-M*2,h:tl.length*tLH+tLH};
       }
-      let byTop=ty+tl.length*tLH+22;
+      // El flujo de la bajada arranca debajo del título REAL (ya fijado), así la
+      // primera vez que se congela queda pegada a él y no en otro lado.
+      let byTop=tyReal+tl.length*tLH+22;
       if(card.cuerpo){
-        ctx.save();ctx.translate(_boddx,_boddy);
+        ctx.save();var _dBfb=deltaTexto(card,'baj',M,byTop);ctx.translate(_dBfb.dx,_dBfb.dy);
         ctx.shadowColor=_fbShadow+(0.28+0.32*_scrim).toFixed(3)+')';
         ctx.shadowBlur=Math.round(bSz*0.12)+6*_scrim;
         ctx.strokeStyle=_fbRule;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(M,byTop);ctx.lineTo(M+50,byTop);ctx.stroke();
@@ -4225,7 +4396,7 @@ function drawCard(card,t){
         var _famC=titleFontFamily(card), _wtC=titleFontWeight(card);
         ctx.font=`${_wtC} ${tSz}px ${_famC}`;ctx.letterSpacing='-0.5px';
         const tl=wrapTitle(card.titulo,textMaxW,tSz,_famC,_wtC);
-        ctx.save();ctx.translate(_titdx,_titdy);
+        ctx.save();var _dTs=deltaTexto(card,'tit',textX,ty);ctx.translate(_dTs.dx,_dTs.dy);
         ctx.fillStyle=CC2.text;
         tl.forEach((l,i)=>{ ctx.fillText(l,textX,ty+i*tLH); });
         ctx.restore();
@@ -4234,7 +4405,7 @@ function drawCard(card,t){
       }
       if(card.cuerpo){
         const bl=wrap(card.cuerpo,textMaxW);
-        ctx.save();ctx.translate(_boddx,_boddy);
+        ctx.save();var _dBs=deltaTexto(card,'baj',textX,ty);ctx.translate(_dBs.dx,_dBs.dy);
         drawRichText(card.cuerpo,textX,ty,textMaxW,bSz,bLH,CC2.body,CC2.text);
         ctx.restore();
         card._bodyBox={x:textX,y:ty-bSz,w:textMaxW,h:bl.length*bLH+bSz};
@@ -4248,7 +4419,7 @@ function drawCard(card,t){
         var _famA=titleFontFamily(card), _wtA=titleFontWeight(card);
         ctx.font=`${_wtA} ${tSz}px ${_famA}`;ctx.letterSpacing='-0.5px';
         const tl=wrapTitle(card.titulo,W-M*2,tSz,_famA,_wtA);
-        ctx.save();ctx.translate(_titdx,_titdy);
+        ctx.save();var _dTa=deltaTexto(card,'tit',M,ty);ctx.translate(_dTa.dx,_dTa.dy);
         ctx.fillStyle=CC3.text;
         tl.forEach((l,i)=>{ ctx.fillText(l,M,ty+i*tLH); });
         ctx.restore();
@@ -4257,7 +4428,7 @@ function drawCard(card,t){
       }
       if(card.cuerpo){
         const bl=wrap(card.cuerpo,W-M*2);
-        ctx.save();ctx.translate(_boddx,_boddy);
+        ctx.save();var _dBa=deltaTexto(card,'baj',M,ty);ctx.translate(_dBa.dx,_dBa.dy);
         drawRichText(card.cuerpo,M,ty,W-M*2,bSz,bLH,CC3.body,CC3.text);
         ctx.restore();
         card._bodyBox={x:M,y:ty-bSz,w:W-M*2,h:bl.length*bLH+bSz};
@@ -4296,7 +4467,7 @@ function drawCard(card,t){
       var _famTx=titleFontFamily(card), _wtTx=titleFontWeight(card);
       ctx.font=`${_wtTx} ${tSz}px ${_famTx}`;ctx.letterSpacing='-0.5px';ctx.fillStyle=CC.text;
       const tl=wrapTitle(card.titulo,W-M*2,tSz,_famTx,_wtTx);
-      ctx.save();ctx.translate(_titdx,_titdy);
+      ctx.save();var _dTx=deltaTexto(card,'tit',M,y);ctx.translate(_dTx.dx,_dTx.dy);
       tl.forEach((l,i)=>{ ctx.fillText(l,M,y+i*tLH); });
       ctx.restore();
       card._titleBox={x:M,y:y-tLH,w:W-M*2,h:tl.length*tLH+30};
@@ -4305,7 +4476,7 @@ function drawCard(card,t){
     y+=28;                       // sin filete: solo aire entre título y cuerpo
     const _bodyTop=y;
     if(card.cuerpo){
-      ctx.save(); ctx.translate(_boddx,_boddy);
+      ctx.save(); var _dBx=deltaTexto(card,'baj',M,y); ctx.translate(_dBx.dx,_dBx.dy);
       if(t<1&&FX.type){
         // Typewriter: cualquier card texto
         const tp=Math.max(0,Math.min(1,(t-.32)/(1-.32)));
@@ -5065,8 +5236,12 @@ function hitVinSlot(card,cx,cy){
 }
 function hitWhichText(card,cx,cy){
   if(!card) return null;
-  const enTit = card.titulo && inBox(card._titleBox, card.titleDX||0, card.titleDY||0, cx,cy);
-  const enCue = card.cuerpo && inBox(card._bodyBox, card.bodyDX||0, card.bodyDY||0, cx,cy);
+  // Las cajas se guardan en coordenadas de flujo; el desplazamiento efectivo
+  // (posición fija menos flujo) lo dejó deltaTexto en _titDelta/_bajDelta.
+  const _dT=card._titDelta||{dx:card.titleDX||0,dy:card.titleDY||0};
+  const _dB=card._bajDelta||{dx:card.bodyDX||0, dy:card.bodyDY||0};
+  const enTit = card.titulo && inBox(card._titleBox, _dT.dx, _dT.dy, cx,cy);
+  const enCue = card.cuerpo && inBox(card._bodyBox, _dB.dx, _dB.dy, cx,cy);
   // Si el click cae en las dos cajas, gana la más chica (la más específica).
   if(enTit && enCue){
     const at=(card._titleBox.w*card._titleBox.h)||1e9;
@@ -5158,9 +5333,14 @@ canvas.addEventListener('mousedown',e=>{
   // agarra el texto y tocar fuera agarra el mapa. Sin filtros adicionales.
   const which=hitWhichText(card,cxC,cyC);
   if(which){
-    textDrag={which:which, x:e.offsetX, y:e.offsetY,
-      dx: which==='title'?(card.titleDX||0):(card.bodyDX||0),
-      dy: which==='title'?(card.titleDY||0):(card.bodyDY||0)};
+    // Arrastrar = fijar. La card sale del modo automático y el bloque pasa a
+    // vivir en la coordenada donde lo sueltes.
+    var _k = which==='title' ? 'titXY' : 'bajXY';
+    var _flu = which==='title' ? (card._titFlujo||{x:M,y:H/2}) : (card._bajFlujo||{x:M,y:H/2});
+    var _md  = which==='title' ? {x:card.titleDX||0,y:card.titleDY||0} : {x:card.bodyDX||0,y:card.bodyDY||0};
+    var _p = card[_k] || {x:Math.round(_flu.x+_md.x), y:Math.round(_flu.y+_md.y)};
+    card[_k]=_p; card.textoAuto=false;
+    textDrag={which:which, k:_k, x:e.offsetX, y:e.offsetY, px:_p.x, py:_p.y};
     canvas.style.cursor='grabbing';
     dragGuides=true;
     e.preventDefault(); return;
@@ -5187,14 +5367,14 @@ canvas.addEventListener('mousedown',e=>{
     if(hit){
       const sl=(vinCache[card.id]||[])[hit.idx];
       if(sl){
-        vinDrag={idx:hit.idx, box:hit.box, x:e.offsetX, y:e.offsetY, cx:sl.cx!==undefined?sl.cx:.5, cy:sl.cy!==undefined?sl.cy:.5};
+        vinDrag={idx:hit.idx, box:hit.box, x:e.offsetX, y:e.offsetY, offX:(sl.offX||0), offY:(sl.offY||0)};
         canvas.style.cursor='grabbing'; dragGuides=true;
         e.preventDefault(); return;
       }
     }
   }
   const m=mediaCache[card.id]; if(!m) return;
-  canvasDrag={x:e.offsetX,y:e.offsetY,cx:m.cx,cy:m.cy};
+  canvasDrag={x:e.offsetX,y:e.offsetY,offX:(m.offX||0),offY:(m.offY||0)};
   dragGuides=true;
   e.preventDefault();
 });
@@ -5264,40 +5444,30 @@ canvas.addEventListener('mousemove',e=>{
   if(vinDrag && card){
     const sl=(vinCache[card.id]||[])[vinDrag.idx];
     if(sl && sl.el){
-      const b=vinDrag.box;
-      const srcW=sl.type==='video'?sl.el.videoWidth:sl.el.naturalWidth;
-      const srcH=sl.type==='video'?sl.el.videoHeight:sl.el.naturalHeight;
+      // También 1:1 y sin tope, igual que la foto de fondo.
       const dx=(e.offsetX-vinDrag.x)*(W/CVW), dy=(e.offsetY-vinDrag.y)*(H/cvH());
-      const bs=baseScale({fitMode:(sl.fitMode||'cover')},b.w,b.h,srcW,srcH)*(sl.zoom||1);
-      const _dw=srcW*bs, _dh=srcH*bs;
-      const _rx=Math.abs(_dw-b.w), _ry=Math.abs(_dh-b.h);
-      const _sx=(_dw>=b.w)?-1:1, _sy=(_dh>=b.h)?-1:1;
-      sl.cx=Math.max(0,Math.min(1, vinDrag.cx + _sx*dx/Math.max(_rx,1)));
-      sl.cy=Math.max(0,Math.min(1, vinDrag.cy + _sy*dy/Math.max(_ry,1)));
+      sl.offX=Math.round(vinDrag.offX+dx);
+      sl.offY=Math.round(vinDrag.offY+dy);
       repintar();
     }
     return;
   }
   if(textDrag && card){
     const dx=(e.offsetX-textDrag.x)*(W/CVW), dy=(e.offsetY-textDrag.y)*(H/cvH());
-    if(textDrag.which==='title'){ card.titleDX=Math.round(textDrag.dx+dx); card.titleDY=Math.round(textDrag.dy+dy); }
-    else { card.bodyDX=Math.round(textDrag.dx+dx); card.bodyDY=Math.round(textDrag.dy+dy); }
+    var _pp=card[textDrag.k];
+    if(_pp){ _pp.x=Math.round(textDrag.px+dx); _pp.y=Math.round(textDrag.py+dy); }
     repintar();
     return;
   }
   if(!canvasDrag)return;
   const m=mediaCache[cards[sel]?.id];if(!m)return;
-  const zoneW=Math.round((card.mediaW||100)/100*W),zoneH=Math.round((card.mediaH||100)/100*H);
+  // Arrastre 1:1 y sin tope (v155): la foto sigue al puntero píxel por píxel y
+  // podés sacarla enteramente de cuadro. Antes el recorrido estaba clampeado
+  // entre 0 y 1 y, según el zoom, el sentido se invertía: no había forma de
+  // correr la imagen hacia abajo más allá del borde de la zona.
   const dx=(e.offsetX-canvasDrag.x)*(W/CVW),dy=(e.offsetY-canvasDrag.y)*(H/cvH());
-  const el=m.el;const srcW=m.type==='video'?el.videoWidth:el.naturalWidth,srcH=m.type==='video'?el.videoHeight:el.naturalHeight;
-  const bs=baseScale(m,zoneW,zoneH,srcW,srcH)*m.zoom;
-  const dw=srcW*bs, dh=srcH*bs;
-  // Rango de recorrido y sentido: si la imagen entra en la zona (zoom<1) se
-  // mueve CON el puntero; si desborda (zoom>1) el encuadre va al revés.
-  const rx=Math.abs(dw-zoneW), ry=Math.abs(dh-zoneH);
-  const sx=(dw>=zoneW)?-1:1, sy=(dh>=zoneH)?-1:1;
-  m.cx=Math.max(0,Math.min(1, canvasDrag.cx + sx*dx/Math.max(rx,1)));
-  m.cy=Math.max(0,Math.min(1, canvasDrag.cy + sy*dy/Math.max(ry,1)));
+  m.offX=Math.round(canvasDrag.offX+dx);
+  m.offY=Math.round(canvasDrag.offY+dy);
   repintar();syncSliders();
 });
 
@@ -5326,8 +5496,11 @@ window.addEventListener('mouseup',()=>{
   if(logoDrag){ logoDrag=null; canvas.style.cursor=''; renderEditor(cards[sel]); repintar(); }
   if(capaDrag||capaResize){ capaDrag=null; capaResize=null; canvas.style.cursor='';
     dragGuides=false; if(cards[sel]) renderEditor(cards[sel]); repintar(); }
+  var fueTexto=!!textDrag;
   canvasDrag=null; textDrag=null; vinDrag=null; canvas.style.cursor='';
   if(wasDragging){ dragGuides=false; if(cards[sel]&&!raf) drawCard(cards[sel],.7); }
+  // Al soltar un texto, el panel refleja el nuevo estado (fijo, dentro de cuadro).
+  if(fueTexto && cards[sel]) renderEditor(cards[sel]);
 });
 
 // ════════════════════════════════
@@ -5360,6 +5533,10 @@ function syncSliders(){
   const zs=document.getElementById('sl-zoom'),xs=document.getElementById('sl-x'),ys=document.getElementById('sl-y');
   if(zs)zs.value=m.zoom;if(xs)xs.value=m.cx;if(ys)ys.value=m.cy;
   const zv=document.getElementById('sl-zoom-val');if(zv)zv.textContent=m.zoom.toFixed(2)+'×';
+  // Los sliders de desplazamiento siguen al arrastre en vivo.
+  const ox=document.getElementById('sl-offx'), oy=document.getElementById('sl-offy');
+  if(ox){ ox.value=m.offX||0; const v=document.getElementById('sl-offx-val'); if(v)v.textContent=m.offX||0; }
+  if(oy){ oy.value=m.offY||0; const v=document.getElementById('sl-offy-val'); if(v)v.textContent=m.offY||0; }
 }
 
 // ════════════════════════════════
@@ -5749,8 +5926,15 @@ function renderEditor(c){
             <button class="tipo-btn${m.fitMode==='cover'?' active':''}" id="fit-cover" style="flex:1;font-size:11px" title="Llena la zona recortando">⛶ Llenar zona</button>
           </div>
           <div class="range-row"><label>Zoom</label><input type="range" id="sl-zoom" min="0.15" max="4" step="0.05" value="${m.zoom}"/><span class="range-val" id="sl-zoom-val">${m.zoom.toFixed(2)}×</span></div>
-          <div class="range-row"><label>Posición H</label><input type="range" id="sl-x" min="0" max="1" step="0.01" value="${m.cx}"/></div>
-          <div class="range-row"><label>Posición V</label><input type="range" id="sl-y" min="0" max="1" step="0.01" value="${m.cy}"/></div>
+          <div class="range-row"><label>Mover H</label><input type="range" id="sl-offx" min="${-Math.round(W*1.3)}" max="${Math.round(W*1.3)}" step="4" value="${m.offX||0}"/><span class="range-val" id="sl-offx-val">${m.offX||0}</span></div>
+          <div class="range-row"><label>Mover V</label><input type="range" id="sl-offy" min="${-Math.round(H*1.3)}" max="${Math.round(H*1.3)}" step="4" value="${m.offY||0}"/><span class="range-val" id="sl-offy-val">${m.offY||0}</span></div>
+          <div class="range-row"><label>Encuadre H</label><input type="range" id="sl-x" min="0" max="1" step="0.01" value="${m.cx}"/></div>
+          <div class="range-row"><label>Encuadre V</label><input type="range" id="sl-y" min="0" max="1" step="0.01" value="${m.cy}"/></div>
+          <button class="btn-g" id="img-center" style="width:100%;margin-top:6px;font-size:11px">◎ Centrar la foto</button>
+          <div style="font-size:10px;color:var(--text3);margin-top:5px;line-height:1.45">
+            Arrastrá la foto sobre la placa: va 1:1 con el mouse y podés sacarla todo lo que quieras fuera de cuadro.
+            «Mover» es lo mismo con precisión; «Encuadre» reparte el sobrante dentro de la zona. La rueda hace zoom.
+          </div>
         </div>
         <div class="range-block" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
           <div class="range-row"><label>Borde esfumado</label><input type="range" id="sl-fade" min="0" max="100" step="5" value="${c.edgeFade||0}"/><span class="range-val" id="sl-fade-val">${c.edgeFade||0}</span></div>
@@ -5801,6 +5985,30 @@ function renderEditor(c){
           <button class="aiedit-run" id="aiedit-run">Aplicar edición IA</button>
           ${m._aiOriginal?`<button class="aiedit-revert" id="aiedit-revert">↩ Volver al original</button>`:''}
           <div class="aiedit-status" id="aiedit-status"></div>
+        </div>
+        <div class="ilus-block" id="ilus-block">
+          <div class="aiedit-head"><span>✎ Ilustrar la foto</span><span class="aiedit-sub">guarda el parecido</span></div>
+          <select id="ilus-sel" class="ilus-sel"></select>
+          <div class="ilus-desc" id="ilus-desc"></div>
+          <label class="ilus-chk"><input type="checkbox" id="ilus-trans"/> Fondo recortado (transparente)</label>
+          <textarea id="ilus-extra" class="ilus-extra" placeholder="Ajuste puntual, opcional: solo el busto, sacá el micrófono, más contraste…"></textarea>
+          <button class="aiedit-run" id="ilus-run">Ilustrar</button>
+          <div class="ilus-fila">
+            <button class="tpl-mini" id="ilus-nuevo">＋ Guardar un prompt</button>
+            <button class="tpl-mini" id="ilus-editar" style="display:none">✎ Editar</button>
+            <button class="tpl-mini del" id="ilus-borrar" style="display:none">Borrar</button>
+          </div>
+          <div class="ilus-form" id="ilus-form" style="display:none">
+            <input type="text" id="ilus-nom" placeholder="Nombre del estilo (ej: Acuarela suave)" maxlength="48"/>
+            <textarea id="ilus-txt" placeholder="Prompt, preferentemente en inglés. Describí el trazo, el color y el nivel de detalle; el parecido de la persona y el recorte del fondo los agrega el editor."></textarea>
+            <label class="ilus-chk"><input type="checkbox" id="ilus-ntrans" checked/> Este estilo va con fondo recortado</label>
+            <div class="ilus-fila">
+              <button class="tpl-mini" id="ilus-base">Partir del estilo elegido</button>
+              <button class="tpl-mini" id="ilus-cancel">Cancelar</button>
+              <button class="btn-p" id="ilus-save" style="flex:1;padding:6px 10px;font-size:12px">Guardar</button>
+            </div>
+          </div>
+          <div class="aiedit-status" id="ilus-status"></div>
         </div>`:''}
       </div>
       <div class="field" style="margin-top:2px"><label>Efectos</label>
@@ -5842,8 +6050,7 @@ function renderEditor(c){
       <div style="font-size:11px;color:var(--text3);margin-top:4px;text-align:center">${layoutHint}</div>
     </div>
     <div class="field"><label>Texto</label>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">✋ Arrastrá el título y la bajada por separado sobre la placa.</div>
-      <button class="fmt-apply" id="reset-textpos"${(c.titleDX||c.titleDY||c.bodyDX||c.bodyDY)?'':' disabled'}>Volver el texto a su lugar</button>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">✋ Arrastrá el título y la bajada por separado sobre la placa. Quedan fijos donde los sueltes — los controles están más abajo, en «Posición del texto».</div>
     </div>`;
   }
 
@@ -5888,8 +6095,7 @@ function renderEditor(c){
       <div style="font-size:10px;color:var(--text3);margin-top:4px">Plano en perspectiva, como una maqueta vista de costado.</div>
     </div>
     <div class="field"><label>Texto</label>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:6px">✋ Arrastrá el título y la bajada por separado sobre la placa.</div>
-      <button class="fmt-apply" id="reset-textpos-map"${(c.titleDX||c.titleDY||c.bodyDX||c.bodyDY)?'':' disabled'}>Volver el texto a su lugar</button>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">✋ Arrastrá el título y la bajada por separado sobre el mapa. Quedan fijos donde los sueltes — los controles están más abajo, en «Posición del texto».</div>
     </div>
     <div class="field"><label>Ficha de ubicación</label>
       <div style="font-size:10px;color:var(--text3);margin-bottom:6px">El nombre del lugar buscado, como ficha que ubica el tema.</div>
@@ -6195,6 +6401,8 @@ function renderEditor(c){
             <div class="range-row"><label>Zoom</label><input type="range" class="vin-zoom" data-i="${i}" min="1" max="4" step="0.05" value="${s.zoom||1}"/><span class="range-val">${(s.zoom||1).toFixed(1)}×</span></div>
             <div class="range-row"><label>H</label><input type="range" class="vin-cx" data-i="${i}" min="0" max="1" step="0.01" value="${s.cx!==undefined?s.cx:.5}"/></div>
             <div class="range-row"><label>V</label><input type="range" class="vin-cy" data-i="${i}" min="0" max="1" step="0.01" value="${s.cy!==undefined?s.cy:.5}"/></div>
+            <button class="btn-g vin-center" data-i="${i}" style="width:100%;margin-top:5px;font-size:11px">◎ Centrar</button>
+            <div style="font-size:10px;color:var(--text3);margin-top:4px">Arrastrala en la placa: va 1:1 y puede salirse del recuadro.</div>
           </div>
           <div class="field" style="margin-top:6px"><label>Epígrafe (nombre) <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">opcional</span></label>
             <input type="text" class="vin-cap" data-i="${i}" value="${cap}" placeholder="Ej: Gustavo Coria" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:13px;padding:8px;outline:none"/>
@@ -6479,6 +6687,26 @@ function renderEditor(c){
     <div class="field"><label>${c.tipo==='media'?'Bajada':c.tipo==='vineta'?'Texto':'Cuerpo'} <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">**negrita** · //itálica// · ==resaltado== · Enter = nueva línea</span></label><textarea id="f-c" rows="${c.tipo==='media'?3:5}">${c.cuerpo||''}</textarea><div class="char-count" id="cc-c">${(c.cuerpo||'').length}/${bodyLimit}</div>
       <button class="tipo-btn${c.bodyItalic?' active':''}" id="body-italic" style="margin-top:6px;font-style:italic;font-size:12px">Toda la bajada en itálica</button>
     </div>
+    ${['texto','media','mapa','tabla','vineta'].indexOf(c.tipo)<0?'':`
+    <div class="field" id="pos-texto-field"><label>Posición del texto</label>
+      ${textoFueraDeCuadro(c)?'<div class="pos-alerta">▲ Hay texto fuera de la placa. Tocá «Traer al cuadro» para recuperarlo.</div>':''}
+      <div class="pos-estado ${c.textoAuto===true?'auto':'fija'}">${c.textoAuto===true
+        ? 'Automática — el texto se reacomoda solo cuando cambia el largo'
+        : 'Fija — el título y la bajada se quedan donde los pusiste'}</div>
+      <div style="display:flex;gap:4px;margin-top:6px">
+        <button class="tipo-btn${c.textoAuto===true?'':' active'}" id="pos-fija" style="flex:1;font-size:11px">Fija</button>
+        <button class="tipo-btn${c.textoAuto===true?' active':''}" id="pos-auto" style="flex:1;font-size:11px">Automática</button>
+      </div>
+      <div style="display:flex;gap:4px;margin-top:4px">
+        <button class="fmt-apply" id="pos-reacomodar" style="flex:1;margin-top:0">↻ Reacomodar ahora</button>
+        <button class="fmt-apply" id="pos-rescate" style="flex:1;margin-top:0">⤓ Traer al cuadro</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:5px;line-height:1.45">
+        Arrastrá el título y la bajada sobre la placa: donde los soltás, se quedan.
+        Agregar o alargar la bajada ya no corre el título.
+        «Reacomodar» los vuelve a apilar una vez, y quedan fijos ahí.
+      </div>
+    </div>`}
     ${(c.tipo!=='cover'&&c.tipo!=='nano')?`
     <div class="field"><label>Fuente del título</label>
       ${(()=>{
@@ -6686,6 +6914,13 @@ function renderEditor(c){
       const slZoom=el.querySelector('#sl-zoom');if(slZoom){slZoom.oninput=e=>{mediaCache[c.id].zoom=parseFloat(e.target.value);el.querySelector('#sl-zoom-val').textContent=parseFloat(e.target.value).toFixed(2)+'×';redraw();};}
       const slX=el.querySelector('#sl-x');if(slX)slX.oninput=e=>{mediaCache[c.id].cx=parseFloat(e.target.value);redraw();};
       const slY=el.querySelector('#sl-y');if(slY)slY.oninput=e=>{mediaCache[c.id].cy=parseFloat(e.target.value);redraw();};
+      // Desplazamiento libre en píxeles: el mismo valor que mueve el arrastre.
+      const slOX=el.querySelector('#sl-offx');
+      if(slOX)slOX.oninput=e=>{const m2=mediaCache[c.id];if(!m2)return;m2.offX=parseInt(e.target.value)||0;const v=el.querySelector('#sl-offx-val');if(v)v.textContent=m2.offX;redraw();};
+      const slOY=el.querySelector('#sl-offy');
+      if(slOY)slOY.oninput=e=>{const m2=mediaCache[c.id];if(!m2)return;m2.offY=parseInt(e.target.value)||0;const v=el.querySelector('#sl-offy-val');if(v)v.textContent=m2.offY;redraw();};
+      const bCenter=el.querySelector('#img-center');
+      if(bCenter)bCenter.onclick=()=>{const m2=mediaCache[c.id];if(!m2)return;m2.offX=0;m2.offY=0;m2.cx=.5;m2.cy=.5;renderEditor(cards[sel]);redraw();setStatus('Foto centrada','');};
 
       // ── Ajustes de imagen (brillo/contraste/exposición/enderezar) ──
       function bindAdj(id,prop,valId,fmt){
@@ -6812,6 +7047,116 @@ function renderEditor(c){
           }
         };
       })();
+      // ── Menú de ilustraciones (v155) ──
+      // Tres estilos de la casa más los que sume el equipo. El prompt final lo
+      // arma ilusPrompt(): estilo + ajuste puntual + las guardas de parecido y
+      // de recorte, para que nadie tenga que acordarse de escribirlas.
+      (function(){
+        const blk=el.querySelector('#ilus-block'); if(!blk) return;
+        const selEl=el.querySelector('#ilus-sel'), descEl=el.querySelector('#ilus-desc');
+        const transEl=el.querySelector('#ilus-trans'), extraEl=el.querySelector('#ilus-extra');
+        const runEl=el.querySelector('#ilus-run'), stEl=el.querySelector('#ilus-status');
+        const bNuevo=el.querySelector('#ilus-nuevo'), bEditar=el.querySelector('#ilus-editar'), bBorrar=el.querySelector('#ilus-borrar');
+        const form=el.querySelector('#ilus-form'), nomEl=el.querySelector('#ilus-nom'), txtEl=el.querySelector('#ilus-txt');
+        const ntransEl=el.querySelector('#ilus-ntrans');
+        const bSave=el.querySelector('#ilus-save'), bCancel=el.querySelector('#ilus-cancel'), bBase=el.querySelector('#ilus-base');
+        let editando=null;   // id del prompt propio que se está editando
+
+        function pintarLista(idSel){
+          const todos=ilusTodos();
+          const casa=todos.filter(x=>!x.propio), propios=todos.filter(x=>x.propio);
+          let html='<optgroup label="De la casa">'+casa.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.nombre)+'</option>').join('')+'</optgroup>';
+          if(propios.length) html+='<optgroup label="Propios y del equipo">'+propios.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.nombre)+'</option>').join('')+'</optgroup>';
+          selEl.innerHTML=html;
+          const elegir=idSel||window.__ilusUltimo||casa[0].id;
+          selEl.value=elegir;
+          if(!selEl.value) selEl.value=casa[0].id;
+          pintarDesc();
+        }
+        function pintarDesc(){
+          const x=ilusPorId(selEl.value);
+          window.__ilusUltimo=selEl.value;
+          descEl.textContent=x.desc||'';
+          transEl.checked=!!x.transparente;
+          const esPropio=!!x.propio;
+          bEditar.style.display=esPropio?'':'none';
+          bBorrar.style.display=esPropio?'':'none';
+        }
+        selEl.onchange=pintarDesc;
+        pintarLista();
+        // Traer los del equipo y refrescar la lista cuando lleguen.
+        if(!ILUS_EQUIPO.length){ ilusCargarEquipo().then(()=>{ if(selEl.isConnected) pintarLista(selEl.value); }); }
+
+        runEl.onclick=async()=>{
+          const x=ilusPorId(selEl.value);
+          if(!x.prompt){ stEl.textContent='Ese estilo no tiene prompt.'; stEl.className='aiedit-status err'; return; }
+          const p=ilusPrompt(x, extraEl.value, transEl.checked);
+          runEl.disabled=true; runEl.textContent='Ilustrando… (~20-40s)';
+          stEl.textContent='Enviando a OpenAI…'; stEl.className='aiedit-status work';
+          try{
+            await editImageWithOpenAI(c.id, p, {transparente:transEl.checked});
+            if(transEl.checked){ const m3=mediaCache[c.id]; if(m3) m3.fitMode='contain'; }
+            stEl.textContent='✓ '+x.nombre; stEl.className='aiedit-status ok';
+            renderList(); renderEditor(cards[sel]); redraw();
+          }catch(err){
+            stEl.textContent='✗ '+(err.message||'Error'); stEl.className='aiedit-status err';
+            runEl.disabled=false; runEl.textContent='Ilustrar';
+          }
+        };
+
+        function abrirForm(base){
+          form.style.display='flex';
+          nomEl.value=base?base.nombre:'';
+          txtEl.value=base?base.prompt:'';
+          ntransEl.checked=base?!!base.transparente:true;
+          editando=(base&&base.propio)?base.id:null;
+          nomEl.focus();
+        }
+        bNuevo.onclick=()=>abrirForm(null);
+        bEditar.onclick=()=>abrirForm(ilusPorId(selEl.value));
+        bBase.onclick=()=>{ const x=ilusPorId(selEl.value); txtEl.value=x.prompt||''; if(!nomEl.value) nomEl.value=x.nombre+' (mío)'; ntransEl.checked=!!x.transparente; };
+        bCancel.onclick=()=>{ form.style.display='none'; editando=null; };
+        bSave.onclick=async()=>{
+          const nombre=(nomEl.value||'').trim(), prompt=(txtEl.value||'').trim();
+          if(!nombre){ nomEl.focus(); stEl.textContent='Ponele un nombre al estilo.'; stEl.className='aiedit-status err'; return; }
+          if(prompt.length<20){ txtEl.focus(); stEl.textContent='El prompt es muy corto: describí trazo, color y detalle.'; stEl.className='aiedit-status err'; return; }
+          const item={ id: editando||('u-'+Math.abs(hashTxt(nombre)).toString(36)),
+                       nombre:nombre, prompt:prompt, transparente:!!ntransEl.checked,
+                       desc:'Prompt propio', fecha:new Date().toISOString().slice(0,10) };
+          // Siempre queda una copia en este navegador; después se publica.
+          const l=ilusMios(); const ya=l.findIndex(z=>z&&z.id===item.id);
+          if(ya>=0) l[ya]=item; else l.push(item);
+          ilusGuardarMios(l);
+          form.style.display='none'; editando=null;
+          pintarLista(item.id);
+          bSave.disabled=true; stEl.textContent='Publicando al equipo…'; stEl.className='aiedit-status work';
+          try{
+            const lista=await storeGuardar('ilustraciones', item);
+            ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&z.prompt);
+            pintarLista(item.id);
+            stEl.textContent='✓ «'+nombre+'» disponible para todo el equipo'; stEl.className='aiedit-status ok';
+          }catch(err){
+            stEl.textContent='Guardado en este navegador (el almacén no respondió)'; stEl.className='aiedit-status';
+          }
+          bSave.disabled=false;
+        };
+        bBorrar.onclick=async()=>{
+          const x=ilusPorId(selEl.value); if(!x.propio) return;
+          const l=ilusMios().filter(z=>z&&z.id!==x.id);
+          ilusGuardarMios(l);
+          ILUS_EQUIPO=ILUS_EQUIPO.filter(z=>z&&(z.id||('u-'+hashTxt(z.nombre)))!==x.id);
+          pintarLista(ILUS_BASE[0].id);
+          stEl.textContent='Borrando para el equipo…'; stEl.className='aiedit-status work';
+          try{
+            const lista=await storeBorrar('ilustraciones', x.nombre);
+            ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&z.prompt);
+            pintarLista(ILUS_BASE[0].id);
+            stEl.textContent='«'+x.nombre+'» borrado'; stEl.className='aiedit-status';
+          }catch(err){
+            stEl.textContent='Borrado acá; en el equipo sigue disponible'; stEl.className='aiedit-status';
+          }
+        };
+      })();
       // ── Ken Burns ──
       const kbBtn=el.querySelector('#kb-toggle');
       if(kbBtn){kbBtn.onclick=()=>{const m2=mediaCache[c.id];if(!m2)return;m2.kenBurns=!m2.kenBurns;if(m2.kenBurns)m2.cinematic=false;renderEditor(cards[sel]);if(!raf)play(cards[sel]);};}
@@ -6842,7 +7187,6 @@ function renderEditor(c){
     el.querySelector('#sl-mediaH')?.addEventListener('input',e=>{cards[sel].mediaH=parseInt(e.target.value);el.querySelector('#sl-mediaH-val').textContent=e.target.value+'%';redraw();});
     el.querySelector('#sl-mediaW')?.addEventListener('input',e=>{cards[sel].mediaW=parseInt(e.target.value);el.querySelector('#sl-mediaW-val').textContent=e.target.value+'%';redraw();});
     el.querySelectorAll('.anchor-cell').forEach(cell=>{if(!cell.dataset.a)return;cell.onclick=()=>{cards[sel].anchor=cell.dataset.a;el.querySelectorAll('[data-a]').forEach(c2=>c2.classList.remove('active'));cell.classList.add('active');redraw();};});
-    el.querySelector('#reset-textpos')?.addEventListener('click',()=>{cards[sel].titleDX=0;cards[sel].titleDY=0;cards[sel].bodyDX=0;cards[sel].bodyDY=0;renderEditor(cards[sel]);redraw();});
   }
 
   // Font size sliders (texto + media)
@@ -6939,7 +7283,6 @@ function renderEditor(c){
       if(cards[sel].mapLat!==undefined){ setStatus('Actualizando mapa…','working'); await loadMapTiles(cards[sel]); setStatus('Listo',''); }
       if(!raf)play(cards[sel]);
     };
-    el.querySelector('#reset-textpos-map')?.addEventListener('click',()=>{cards[sel].titleDX=0;cards[sel].titleDY=0;cards[sel].bodyDX=0;cards[sel].bodyDY=0;renderEditor(cards[sel]);redraw();});
     // ── Ficha de ubicación ──
     el.querySelectorAll('[data-mapficha]').forEach(b=>{
       b.onclick=()=>{ cards[sel].mapFicha = b.dataset.mapficha==='1'; renderEditor(cards[sel]); redraw(); };
@@ -7388,6 +7731,10 @@ REGLAS IMPORTANTES:
     el.querySelectorAll('.vin-cy').forEach(inp=>{
       inp.oninput=e=>{ const i=parseInt(inp.dataset.i); if(vinCache[c.id][i]){ vinCache[c.id][i].cy=parseFloat(e.target.value); redraw(); } };
     });
+    el.querySelectorAll('.vin-center').forEach(btn=>{
+      btn.onclick=()=>{ const i=parseInt(btn.dataset.i); const s=vinCache[c.id]&&vinCache[c.id][i];
+        if(s){ s.offX=0; s.offY=0; s.cx=.5; s.cy=.5; renderEditor(cards[sel]); redraw(); } };
+    });
     // epígrafe por slot
     el.querySelectorAll('.vin-cap').forEach(inp=>{
       inp.oninput=e=>{ const i=parseInt(inp.dataset.i); cards[sel].vinCaptions=cards[sel].vinCaptions||['','']; cards[sel].vinCaptions[i]=e.target.value; redraw(); };
@@ -7491,6 +7838,39 @@ REGLAS IMPORTANTES:
   });
   {const _ft=document.getElementById('f-t'); if(_ft) _ft.oninput=e=>{cards[sel].titulo=e.target.value;const cc=document.getElementById('cc-t');cc.textContent=`${e.target.value.length}/55`;cc.className='char-count'+(e.target.value.length>55?' over':'');redraw();};}
   document.getElementById('f-c').oninput=e=>{cards[sel].cuerpo=e.target.value;const cc=document.getElementById('cc-c');cc.textContent=`${e.target.value.length}/${bodyLimit}`;cc.className='char-count'+(e.target.value.length>bodyLimit?' over':'');redraw();};
+
+  // ── Posición del texto: fija por defecto, automática si la pedís ──
+  {
+    const bFija=el.querySelector('#pos-fija'), bAuto=el.querySelector('#pos-auto');
+    const bReac=el.querySelector('#pos-reacomodar'), bResc=el.querySelector('#pos-rescate');
+    if(bFija) bFija.onclick=()=>{
+      const cc=cards[sel]; if(!cc) return;
+      cc.textoAuto=false;              // las coordenadas se congelan en el próximo dibujo
+      renderEditor(cards[sel]); redraw();
+      setStatus('Texto fijo: se queda donde lo dejes','');
+    };
+    if(bAuto) bAuto.onclick=()=>{
+      const cc=cards[sel]; if(!cc) return;
+      cc.textoAuto=true; soltarTexto(cc,'ambos');
+      renderEditor(cards[sel]); redraw();
+      setStatus('Texto automático: se reacomoda al cambiar el largo','');
+    };
+    if(bReac) bReac.onclick=()=>{
+      const cc=cards[sel]; if(!cc) return;
+      // Suelta las coordenadas, redibuja (que las vuelve a congelar en el flujo)
+      // y las deja fijas ahí. Una pasada de orden, sin perder el modo fijo.
+      soltarTexto(cc,'ambos'); cc.textoAuto=false;
+      redraw();
+      renderEditor(cards[sel]);
+      setStatus('Título y bajada reacomodados, y fijos ahí','');
+    };
+    if(bResc) bResc.onclick=()=>{
+      const cc=cards[sel]; if(!cc) return;
+      const n=rescatarTextos(cc);
+      redraw(); renderEditor(cards[sel]);
+      setStatus(n?('Texto traído al cuadro'):('El texto ya estaba dentro de la placa'),'');
+    };
+  }
 
   // ── Color de texto ──
   ['auto','white','black'].forEach(mode=>{
@@ -7965,7 +8345,11 @@ const TPL_LS='incertis_templates';
 // Estilo que comparten todos los tipos de card
 const TPL_COMUN=['cardBg','cardTextColor','frameW','frameColor','numbered',
   'titleSz','bodySz','titleFont','titleItalic','bodyItalic','volantaColor',
-  'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur'];
+  'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur',
+  // Posición exacta del título y de la bajada. Es lo que permite dejar la placa
+  // armada y que un colaborador solo reemplace el texto: el template le pone
+  // los bloques en el mismo lugar, cualquiera sea el largo de lo que escriba.
+  'titXY','bajXY','textoAuto'];
 // Estilo propio de cada tipo
 const TPL_TIPO={
   media:['mediaW','mediaH','anchor','edgeFade','fadeSides','photoRule','blurBg','scrimInt','waveStyle'],
@@ -8036,13 +8420,17 @@ function tplGuardarMios(lista){
 const TPL_DEF={cardBg:null, cardTextColor:'auto', frameW:0, frameColor:'#D94F1C',
   numbered:false, titleSz:52, bodySz:52, titleFont:'fraunces', titleItalic:false,
   bodyItalic:false, volantaColor:'#c1121f', logoVariant:'', logoOff:false,
-  logoPos:'tr', logoDX:0, logoDY:0, fixedDur:null};
+  logoPos:'tr', logoDX:0, logoDY:0, fixedDur:null,
+  titXY:null, bajXY:null, textoAuto:false};
 // Lee el estilo que hay puesto ahora mismo.
 function tplTomarEstilo(nombre){
   const base=cards[sel]||cards[0]||{};
   const comun={};
   TPL_COMUN.forEach(k=>{
-    comun[k] = (base[k]!==undefined) ? base[k] : (TPL_DEF[k]!==undefined?TPL_DEF[k]:null);
+    var v = (base[k]!==undefined) ? base[k] : (TPL_DEF[k]!==undefined?TPL_DEF[k]:null);
+    // Clonar los objetos (titXY, bajXY) para que el template no quede atado a
+    // la card de la que se tomó el estilo.
+    comun[k] = (v && typeof v==='object') ? JSON.parse(JSON.stringify(v)) : v;
   });
   const porTipo={};
   Object.keys(TPL_TIPO).forEach(tipo=>{
@@ -8098,9 +8486,15 @@ function tplAplicar(t){
   }
   cards.forEach(c=>{
     if(!c) return;
-    Object.assign(c, t.comun||{});
+    // Clonar por card: si no, todas compartirían el MISMO objeto de posición y
+    // mover el título de una movería el de todas.
+    var com=JSON.parse(JSON.stringify(t.comun||{}));
+    Object.assign(c, com);
     const pt=(t.porTipo||{})[c.tipo];
-    if(pt) Object.assign(c, pt);
+    if(pt) Object.assign(c, JSON.parse(JSON.stringify(pt)));
+    // El template manda: si trae posiciones, se descartan los deltas viejos.
+    if(com.titXY){ c.titleDX=0; c.titleDY=0; }
+    if(com.bajXY){ c.bodyDX=0;  c.bodyDY=0;  }
   });
   // Si el template trae una fuente que no está bajada, la pedimos y redibujamos
   const f=(t.comun||{}).titleFont;
@@ -8266,7 +8660,7 @@ async function tplTomarCard(nombre, rutaVideo){
             card:copia, media:null, formato:currentFormat };
   const m=mediaCache[c.id];
   if(m){
-    const enc={type:m.type, zoom:m.zoom, cx:m.cx, cy:m.cy, fitMode:m.fitMode,
+    const enc={type:m.type, zoom:m.zoom, cx:m.cx, cy:m.cy, offX:m.offX, offY:m.offY, fitMode:m.fitMode,
                adjBright:m.adjBright, adjContrast:m.adjContrast, adjExposure:m.adjExposure,
                adjSat:m.adjSat, adjRotate:m.adjRotate, fxBW:m.fxBW, fxGrain:m.fxGrain,
                cinematic:m.cinematic, cinematicPreset:m.cinematicPreset,
@@ -8372,7 +8766,7 @@ function openTemplatesPanel(){
         '<div class="tpl-sec" style="margin-top:10px">Míos, en este navegador</div><div id="tpl-mios"></div>'+
         '<div class="tpl-sec" style="margin-top:10px">Guardar el estilo que tenés puesto</div>'+
         '<div class="tpl-nuevo"><input type="text" id="tpl-nom" placeholder="Ej: Breaking rojo, Clarín serif…" maxlength="60"><button class="btn-p" id="tpl-save">Guardar</button></div>'+
-        '<div class="wa-note">Un template de estilo guarda cómo se ven las cards (tipografías, tamaños, fondo, marco, logo, formato, FX), nunca los textos. Al aplicarlo, todas las cards del carrusel quedan con ese estilo.</div>'+
+        '<div class="wa-note">Un template de estilo guarda cómo se ven las cards (tipografías, tamaños, fondo, marco, logo, formato, FX) <b>y la posición exacta del título y de la bajada</b>, nunca los textos. Al aplicarlo, todas las cards del carrusel quedan con ese estilo y con los bloques en el mismo lugar: un colaborador solo reemplaza el texto y la placa no se desarma.</div>'+
       '</div>'+
       '<div id="tpl-pane-cards" style="display:none">'+
         '<div class="tpl-sec">Del equipo</div><div id="tplc-equipo"></div>'+
@@ -9011,6 +9405,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v155','El texto no se mueve','Escribir una bajada corría el título hacia arriba y, si era larga, lo empujaba fuera de la placa sin manera de recuperarlo. Ahora cada bloque tiene su coordenada propia: se fija donde está y solo se mueve si lo arrastrás. Las posiciones se guardan en el template, así un colaborador reemplaza el texto y la placa no se desarma. Suma un botón para traer al cuadro lo que se haya ido. Las fotos se arrastran 1:1 con el mouse y sin tope: ya se pueden sacar de cuadro para abajo, que antes era imposible. Y hay un menú de ilustraciones (línea con color plano, crosshatching en blanco y negro, línea simple de viñeta) al que se le pueden sumar prompts propios, compartidos con todo el equipo.'],
     ['v154','Los templates llegan al equipo','Guardar publicaba solo en el navegador de cada uno. La clave que el almacén pide para aceptar un guardado se leía del cuadro de contraseña, pero al recargar la sesión ya está validada, ese cuadro no aparece y su valor queda vacío: el almacén rechazaba el guardado y el editor caía a la copia local. Ahora la clave se toma de la propia página, así que guardar publica siempre.'],
     ['v153','El almacén, conectado','Vercel cambió cómo se autentican los almacenes: dejó de entregar el token largo y pasó a credenciales que se renuevan solas (OIDC). El editor y sus funciones ahora usan ese sistema, y las subidas de ilustraciones y videos van por URL firmada en vez de token de cliente. Para el equipo no cambia nada, salvo que ahora funciona.'],
     ['v152','Ilustraciones y videos fuera del JSON','Las cards modelo ya no llevan la foto adentro del archivo compartido: la ilustración y el video se guardan como archivos en el almacén y el registro solo se queda con su dirección y una miniatura de unos pocos KB. Así el editor no baja todo el material cada vez que abre, y la lista puede crecer a cientos de cards sin volverse pesada. El video ya no pide poner la ruta a mano: se sube solo al guardar.'],
