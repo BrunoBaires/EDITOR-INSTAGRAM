@@ -755,6 +755,9 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-top:4px;cursor:pointer">
           <input type="checkbox" id="info-encadenar" checked/> Encadenar: cada escena ve la anterior
         </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-top:4px;cursor:pointer">
+          <input type="checkbox" id="info-transp" checked/> Fondo transparente (para pintar la placa)
+        </label>
 
         <div class="slabel" style="margin-top:11px">Referencias (opcional)</div>
         <div class="bulk-drop" id="info-drop" style="margin:0">
@@ -4382,46 +4385,48 @@ function drawInfografia(card,t){
   const cA=FX.fade?eo3(rm(t,.05,.36)):1;
   const cDy=FX.rise?(1-eo3(rm(t,.05,.36)))*28:0;
   const CC=getCardColors(card);
-  const pct=Math.max(12,Math.min(72, card.infoTextH!==undefined?card.infoTextH:34));
-  const splitY=Math.round(H*pct/100);
   const m=mediaCache[card.id];
 
-  // ── Ilustración: ocupa todo el ancho, del corte hasta el borde de abajo ──
+  // ── Ilustración: una sola área sobre el fondo de la card ──
+  // El PNG viene con fondo transparente, así que el color de la card se ve
+  // detrás del dibujo y la placa se lee como una sola superficie.
+  const zoneH=Math.round((card.mediaH!==undefined?card.mediaH:100)/100*H);
+  const zoneW=Math.round((card.mediaW!==undefined?card.mediaW:100)/100*W);
+  const anc=ANCHORS[card.anchor||'bc']||ANCHORS['bc'];
+  const zx=Math.round((W-zoneW)*anc.x), zy=Math.round((H-zoneH)*anc.y);
   ctx.save(); ctx.globalAlpha=cA;
-  if(m){ drawMedia(m, 0, splitY, W, H-splitY, t); }
+  if(m){ drawMedia(m, zx, zy, zoneW, zoneH, t); }
   else {
-    ctx.fillStyle=PAL.rule; ctx.fillRect(0,splitY,W,H-splitY);
     ctx.font='300 34px "IBM Plex Sans"'; ctx.letterSpacing='0px';
     ctx.fillStyle=PAL.meta; ctx.textAlign='center';
     if(card.infoError){
-      // El error de la API se lee en la placa: no queda escondido en la barra de estado.
-      ctx.fillText('No se pudo dibujar', W/2, splitY+(H-splitY)/2-30);
+      ctx.fillText('No se pudo dibujar', W/2, H*0.62-30);
       ctx.font='300 26px "IBM Plex Sans"';
       wrap(String(card.infoError).slice(0,220), W-M*3).slice(0,4).forEach((l,i)=>{
-        ctx.fillText(l, W/2, splitY+(H-splitY)/2+24+i*34);
+        ctx.fillText(l, W/2, H*0.62+24+i*34);
       });
     } else {
-      ctx.fillText('Sin ilustración', W/2, splitY+(H-splitY)/2);
+      ctx.fillText('Sin ilustración', W/2, H*0.62);
     }
     ctx.textAlign='left';
   }
   ctx.restore();
 
-  // ── Texto arriba ──
+  // ── Texto encima, arriba de todo ──
   ctx.save(); ctx.globalAlpha=cA; ctx.translate(0,cDy);
   const ruleY=M+10;
   if(card.infoRule!==false){
     ctx.fillStyle=CC.text; ctx.fillRect(M, ruleY, 56, 5);
   }
-  // Borde superior del bloque de texto: debajo de la regla, con aire.
   const topTxt=ruleY+(card.infoRule!==false?42:16);
-  // Autoajuste: el cuerpo se achica hasta entrar en el bloque de texto.
+  // Zona reservada al texto: no se dibuja ninguna línea, solo limita el cuerpo.
+  const zonaTxt=Math.round(H*Math.max(12,Math.min(72, card.infoTextH!==undefined?card.infoTextH:34))/100);
   let bSz=card.bodySz||58;
   if(card.cuerpo&&card.infoFit!==false){
     let guard=0, altoTit=0;
     if(card.titulo){ const tS=card.titleSz||52; altoTit=Math.round(tS*1.14)*wrapTitle(card.titulo,W-M*2,tS,titleFontFamily(card),titleFontWeight(card)).length+Math.round(tS*0.5); }
     while(bSz>26 && guard++<40 &&
-          topTxt+altoTit+richTextHeight(card.cuerpo, W-M*2, bSz, Math.round(bSz*1.34)) > splitY-26){ bSz-=2; }
+          topTxt+altoTit+richTextHeight(card.cuerpo, W-M*2, bSz, Math.round(bSz*1.34)) > zonaTxt-26){ bSz-=2; }
   }
   let ty=topTxt+Math.round((card.titulo?(card.titleSz||52):bSz)*0.8);
   card._titleBox=null; card._bodyBox=null;
@@ -4451,7 +4456,6 @@ function drawInfografia(card,t){
   drawChrome(chromeA,card.id,CC.dark);
   drawGrid();
 }
-
 function drawCard(card,t){
   _drawingCardId = card?card.id:null;
   if(card){ card._capaBoxes=[]; card._capaHandle=null; }
@@ -6766,8 +6770,12 @@ function renderEditor(c){
     <div class="field"><label style="color:#c1121c">◈ Infografía — texto arriba, ilustración abajo</label>
       <div style="font-size:11px;color:var(--text3);line-height:1.45">El texto se edita como en cualquier card (**negrita**, ==resaltado==) y se achica solo para entrar. La ilustración va a sangre, del corte al borde de abajo.</div>
     </div>
-    <div class="field"><label>Alto del bloque de texto — <b id="sl-infoh-val">${pctI}%</b></label>
+    <div class="field"><label>Zona de texto — <b id="sl-infoh-val">${pctI}%</b> del alto</label>
       <input type="range" id="sl-infoh" min="12" max="72" step="1" value="${pctI}"/>
+      <div style="font-size:10px;color:var(--text3)">No dibuja ninguna línea: solo limita hasta dónde puede crecer el cuerpo antes de achicarse.</div>
+    </div>
+    <div class="field"><label>Tamaño de la ilustración — <b id="sl-infomh-val">${(c.mediaH!==undefined?c.mediaH:100)}%</b></label>
+      <input type="range" id="sl-infomh" min="40" max="100" step="1" value="${(c.mediaH!==undefined?c.mediaH:100)}"/>
     </div>
     <div class="field"><label>Ilustración</label>
       ${hasImg
@@ -6779,9 +6787,17 @@ function renderEditor(c){
         ${hasImg?`<button class="btn-g" id="info-card-replace" style="flex:1">⤒ Subir otra</button>`:''}
       </div>
       <input type="file" id="info-card-file2" accept="image/*" style="display:none"/>
+      <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text2);margin-top:6px;cursor:pointer">
+        <input type="checkbox" id="info-card-transp" ${c.infoTransp!==false?'checked':''}/> Fondo transparente
+      </label>
+      <div style="font-size:10px;color:var(--text3);line-height:1.45">Con el PNG transparente, el color de fondo de la card se ve detrás del dibujo. Se cambia más abajo, en «Fondo».</div>
       <div class="aiedit-status" id="info-card-status"></div>
     </div>
     ${hasImg?`<div class="field"><label>Encuadre de la ilustración</label>
+      <div style="display:flex;gap:5px;margin-bottom:6px">
+        <button class="tipo-btn${(m.fitMode||'contain')==='contain'?' active':''}" id="info-fit-contain" style="flex:1">Entera</button>
+        <button class="tipo-btn${m.fitMode==='cover'?' active':''}" id="info-fit-cover" style="flex:1">Rellena</button>
+      </div>
       <div class="range-block">
         <div class="range-row"><label>Zoom</label><input type="range" id="sl-infozoom" min="1" max="3" step="0.05" value="${m.zoom||1}"/><span class="range-val">${(m.zoom||1).toFixed(2)}×</span></div>
         <div class="range-row"><label>H</label><input type="range" id="sl-infocx" min="0" max="1" step="0.01" value="${m.cx!==undefined?m.cx:.5}"/></div>
@@ -8061,6 +8077,11 @@ REGLAS IMPORTANTES:
     const sh=el.querySelector('#sl-infoh');
     if(sh) sh.oninput=e=>{ cards[sel].infoTextH=parseInt(e.target.value);
       const v=el.querySelector('#sl-infoh-val'); if(v) v.textContent=e.target.value+'%'; redraw(); };
+    const smh=el.querySelector('#sl-infomh');
+    if(smh) smh.oninput=e=>{ cards[sel].mediaH=parseInt(e.target.value); cards[sel].mediaW=parseInt(e.target.value);
+      const v=el.querySelector('#sl-infomh-val'); if(v) v.textContent=e.target.value+'%'; redraw(); };
+    const tr=el.querySelector('#info-card-transp');
+    if(tr) tr.onchange=e=>{ cards[sel].infoTransp=!!e.target.checked; };
     const pr=el.querySelector('#info-card-prompt');
     if(pr) pr.oninput=e=>{ cards[sel].infoPrompt=e.target.value; };
     const f1=el.querySelector('#info-card-file'), f2=el.querySelector('#info-card-file2');
@@ -8096,6 +8117,9 @@ REGLAS IMPORTANTES:
       const v=z.parentElement.querySelector('.range-val'); if(v) v.textContent=parseFloat(e.target.value).toFixed(2)+'×'; redraw(); };
     if(qx&&mm) qx.oninput=e=>{ mm.cx=parseFloat(e.target.value); redraw(); };
     if(qy&&mm) qy.oninput=e=>{ mm.cy=parseFloat(e.target.value); redraw(); };
+    const fC=el.querySelector('#info-fit-contain'), fV=el.querySelector('#info-fit-cover');
+    if(fC&&mm) fC.onclick=()=>{ mm.fitMode='contain'; renderEditor(cards[sel]); redraw(); };
+    if(fV&&mm) fV.onclick=()=>{ mm.fitMode='cover'; renderEditor(cards[sel]); redraw(); };
   }
 
   // ── Capas: gráficos y textos libres ──
@@ -8355,7 +8379,7 @@ function addCard(tipo){
   if(tipo==='grafico'){defaults.chartType='bar';defaults.chartColor='#D94F1C';defaults.chartData=[];defaults.chartUnit='';defaults.chartSource='';}
   if(tipo==='tabla'){defaults.titulo='';defaults.cuerpo='';defaults.tableRows=[];defaults.titleSz=76;}
   if(tipo==='vineta'){defaults.vinCount=1;defaults.vinCaptions=['',''];defaults.bodySz=46;vinCache[defaults.id]=[];}
-  if(tipo==='infografia'){defaults.infoTextH=34;defaults.bodySz=58;defaults.titleSz=52;defaults.infoPrompt='';}
+  if(tipo==='infografia'){defaults.infoTextH=34;defaults.bodySz=58;defaults.titleSz=52;defaults.infoPrompt='';defaults.mediaH=100;defaults.mediaW=100;defaults.anchor='bc';defaults.infoTransp=true;}
   if(tipo==='libre'){
     defaults.titulo=''; defaults.cuerpo='';
     defaults.libreVAlign='center';
@@ -8689,6 +8713,8 @@ High contrast: absolute black on absolute white. Clean, precise, slightly organi
 No decorative effects: no shadows, gradients, textures, 3D volume, dramatic lighting, glows, grain, ambient backgrounds, atmospheric perspective, cinematic look, comic style or ornamental elements.
 The result must look like a contemporary forensic reconstruction: objective, precise, cold, neutral and didactic, where every element present has a concrete informative function and nothing was added merely to decorate.`;
 const INFO_SIN_TEXTO=' Absolutely no text, letters, numbers, labels, captions, legends, titles, watermarks or signatures anywhere in the image.';
+const INFO_TRANSPARENTE=' IMPORTANT — override any background instruction above: the background must be fully transparent (alpha), not white. Do not paint any background, paper, ground plane, floor, horizon, frame, border, drop shadow or glow: the black silhouettes, lines and technical marks are the only opaque elements, with clean precise edges.';
+const INFO_COMPOSICION=' Compose the scene in the lower two thirds of a tall vertical frame, leaving the upper third completely empty, because a caption will sit there.';
 const INFO_REF_NOTA=' The attached images are visual references only: use them as a guide for posture, framing, spatial layout and the objects involved. Do not copy their style, their colours or their photographic look, and do not reproduce recognisable faces. Redraw everything in the forensic style described above.';
 const INFO_CADENA=' The last attached image is the previous panel of the same series: keep the same line weight, the same silhouette treatment, the same scale of the figures and the same amount of white space, so that both drawings read as one sequence.';
 
@@ -8704,14 +8730,16 @@ function infoEl(id){ return document.getElementById(id); }
 function infoExtra(){ const e=infoEl('info-extra'); return e?e.value.trim():''; }
 
 // Prompt final que recibe gpt-image: estilo base + qué pasa en la escena + guardas.
-function infoPromptFinal(escena, hayRefs, encadenada){
+function infoPromptFinal(escena, hayRefs, encadenada, transparente){
   let p=infoBase().trim();
   p+='\n\nSCENE TO DRAW: '+String(escena||'').trim();
   const x=infoExtra();
   if(x) p+=' Additional instruction: '+x+'.';
   if(hayRefs) p+=INFO_REF_NOTA;
   if(encadenada) p+=INFO_CADENA;
+  p+=INFO_COMPOSICION;
   p+=INFO_SIN_TEXTO;
+  if(transparente) p+=INFO_TRANSPARENTE;
   return p;
 }
 
@@ -8894,11 +8922,11 @@ function infoGuionPintar(){
 // ── Imagen (OpenAI · gpt-image) ───────────────────────────
 // Se prueban variantes en orden: si la cuenta no acepta un modelo o un
 // parámetro, se reintenta sin él antes de dar el error por bueno.
-async function infoImagen(prompt, imagenes, size){
+async function infoImagen(prompt, imagenes, size, transparente){
   const intentos=[['gpt-image-1.5',true],['gpt-image-1.5',false],['gpt-image-1',false]];
   let ultimo=null;
   for(let i=0;i<intentos.length;i++){
-    try{ return await infoImagenIntento(prompt, imagenes, size, intentos[i][0], intentos[i][1]); }
+    try{ return await infoImagenIntento(prompt, imagenes, size, intentos[i][0], intentos[i][1], transparente); }
     catch(e){
       console.error('[infografía] intento', intentos[i][0], e && e.message);
       ultimo=e;
@@ -8911,7 +8939,7 @@ async function infoImagen(prompt, imagenes, size){
   if(!(imagenes&&imagenes.length)){
     try{
       console.warn('[infografía] reintento por /edits sobre lienzo blanco');
-      return await infoImagenIntento(prompt+' Draw on the blank white canvas provided.', [infoLienzoBlanco(size)], size, 'gpt-image-1.5', false);
+      return await infoImagenIntento(prompt+' Draw on the blank canvas provided.', [infoLienzoBlanco(size)], size, 'gpt-image-1.5', false, transparente);
     }catch(e){ console.error('[infografía] lienzo', e&&e.message); ultimo=e; }
   }
   throw ultimo||new Error('No se pudo generar la imagen');
@@ -8924,7 +8952,7 @@ function infoLienzoBlanco(size){
   const x=cv.getContext('2d'); x.fillStyle='#ffffff'; x.fillRect(0,0,cv.width,cv.height);
   return cv.toDataURL('image/png');
 }
-async function infoImagenIntento(prompt, imagenes, size, modelo, conFormato){
+async function infoImagenIntento(prompt, imagenes, size, modelo, conFormato, transparente){
   const key=getOpenAIKey();
   if(!key){ const e=new Error('Cargá tu OpenAI key arriba (sk-…)'); e.fatal=true; throw e; }
   let resp;
@@ -8940,11 +8968,13 @@ async function infoImagenIntento(prompt, imagenes, size, modelo, conFormato){
     fd.append('quality','high');
     fd.append('size', size);
     if(conFormato) fd.append('output_format','png');
+    if(transparente) fd.append('background','transparent');
     resp=await fetch('https://api.openai.com/v1/images/edits',{
       method:'POST', headers:{'Authorization':'Bearer '+key}, body:fd });
   } else {
     const cuerpo={ model:modelo, prompt:prompt, size:size, quality:'high' };
     if(conFormato) cuerpo.output_format='png';
+    if(transparente){ cuerpo.background='transparent'; cuerpo.output_format='png'; }
     resp=await fetch('https://api.openai.com/v1/images/generations',{
       method:'POST',
       headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},
@@ -8967,7 +8997,7 @@ function infoSetImagen(cardId, dataUrl){
   return new Promise((res,rej)=>{
     const img=new Image();
     img.onload=()=>{ mediaCache[cardId]={...(mediaCache[cardId]||{}), type:'img', el:img,
-      dataUrl:dataUrl, thumbUrl:dataUrl, zoom:1, cx:.5, cy:.5}; res(); };
+      dataUrl:dataUrl, thumbUrl:dataUrl, zoom:1, cx:.5, cy:1, fitMode:'contain'}; res(); };
     img.onerror=()=>rej(new Error('No se pudo cargar la ilustración'));
     img.src=dataUrl;
   });
@@ -8978,8 +9008,9 @@ async function infoDibujarCard(card){
   if(!card) throw new Error('No hay card seleccionada');
   const escena=(card.infoPrompt||'').trim() || richToPlain(card.cuerpo||'').trim();
   if(!escena) throw new Error('Escribí qué se ve en esta escena');
-  const pct=(card.infoTextH!==undefined?card.infoTextH:34);
-  const size=bestOutputSize(W, Math.max(200, Math.round(H*(100-pct)/100)));
+  // Una sola área: la ilustración se piensa para toda la placa.
+  const size=bestOutputSize(W, H);
+  const transp=(card.infoTransp!==false);
   const refs=INFO_REFS.map(r=>r.dataUrl);
   let previa=null;
   const enc=infoEl('info-encadenar');
@@ -8993,7 +9024,7 @@ async function infoDibujarCard(card){
     }
   }
   const entradas=(previa?refs.concat([previa]):refs).slice(0,6);
-  const dataUrl=await infoImagen(infoPromptFinal(escena, refs.length>0, !!previa), entradas, size);
+  const dataUrl=await infoImagen(infoPromptFinal(escena, refs.length>0, !!previa, transp), entradas, size, transp);
   await infoSetImagen(card.id, dataUrl);
   return dataUrl;
 }
@@ -9005,6 +9036,8 @@ function infoCrearCards(){
     const c=cards[cards.length-1];
     c.cuerpo=g.texto||'';
     c.infoPrompt=g.prompt||'';
+    const tr=infoEl('info-transp');
+    c.infoTransp=tr?!!tr.checked:true;
     if(g.sintesis){ c.esSintesis=true; c.volanta='SÍNTESIS'; c.infoTextH=46; }
     g.card=c; g.estado='pendiente';
   });
@@ -10223,7 +10256,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
-    ['v157','Infografía forense','Bloque nuevo en el panel izquierdo: pegás el texto de un hecho y Claude lo parte en escenas dibujables. Devuelve, por cada una, el título, la explicación que va en la card y el prompt de imagen en inglés, todo editable antes de gastar una sola imagen. Recién ahí gpt-image dibuja, de a una y con progreso a la vista, sobre un prompt base de estilo forense —siluetas negras sobre blanco puro, sin rasgos, sin sombras y sin texto adentro del dibujo— que se puede editar y queda guardado. Se pueden cargar fotos, planos o croquis como referencia de postura y disposición, y encadenar las escenas para que cada una vea la anterior y el trazo no baile. El contenido puede entrar de tres maneras: pegando el texto, pegando un link —una nota, un posteo de X, cualquier página— o escribiendo una pregunta, y en ese caso Claude la responde con lo que sabe, sin buscar en la web, que sirve para explicativos y procedimientos pero no para datos de actualidad. Suma el tipo de card «infografía»: texto arriba, que se achica solo para entrar, e ilustración a sangre abajo. Cada escena se vuelve a dibujar sola, sin tocar el resto, y la card se puede reemplazar por una imagen propia.'],
+    ['v157','Infografía forense','Bloque nuevo en el panel izquierdo: pegás el texto de un hecho y Claude lo parte en escenas dibujables. Devuelve, por cada una, el título, la explicación que va en la card y el prompt de imagen en inglés, todo editable antes de gastar una sola imagen. Recién ahí gpt-image dibuja, de a una y con progreso a la vista, sobre un prompt base de estilo forense —siluetas negras sobre blanco puro, sin rasgos, sin sombras y sin texto adentro del dibujo— que se puede editar y queda guardado. Se pueden cargar fotos, planos o croquis como referencia de postura y disposición, y encadenar las escenas para que cada una vea la anterior y el trazo no baile. El contenido puede entrar de tres maneras: pegando el texto, pegando un link —una nota, un posteo de X, cualquier página— o escribiendo una pregunta, y en ese caso Claude la responde con lo que sabe, sin buscar en la web, que sirve para explicativos y procedimientos pero no para datos de actualidad. Suma el tipo de card «infografía»: una sola superficie, con el texto arriba —se achica solo para entrar— y la ilustración en PNG con fondo transparente, así el color de fondo de la placa se ve detrás del dibujo y la card se puede pintar como cualquier otra. Cada escena se vuelve a dibujar sola, sin tocar el resto, y la card se puede reemplazar por una imagen propia.'],
     ['v156','Recortar o no recortar','El fondo de la ilustración ahora se elige con dos botones, «Recortar fondo» y «No recortar fondo»: cada estilo trae su default y se puede cambiar en el momento. Suma un cuarto estilo de la casa, editorial de línea calcada tipo rotring con color plano desaturado, que conserva el fondo porque la escena es parte del recurso. Y se arregló el guardado de prompts propios: los avisos de «falta el nombre» aparecían al pie del panel, fuera de vista, y parecía que el botón no hacía nada. Ahora van dentro del formulario, el guardado local es lo que manda (el almacén del equipo es un extra que ya no puede hacerlo fracasar), hay un contador de prompts guardados y el borrador sobrevive si cambiás de card.'],
     ['v155','El texto no se mueve','Escribir una bajada corría el título hacia arriba y, si era larga, lo empujaba fuera de la placa sin manera de recuperarlo. Ahora cada bloque tiene su coordenada propia: se fija donde está y solo se mueve si lo arrastrás. Las posiciones se guardan en el template, así un colaborador reemplaza el texto y la placa no se desarma. Suma un botón para traer al cuadro lo que se haya ido. Las fotos se arrastran 1:1 con el mouse y sin tope: ya se pueden sacar de cuadro para abajo, que antes era imposible. Y hay un menú de ilustraciones (línea con color plano, crosshatching en blanco y negro, línea simple de viñeta) al que se le pueden sumar prompts propios, compartidos con todo el equipo.'],
     ['v154','Los templates llegan al equipo','Guardar publicaba solo en el navegador de cada uno. La clave que el almacén pide para aceptar un guardado se leía del cuadro de contraseña, pero al recargar la sesión ya está validada, ese cuadro no aparece y su valor queda vacío: el almacén rechazaba el guardado y el editor caía a la copia local. Ahora la clave se toma de la propia página, así que guardar publica siempre.'],
