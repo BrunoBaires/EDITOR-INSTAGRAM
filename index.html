@@ -616,7 +616,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v156 «recortar o no recortar»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v157 «infografía forense»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -704,9 +704,31 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
       <summary class="gen-summary"><span>◈ Infografía forense</span><span class="gen-chev">▾</span></summary>
       <div class="fmt-panel" style="padding-bottom:12px">
 
-        <div class="slabel">Texto del hecho</div>
-        <textarea id="info-texto" placeholder="Pegá el texto que hay que reconstruir…" style="width:100%;height:80px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text2);font-family:'IBM Plex Sans',sans-serif;font-size:12px;line-height:1.55;padding:8px;resize:vertical;outline:none"></textarea>
-        <button class="tpl-mini" id="info-usar-nota" style="margin-top:5px">↩ Usar el texto de la nota</button>
+        <div class="slabel">De dónde sale el contenido</div>
+        <div class="fmt-row" id="info-origen-row" style="margin-bottom:9px">
+          <button class="fmt-btn active" data-org="texto">Texto</button>
+          <button class="fmt-btn" data-org="link">Link</button>
+          <button class="fmt-btn" data-org="pregunta">Pregunta</button>
+        </div>
+
+        <div id="info-org-link" style="display:none;margin-bottom:9px">
+          <div class="slabel">Dirección</div>
+          <input type="text" id="info-url" placeholder="https://…  ·  una nota, un posteo de X, una página" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 8px;outline:none"/>
+          <button class="tpl-mini" id="info-url-traer" style="margin-top:5px">↓ Traer el contenido</button>
+          <div class="ilus-guardados" id="info-url-estado">El texto llega a la pestaña «Texto» para que lo revises antes de armar el guion.</div>
+        </div>
+
+        <div id="info-org-pregunta" style="display:none;margin-bottom:9px">
+          <div class="slabel">Pregunta</div>
+          <textarea id="info-pregunta" placeholder="ej: cómo instalar una sombrilla en la playa un día de viento" style="width:100%;height:56px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text2);font-family:'IBM Plex Sans',sans-serif;font-size:12px;line-height:1.55;padding:8px;resize:vertical;outline:none"></textarea>
+          <div class="ilus-guardados">Claude responde con lo que sabe: no busca en la web. Va bien para explicativos, procedimientos y seguridad. Para noticias del día, precios o cifras actuales, usá Texto o Link.</div>
+        </div>
+
+        <div id="info-org-texto">
+          <div class="slabel">Texto del hecho</div>
+          <textarea id="info-texto" placeholder="Pegá el texto que hay que reconstruir…" style="width:100%;height:80px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text2);font-family:'IBM Plex Sans',sans-serif;font-size:12px;line-height:1.55;padding:8px;resize:vertical;outline:none"></textarea>
+          <button class="tpl-mini" id="info-usar-nota" style="margin-top:5px">↩ Usar el texto de la nota</button>
+        </div>
 
         <div style="display:flex;gap:6px;margin-top:9px">
           <div style="flex:1">
@@ -894,7 +916,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v156 «recortar o no recortar»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v157 «infografía forense»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -4371,7 +4393,16 @@ function drawInfografia(card,t){
     ctx.fillStyle=PAL.rule; ctx.fillRect(0,splitY,W,H-splitY);
     ctx.font='300 34px "IBM Plex Sans"'; ctx.letterSpacing='0px';
     ctx.fillStyle=PAL.meta; ctx.textAlign='center';
-    ctx.fillText('Sin ilustración', W/2, splitY+(H-splitY)/2);
+    if(card.infoError){
+      // El error de la API se lee en la placa: no queda escondido en la barra de estado.
+      ctx.fillText('No se pudo dibujar', W/2, splitY+(H-splitY)/2-30);
+      ctx.font='300 26px "IBM Plex Sans"';
+      wrap(String(card.infoError).slice(0,220), W-M*3).slice(0,4).forEach((l,i)=>{
+        ctx.fillText(l, W/2, splitY+(H-splitY)/2+24+i*34);
+      });
+    } else {
+      ctx.fillText('Sin ilustración', W/2, splitY+(H-splitY)/2);
+    }
     ctx.textAlign='left';
   }
   ctx.restore();
@@ -5996,7 +6027,7 @@ function renderList(){
     item.className='card-item'+(i===sel?' active':'');
     const vinThumb=(c.tipo==='vineta'&&vinCache[c.id]&&vinCache[c.id][0]&&vinCache[c.id][0].type!=='video'&&vinCache[c.id][0].dataUrl)?vinCache[c.id][0].dataUrl:null;
     const thumbHtml=m?.thumbUrl?`<img class="card-thumb" src="${m.thumbUrl}"/>`:vinThumb?`<img class="card-thumb" src="${vinThumb}"/>`:c.tipo==='media'?`<div class="card-thumb-ph">▣</div>`:c.tipo==='mapa'?`<div class="card-thumb-ph" title="Mapa">🗺</div>`:c.tipo==='nano'?`<div class="card-thumb-ph" title="Nano">✦</div>`:c.tipo==='grafico'?`<div class="card-thumb-ph" title="Gráfico">↗</div>`:c.tipo==='tabla'?`<div class="card-thumb-ph" title="Tabla">▦</div>`:c.tipo==='vineta'?`<div class="card-thumb-ph" title="Viñeta">▣</div>`:c.tipo==='infografia'?`<div class="card-thumb-ph" title="Infografía">◈</div>`:`<div class="card-thumb-ph" style="font-size:9px">T</div>`;
-    const listTitle=c.titulo||(c.tipo==='vineta'?(richToPlain(c.cuerpo||'').slice(0,40)||'—'):'—');
+    const listTitle=c.titulo||((c.tipo==='vineta'||c.tipo==='infografia')?(richToPlain(c.cuerpo||'').slice(0,40)||'—'):'—');
     item.innerHTML=`<span class="drag-handle" title="Arrastrar">⠿</span>${thumbHtml}<span class="cn">${c.id}</span><div class="ci"><div class="ci-tipo">${c.tipo}</div><div class="ci-title">${listTitle}</div></div><div class="item-actions"><button class="ia-btn" data-action="dup" title="Duplicar">⧉</button><button class="ia-btn del" data-action="del" title="Eliminar">×</button></div>`;
     item.querySelector('[data-action=dup]').onclick=e=>{e.stopPropagation();duplicateCard(i);};
     item.querySelector('[data-action=del]').onclick=e=>{e.stopPropagation();deleteCard(i);};
@@ -8048,11 +8079,14 @@ REGLAS IMPORTANTES:
       setStatus('Dibujando la ilustración…','working');
       try{
         await infoDibujarCard(card);
+        card.infoError=null;
         setStatus('Ilustración lista','');
         renderEditor(cards[sel]); renderList(); redraw();
       }catch(err){
+        card.infoError=err.message;
         if(st) st.textContent='✕ '+err.message;
-        setStatus('No se pudo dibujar','error');
+        setStatus('No se pudo dibujar: '+err.message,'error');
+        drawCard(card,.7);
         bDraw.disabled=false;
       }
     };
@@ -8658,6 +8692,7 @@ const INFO_SIN_TEXTO=' Absolutely no text, letters, numbers, labels, captions, l
 const INFO_REF_NOTA=' The attached images are visual references only: use them as a guide for posture, framing, spatial layout and the objects involved. Do not copy their style, their colours or their photographic look, and do not reproduce recognisable faces. Redraw everything in the forensic style described above.';
 const INFO_CADENA=' The last attached image is the previous panel of the same series: keep the same line weight, the same silhouette treatment, the same scale of the figures and the same amount of white space, so that both drawings read as one sequence.';
 
+let INFO_ORIGEN='texto';   // 'texto' | 'link' | 'pregunta'
 let INFO_GUION=[];      // [{titulo,texto,prompt,estado,error,card,sintesis}]
 let INFO_REFS=[];       // [{name,dataUrl}]
 let INFO_CORRIENDO=false;
@@ -8699,15 +8734,67 @@ function infoRefAgregar(file){
   });
 }
 
+// ── Traer el contenido de un link ─────────────────────────
+// Un posteo de X sale por la API pública que el proxy ya tiene habilitada;
+// cualquier otra página, por el lector de artículos, con el proxy de respaldo.
+function infoLimpiarTexto(md){
+  return String(md||'')
+    .replace(/^Title:\s*/im,'')
+    .replace(/^URL Source:.*$/im,'')
+    .replace(/^Markdown Content:\s*$/im,'')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g,'')          // imágenes
+    .replace(/\[([^\]]*)\]\([^)]*\)/g,'$1')       // links: queda el texto
+    .replace(/^[#>*\-]{1,4}\s?/gm,'')
+    .replace(/\n{3,}/g,'\n\n')
+    .trim();
+}
+async function infoTraerUrl(url){
+  url=String(url||'').trim();
+  if(!/^https?:\/\//i.test(url)) throw new Error('Pegá la dirección completa, con https://');
+  const mx=url.match(/(?:twitter|x)\.com\/[^/]+\/status(?:es)?\/(\d+)/i);
+  if(mx){
+    try{
+      const j=await fetch('/api/media?url='+encodeURIComponent('https://api.fxtwitter.com/status/'+mx[1])).then(r=>r.ok?r.json():null);
+      const t=j&&j.tweet&&j.tweet.text;
+      if(t) return t.trim();
+    }catch(e){ console.error('[infografía] X', e&&e.message); }
+  }
+  let txt=null;
+  try{ txt=await fetch('https://r.jina.ai/'+url,{headers:{'X-Return-Format':'markdown'}}).then(r=>r.ok?r.text():null); }
+  catch(e){ console.error('[infografía] lector', e&&e.message); }
+  if(!txt){
+    try{ txt=await fetch('/api/media?url='+encodeURIComponent(url)).then(r=>r.ok?r.text():null); }
+    catch(e){ console.error('[infografía] proxy', e&&e.message); }
+  }
+  if(!txt||txt.length<160) throw new Error('No se pudo leer esa página. Copiá el texto a mano y pegalo en «Texto».');
+  const limpio=infoLimpiarTexto(txt);
+  if(limpio.length<160) throw new Error('La página no devolvió texto aprovechable');
+  return limpio.slice(0,14000);
+}
+function infoSetOrigen(org){
+  INFO_ORIGEN=org;
+  const row=infoEl('info-origen-row');
+  if(row) row.querySelectorAll('.fmt-btn').forEach(b=>b.classList.toggle('active', b.dataset.org===org));
+  const t=infoEl('info-org-texto'), l=infoEl('info-org-link'), q=infoEl('info-org-pregunta');
+  if(t) t.style.display=(org==='pregunta')?'none':'block';   // en modo link el texto traído queda a la vista
+  if(l) l.style.display=(org==='link')?'block':'none';
+  if(q) q.style.display=(org==='pregunta')?'block':'none';
+}
+
 // ── Guion (Claude) ────────────────────────────────────────
 async function infoArmarGuion(){
   const key=getKey(); if(!key) throw new Error('Cargá la API key de Anthropic arriba');
-  const texto=(infoEl('info-texto')?infoEl('info-texto').value:'').trim();
-  if(!texto) throw new Error('Pegá el texto del hecho');
+  const esPregunta=(INFO_ORIGEN==='pregunta');
+  const texto=esPregunta
+    ? (infoEl('info-pregunta')?infoEl('info-pregunta').value:'').trim()
+    : (infoEl('info-texto')?infoEl('info-texto').value:'').trim();
+  if(!texto) throw new Error(esPregunta?'Escribí la pregunta':'Pegá el texto del hecho');
   const n=parseInt(infoEl('info-n')?infoEl('info-n').value:'4')||4;
   const conSintesis=!!(infoEl('info-sintesis')&&infoEl('info-sintesis').checked);
   const x=infoExtra();
-  const sys=`Sos editor de infografías forenses de un medio argentino. Recibís un texto y lo partís en escenas dibujables: momentos, posiciones o relaciones espaciales que se puedan reconstruir con siluetas.
+  const sys=`${esPregunta
+    ? 'Sos editor de infografías explicativas de un medio argentino. Recibís una PREGUNTA y la respondés vos mismo, con lo que sabés, repartiendo la respuesta en escenas dibujables: pasos, posiciones o relaciones espaciales que se puedan reconstruir con siluetas. El lector no ve la pregunta: las cards tienen que entenderse solas.'
+    : 'Sos editor de infografías forenses de un medio argentino. Recibís un texto y lo partís en escenas dibujables: momentos, posiciones o relaciones espaciales que se puedan reconstruir con siluetas.'}
 
 Devolvés EXACTAMENTE ${n} escena${n>1?'s':''}, en orden y sin repetirse.${conSintesis?' Además devolvés una síntesis final.':''}
 
@@ -8721,7 +8808,9 @@ SÍNTESIS:
 · texto: entre 3 y 5 bullets, uno por línea, cada uno empezando con "· ", máximo 70 caracteres cada uno.
 · prompt: un único diagrama en inglés que resuma el hecho completo, con las mismas reglas que arriba.
 `:''}
-FIDELIDAD: no inventes datos, distancias, tiempos ni participantes que no estén en el texto. Si el texto no da una medida, no la inventes: mostrala como relación espacial.${x?`\n\nINSTRUCCIÓN DEL EDITOR (tiene prioridad): ${x}`:''}
+${esPregunta
+  ? 'PRECISIÓN: respondé con lo que sabés y con lo que se mantiene estable en el tiempo. No inventes cifras, marcas, normas ni estudios: si no estás seguro de un número, describí la relación sin número. Nada de datos de actualidad —precios, resultados, cargos— que puedan haber cambiado. Si la pregunta es un procedimiento, las escenas van en el orden en que se hace.'
+  : 'FIDELIDAD: no inventes datos, distancias, tiempos ni participantes que no estén en el texto. Si el texto no da una medida, no la inventes: mostrala como relación espacial.'}${x?`\n\nINSTRUCCIÓN DEL EDITOR (tiene prioridad): ${x}`:''}
 
 Respondé ÚNICAMENTE con JSON válido sin markdown:
 {"escenas":[{"titulo":"string","texto":"string","prompt":"string"}]${conSintesis?',"sintesis":{"titulo":"string","texto":"string","prompt":"string"}':''}}`;
@@ -8729,7 +8818,7 @@ Respondé ÚNICAMENTE con JSON válido sin markdown:
     method:'POST',
     headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
     body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:2500, system:sys,
-      messages:[{role:'user',content:texto.slice(0,14000)}] })
+      messages:[{role:'user',content:(esPregunta?'Respondé y descomponé en escenas:\n\n':'Descomponé en escenas:\n\n')+texto.slice(0,14000)}] })
   });
   if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error&&e.error.message?e.error.message:('Error '+res.status)); }
   const data=await res.json();
@@ -8794,22 +8883,55 @@ function infoGuionPintar(){
   box.querySelectorAll('button[data-draw]').forEach(b=>{
     b.onclick=async()=>{ const g=INFO_GUION[parseInt(b.dataset.draw)]; if(!g||!g.card||INFO_CORRIENDO) return;
       INFO_CORRIENDO=true; g.estado='dibujando'; infoGuionPintar(); setStatus('Dibujando la escena…','working');
-      try{ await infoDibujarCard(g.card); g.estado='lista'; setStatus('Ilustración lista',''); }
-      catch(e){ g.estado='error'; g.error=e.message; setStatus('No se pudo dibujar: '+e.message,'error'); }
+      try{ await infoDibujarCard(g.card); g.estado='lista'; g.card.infoError=null; setStatus('Ilustración lista',''); }
+      catch(e){ g.estado='error'; g.error=e.message; g.card.infoError=e.message;
+        setStatus('No se pudo dibujar: '+e.message,'error'); alert('No se pudo dibujar:\n\n'+e.message); }
       INFO_CORRIENDO=false; infoGuionPintar(); renderList();
       if(cards[sel]){ renderEditor(cards[sel]); drawCard(cards[sel],.7); } };
   });
 }
 
 // ── Imagen (OpenAI · gpt-image) ───────────────────────────
+// Se prueban variantes en orden: si la cuenta no acepta un modelo o un
+// parámetro, se reintenta sin él antes de dar el error por bueno.
 async function infoImagen(prompt, imagenes, size){
+  const intentos=[['gpt-image-1.5',true],['gpt-image-1.5',false],['gpt-image-1',false]];
+  let ultimo=null;
+  for(let i=0;i<intentos.length;i++){
+    try{ return await infoImagenIntento(prompt, imagenes, size, intentos[i][0], intentos[i][1]); }
+    catch(e){
+      console.error('[infografía] intento', intentos[i][0], e && e.message);
+      ultimo=e;
+      if(e&&e.fatal) throw e;   // key inválida o sin permisos: no tiene sentido reintentar
+    }
+  }
+  // Último recurso: dibujar sobre un lienzo blanco por /images/edits, que es el
+  // camino que el editor ya usa para ilustrar fotos. Sirve cuando la cuenta
+  // tiene habilitada la edición pero no la generación desde cero.
+  if(!(imagenes&&imagenes.length)){
+    try{
+      console.warn('[infografía] reintento por /edits sobre lienzo blanco');
+      return await infoImagenIntento(prompt+' Draw on the blank white canvas provided.', [infoLienzoBlanco(size)], size, 'gpt-image-1.5', false);
+    }catch(e){ console.error('[infografía] lienzo', e&&e.message); ultimo=e; }
+  }
+  throw ultimo||new Error('No se pudo generar la imagen');
+}
+// Lienzo blanco del tamaño pedido, como dataURL.
+function infoLienzoBlanco(size){
+  const partes=String(size||'1024x1024').split('x');
+  const cv=document.createElement('canvas');
+  cv.width=parseInt(partes[0])||1024; cv.height=parseInt(partes[1])||1024;
+  const x=cv.getContext('2d'); x.fillStyle='#ffffff'; x.fillRect(0,0,cv.width,cv.height);
+  return cv.toDataURL('image/png');
+}
+async function infoImagenIntento(prompt, imagenes, size, modelo, conFormato){
   const key=getOpenAIKey();
-  if(!key) throw new Error('Cargá tu OpenAI key arriba (sk-…)');
+  if(!key){ const e=new Error('Cargá tu OpenAI key arriba (sk-…)'); e.fatal=true; throw e; }
   let resp;
   if(imagenes&&imagenes.length){
     // Con referencias: van como imágenes de entrada al endpoint de edición.
     const fd=new FormData();
-    fd.append('model','gpt-image-1.5');
+    fd.append('model',modelo);
     for(let i=0;i<imagenes.length;i++){
       const prep=await dataUrlToPngBlob(imagenes[i]);
       fd.append('image[]', prep.blob, 'ref'+i+'.png');
@@ -8817,20 +8939,24 @@ async function infoImagen(prompt, imagenes, size){
     fd.append('prompt', prompt);
     fd.append('quality','high');
     fd.append('size', size);
-    fd.append('output_format','png');
+    if(conFormato) fd.append('output_format','png');
     resp=await fetch('https://api.openai.com/v1/images/edits',{
       method:'POST', headers:{'Authorization':'Bearer '+key}, body:fd });
   } else {
+    const cuerpo={ model:modelo, prompt:prompt, size:size, quality:'high' };
+    if(conFormato) cuerpo.output_format='png';
     resp=await fetch('https://api.openai.com/v1/images/generations',{
       method:'POST',
       headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},
-      body:JSON.stringify({ model:'gpt-image-1.5', prompt:prompt, size:size, quality:'high', output_format:'png' })
+      body:JSON.stringify(cuerpo)
     });
   }
   if(!resp.ok){
     let msg='Error '+resp.status;
     try{ const e=await resp.json(); if(e.error&&e.error.message) msg=e.error.message; }catch(_){}
-    throw new Error(msg);
+    const err=new Error(msg);
+    if(resp.status===401||resp.status===403) err.fatal=true;
+    throw err;
   }
   const data=await resp.json();
   const b64=data&&data.data&&data.data[0]&&data.data[0].b64_json;
@@ -8899,14 +9025,18 @@ async function infoCola(soloPrimera){
   const lista=soloPrimera?pend.slice(0,1):pend;
   if(!lista.length){ setStatus('No queda ninguna escena por dibujar',''); return; }
   INFO_CORRIENDO=true;
-  let hechas=0;
+  let hechas=0, avisado=false;
   infoProgreso(0,lista.length,'Dibujando');
   for(let i=0;i<lista.length;i++){
     const g=lista[i];
     g.estado='dibujando'; infoGuionPintar();
     setStatus(`Dibujando ${i+1} de ${lista.length}…`,'working');
-    try{ await infoDibujarCard(g.card); g.estado='lista'; }
-    catch(e){ g.estado='error'; g.error=e.message; setStatus('Error en una escena: '+e.message,'error'); }
+    try{ await infoDibujarCard(g.card); g.estado='lista'; g.card.infoError=null; }
+    catch(e){
+      g.estado='error'; g.error=e.message; g.card.infoError=e.message;
+      setStatus('Error en una escena: '+e.message,'error');
+      if(!avisado){ avisado=true; alert('No se pudo dibujar la escena '+(i+1)+':\n\n'+e.message+'\n\nLas demás siguen igual. Revisá la OpenAI key y el saldo de la cuenta.'); }
+    }
     hechas++; infoProgreso(hechas,lista.length,'Dibujando');
     infoGuionPintar(); renderList();
     if(cards[sel]){ renderEditor(cards[sel]); drawCard(cards[sel],.7); }
@@ -8922,6 +9052,27 @@ async function infoCola(soloPrimera){
   const bTexto=infoEl('info-texto'), bBase=infoEl('info-base');
   if(bBase) bBase.value=infoBase();
   const est=(msg)=>{ const e=infoEl('info-base-est'); if(e) e.textContent=msg; };
+
+  const rowOrg=infoEl('info-origen-row');
+  if(rowOrg) rowOrg.querySelectorAll('.fmt-btn').forEach(b=>{ b.onclick=()=>infoSetOrigen(b.dataset.org); });
+
+  const bTraer=infoEl('info-url-traer');
+  if(bTraer) bTraer.onclick=async()=>{
+    const u=infoEl('info-url'), estado=infoEl('info-url-estado');
+    if(!u||!u.value.trim()){ if(estado) estado.textContent='Pegá una dirección primero'; return; }
+    bTraer.disabled=true; if(estado) estado.textContent='Leyendo la página…';
+    setStatus('Trayendo el contenido…','working');
+    try{
+      const t=await infoTraerUrl(u.value);
+      if(bTexto) bTexto.value=t;
+      infoSetOrigen('texto');
+      if(estado) estado.textContent='';
+      setStatus(`Contenido traído · ${t.length} caracteres — revisalo y armá el guion`,'');
+    }catch(e){
+      if(estado) estado.textContent='✕ '+e.message;
+      setStatus('No se pudo traer el contenido','error');
+    }finally{ bTraer.disabled=false; }
+  };
 
   const bNota=infoEl('info-usar-nota');
   if(bNota) bNota.onclick=()=>{
@@ -10072,6 +10223,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v157','Infografía forense','Bloque nuevo en el panel izquierdo: pegás el texto de un hecho y Claude lo parte en escenas dibujables. Devuelve, por cada una, el título, la explicación que va en la card y el prompt de imagen en inglés, todo editable antes de gastar una sola imagen. Recién ahí gpt-image dibuja, de a una y con progreso a la vista, sobre un prompt base de estilo forense —siluetas negras sobre blanco puro, sin rasgos, sin sombras y sin texto adentro del dibujo— que se puede editar y queda guardado. Se pueden cargar fotos, planos o croquis como referencia de postura y disposición, y encadenar las escenas para que cada una vea la anterior y el trazo no baile. El contenido puede entrar de tres maneras: pegando el texto, pegando un link —una nota, un posteo de X, cualquier página— o escribiendo una pregunta, y en ese caso Claude la responde con lo que sabe, sin buscar en la web, que sirve para explicativos y procedimientos pero no para datos de actualidad. Suma el tipo de card «infografía»: texto arriba, que se achica solo para entrar, e ilustración a sangre abajo. Cada escena se vuelve a dibujar sola, sin tocar el resto, y la card se puede reemplazar por una imagen propia.'],
     ['v156','Recortar o no recortar','El fondo de la ilustración ahora se elige con dos botones, «Recortar fondo» y «No recortar fondo»: cada estilo trae su default y se puede cambiar en el momento. Suma un cuarto estilo de la casa, editorial de línea calcada tipo rotring con color plano desaturado, que conserva el fondo porque la escena es parte del recurso. Y se arregló el guardado de prompts propios: los avisos de «falta el nombre» aparecían al pie del panel, fuera de vista, y parecía que el botón no hacía nada. Ahora van dentro del formulario, el guardado local es lo que manda (el almacén del equipo es un extra que ya no puede hacerlo fracasar), hay un contador de prompts guardados y el borrador sobrevive si cambiás de card.'],
     ['v155','El texto no se mueve','Escribir una bajada corría el título hacia arriba y, si era larga, lo empujaba fuera de la placa sin manera de recuperarlo. Ahora cada bloque tiene su coordenada propia: se fija donde está y solo se mueve si lo arrastrás. Las posiciones se guardan en el template, así un colaborador reemplaza el texto y la placa no se desarma. Suma un botón para traer al cuadro lo que se haya ido. Las fotos se arrastran 1:1 con el mouse y sin tope: ya se pueden sacar de cuadro para abajo, que antes era imposible. Y hay un menú de ilustraciones (línea con color plano, crosshatching en blanco y negro, línea simple de viñeta) al que se le pueden sumar prompts propios, compartidos con todo el equipo.'],
     ['v154','Los templates llegan al equipo','Guardar publicaba solo en el navegador de cada uno. La clave que el almacén pide para aceptar un guardado se leía del cuadro de contraseña, pero al recargar la sesión ya está validada, ese cuadro no aparece y su valor queda vacío: el almacén rechazaba el guardado y el editor caía a la copia local. Ahora la clave se toma de la propia página, así que guardar publica siempre.'],
