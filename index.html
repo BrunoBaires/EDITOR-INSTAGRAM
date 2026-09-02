@@ -153,6 +153,25 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 .tpl-estado.ok{color:#10a37f;}
 .tpl-estado.off{color:#c1121f;}
 /* ── Ilustraciones a partir de fotos (v155) ── */
+.info-esc{border:1px solid var(--border);border-radius:4px;background:var(--bg);padding:8px;margin-bottom:6px;}
+.info-esc.lista{border-color:#bcd9cc;}
+.info-esc-top{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+.info-n{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:18px;flex-shrink:0;}
+.info-esc input.info-tit{flex:1;min-width:0;background:transparent;border:none;border-bottom:1px solid var(--border);font-family:'IBM Plex Sans',sans-serif;font-size:12px;font-weight:600;color:var(--text);padding:2px 0;outline:none;}
+.info-st{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 5px;border-radius:2px;border:1px solid var(--border);color:var(--text3);white-space:nowrap;}
+.info-st.ok{color:#1c7d59;border-color:#bcd9cc;background:#f0f7f3;}
+.info-st.run{color:#a35b00;border-color:#e5cfae;background:#fbf4e9;}
+.info-st.err{color:#c1121c;border-color:#e8b9bc;background:#fbeff0;}
+.info-esc textarea{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text2);font-family:'IBM Plex Sans',sans-serif;font-size:11.5px;line-height:1.5;padding:6px;resize:vertical;outline:none;}
+.info-esc textarea.info-pr{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);margin-top:5px;}
+.info-esc-fila{display:flex;gap:5px;align-items:center;margin-top:5px;}
+.info-refs{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+.info-ref{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:3px;padding:3px 6px 3px 3px;background:var(--bg);font-size:10.5px;color:var(--text2);}
+.info-ref img{width:22px;height:22px;object-fit:cover;border-radius:2px;border:1px solid var(--border);display:block;}
+.info-ref button{background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;line-height:1;padding:0 2px;}
+.info-prog{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2);margin:6px 0;}
+.info-bar{flex:1;height:3px;background:var(--bg2);border-radius:2px;overflow:hidden;}
+.info-bar i{display:block;height:100%;width:0;background:var(--text);transition:width .3s;}
 .ilus-block{margin-top:8px;padding:10px;background:var(--bg2);border:1px solid var(--border);border-radius:6px;}
 .ilus-sel{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 8px;outline:none;cursor:pointer;}
 .ilus-sel:focus{border-color:#aaa;}
@@ -680,6 +699,73 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
       </div>
     </details>
 
+    <!-- ZONA INFOGRAFÍA FORENSE -->
+    <details class="gen-block" id="info-block">
+      <summary class="gen-summary"><span>◈ Infografía forense</span><span class="gen-chev">▾</span></summary>
+      <div class="fmt-panel" style="padding-bottom:12px">
+
+        <div class="slabel">Texto del hecho</div>
+        <textarea id="info-texto" placeholder="Pegá el texto que hay que reconstruir…" style="width:100%;height:80px;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text2);font-family:'IBM Plex Sans',sans-serif;font-size:12px;line-height:1.55;padding:8px;resize:vertical;outline:none"></textarea>
+        <button class="tpl-mini" id="info-usar-nota" style="margin-top:5px">↩ Usar el texto de la nota</button>
+
+        <div style="display:flex;gap:6px;margin-top:9px">
+          <div style="flex:1">
+            <div class="slabel">Escenas</div>
+            <select id="info-n" class="ilus-sel">
+              <option value="3">3 escenas</option>
+              <option value="4" selected>4 escenas</option>
+              <option value="5">5 escenas</option>
+              <option value="6">6 escenas</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <div class="slabel">Dibujar</div>
+            <select id="info-modo" class="ilus-sel">
+              <option value="todas" selected>Todas de una</option>
+              <option value="primera">Solo la 1ª, y después veo</option>
+            </select>
+          </div>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-top:8px;cursor:pointer">
+          <input type="checkbox" id="info-sintesis" checked/> Sumar card de síntesis
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-top:4px;cursor:pointer">
+          <input type="checkbox" id="info-encadenar" checked/> Encadenar: cada escena ve la anterior
+        </label>
+
+        <div class="slabel" style="margin-top:11px">Referencias (opcional)</div>
+        <div class="bulk-drop" id="info-drop" style="margin:0">
+          <input type="file" id="info-refs-file" accept="image/*" multiple/>
+          <div class="bulk-drop-txt">Fotos, planos, croquis o capturas · guía de postura y disposición</div>
+        </div>
+        <div class="info-refs" id="info-refs"></div>
+
+        <div class="slabel" style="margin-top:11px">Instrucción libre</div>
+        <input type="text" id="info-extra" placeholder="ej: marcar la distancia en metros en cada escena" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:'IBM Plex Sans',sans-serif;font-size:12px;padding:7px 8px;outline:none"/>
+
+        <details style="margin-top:10px">
+          <summary style="cursor:pointer;font-size:11px;color:var(--text3);letter-spacing:1px;text-transform:uppercase">Prompt base del estilo</summary>
+          <textarea id="info-base" style="width:100%;box-sizing:border-box;min-height:120px;margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:1.5;padding:7px;resize:vertical;outline:none"></textarea>
+          <div class="ilus-fila" style="margin-top:5px">
+            <button class="tpl-mini" id="info-base-save">Guardar el estilo</button>
+            <button class="tpl-mini" id="info-base-reset">Volver al original</button>
+          </div>
+          <div class="ilus-guardados" id="info-base-est">Se aplica a todas las escenas. Lo que escribe Claude es solo qué se ve en cada una.</div>
+        </details>
+
+        <button class="gen-btn" id="info-guion-btn" style="width:100%;margin-top:11px">Armar guion</button>
+
+        <div id="info-guion-wrap" style="display:none;margin-top:10px">
+          <div class="slabel">Guion — revisalo antes de dibujar</div>
+          <div id="info-guion-list"></div>
+          <div class="info-prog" id="info-prog" style="display:none"><span id="info-prog-txt">Dibujando</span><span class="info-bar"><i id="info-prog-bar"></i></span><span id="info-prog-n"></span></div>
+          <button class="gen-btn" id="info-crear-btn" style="width:100%;margin-top:6px">Crear las cards y dibujar</button>
+          <button class="fmt-apply" id="info-faltan-btn" style="margin-top:5px;display:none">Dibujar las que faltan</button>
+        </div>
+      </div>
+    </details>
+
     <!-- ZONA CARDS (protagonista) -->
     <div class="list-header">
       <span class="list-header-label">Cards</span>
@@ -693,6 +779,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
         <button class="add-btn" id="add-tabla" title="Tabla desde imagen">▦</button>
         <button class="add-btn" id="add-vineta" title="Viñeta: fotos arriba + texto abajo">▣ Viñeta</button>
         <button class="add-btn" id="add-libre" title="Bloques de texto libres, cada uno con su estilo">✦ Libre</button>
+        <button class="add-btn" id="add-infografia" title="Infografía: texto arriba, ilustración forense abajo">◈ Infografía</button>
         <button class="add-btn" id="add-sintesis" title="Agrega una card de síntesis en bullets al final, sin tocar las cards que ya tenés" style="border-color:var(--text);font-weight:600">↯ Sumar síntesis</button>
         <button class="add-btn" id="templates-btn" title="Guardar y aplicar templates de estilo" style="border-color:var(--text);font-weight:600">◇ Templates</button>
         <button class="add-btn" id="limpiar-btn" style="color:#ef4444;border-color:#ef4444">✕</button>
@@ -4262,6 +4349,78 @@ function drawLibre(card,t){
   drawChrome(chromeA,card.id,CC.dark); drawGrid();
 }
 
+// ════════════════════════════════
+// INFOGRAFÍA — texto arriba, ilustración forense abajo, a sangre
+// La imagen vive en mediaCache[card.id] como cualquier foto, así que hereda
+// zoom/encuadre, Ken Burns, la miniatura de la lista y el pegado con Ctrl+V.
+// ════════════════════════════════
+function drawInfografia(card,t){
+  pintarFondo(card);
+  const chromeA=FX.fade?eo3(rm(t,0,.26)):1;
+  const cA=FX.fade?eo3(rm(t,.05,.36)):1;
+  const cDy=FX.rise?(1-eo3(rm(t,.05,.36)))*28:0;
+  const CC=getCardColors(card);
+  const pct=Math.max(12,Math.min(72, card.infoTextH!==undefined?card.infoTextH:34));
+  const splitY=Math.round(H*pct/100);
+  const m=mediaCache[card.id];
+
+  // ── Ilustración: ocupa todo el ancho, del corte hasta el borde de abajo ──
+  ctx.save(); ctx.globalAlpha=cA;
+  if(m){ drawMedia(m, 0, splitY, W, H-splitY, t); }
+  else {
+    ctx.fillStyle=PAL.rule; ctx.fillRect(0,splitY,W,H-splitY);
+    ctx.font='300 34px "IBM Plex Sans"'; ctx.letterSpacing='0px';
+    ctx.fillStyle=PAL.meta; ctx.textAlign='center';
+    ctx.fillText('Sin ilustración', W/2, splitY+(H-splitY)/2);
+    ctx.textAlign='left';
+  }
+  ctx.restore();
+
+  // ── Texto arriba ──
+  ctx.save(); ctx.globalAlpha=cA; ctx.translate(0,cDy);
+  const ruleY=M+10;
+  if(card.infoRule!==false){
+    ctx.fillStyle=CC.text; ctx.fillRect(M, ruleY, 56, 5);
+  }
+  // Borde superior del bloque de texto: debajo de la regla, con aire.
+  const topTxt=ruleY+(card.infoRule!==false?42:16);
+  // Autoajuste: el cuerpo se achica hasta entrar en el bloque de texto.
+  let bSz=card.bodySz||58;
+  if(card.cuerpo&&card.infoFit!==false){
+    let guard=0, altoTit=0;
+    if(card.titulo){ const tS=card.titleSz||52; altoTit=Math.round(tS*1.14)*wrapTitle(card.titulo,W-M*2,tS,titleFontFamily(card),titleFontWeight(card)).length+Math.round(tS*0.5); }
+    while(bSz>26 && guard++<40 &&
+          topTxt+altoTit+richTextHeight(card.cuerpo, W-M*2, bSz, Math.round(bSz*1.34)) > splitY-26){ bSz-=2; }
+  }
+  let ty=topTxt+Math.round((card.titulo?(card.titleSz||52):bSz)*0.8);
+  card._titleBox=null; card._bodyBox=null;
+  if(card.titulo){
+    const tSz=card.titleSz||52;
+    const tLH=Math.round(tSz*1.14);
+    const _fam=titleFontFamily(card), _wt=titleFontWeight(card);
+    ctx.save(); var _dT=deltaTexto(card,'tit',M,ty); ctx.translate(_dT.dx,_dT.dy);
+    ctx.font=`${_wt} ${tSz}px ${_fam}`; ctx.letterSpacing='-0.5px';
+    ctx.fillStyle=CC.text; ctx.textAlign='left';
+    const tl=wrapTitle(card.titulo, W-M*2, tSz, _fam, _wt);
+    tl.forEach((l,i)=>{ ctx.fillText(l, M, ty+i*tLH); });
+    ctx.letterSpacing='0px'; ctx.restore();
+    card._titleBox={x:M, y:ty-tLH, w:W-M*2, h:tl.length*tLH+30};
+    ty += tl.length*tLH + Math.round(tSz*0.5);
+  }
+  if(card.cuerpo){
+    if(card.titulo) ty+=Math.round(bSz*0.2);
+    ctx.save(); var _dB=deltaTexto(card,'baj',M,ty); ctx.translate(_dB.dx,_dB.dy);
+    const endY=drawRichText(card.cuerpo, M, ty, W-M*2, bSz, Math.round(bSz*1.34), CC.text, CC.text, card.bodyItalic);
+    ctx.restore();
+    card._bodyBox={x:M, y:ty-bSz, w:W-M*2, h:(endY-ty)+bSz};
+  }
+  ctx.restore();
+
+  drawCapas(card, false);
+  drawChrome(chromeA,card.id,CC.dark);
+  drawGrid();
+}
+
 function drawCard(card,t){
   _drawingCardId = card?card.id:null;
   if(card){ card._capaBoxes=[]; card._capaHandle=null; }
@@ -4271,6 +4430,7 @@ function drawCard(card,t){
   if(card.tipo==='grafico'){drawGrafico(card,t);return;}
   if(card.tipo==='tabla'){drawTabla(card,t);return;}
   if(card.tipo==='vineta'){drawVineta(card,t);return;}
+  if(card.tipo==='infografia'){drawInfografia(card,t);return;}
   if(card.tipo==='libre'){drawLibre(card,t);return;}
   const m=mediaCache[card.id];
   if(m?.type==='audio'){drawAudioCard(card,t,m);return;}
@@ -5835,7 +5995,7 @@ function renderList(){
     const item=document.createElement('div');
     item.className='card-item'+(i===sel?' active':'');
     const vinThumb=(c.tipo==='vineta'&&vinCache[c.id]&&vinCache[c.id][0]&&vinCache[c.id][0].type!=='video'&&vinCache[c.id][0].dataUrl)?vinCache[c.id][0].dataUrl:null;
-    const thumbHtml=m?.thumbUrl?`<img class="card-thumb" src="${m.thumbUrl}"/>`:vinThumb?`<img class="card-thumb" src="${vinThumb}"/>`:c.tipo==='media'?`<div class="card-thumb-ph">▣</div>`:c.tipo==='mapa'?`<div class="card-thumb-ph" title="Mapa">🗺</div>`:c.tipo==='nano'?`<div class="card-thumb-ph" title="Nano">✦</div>`:c.tipo==='grafico'?`<div class="card-thumb-ph" title="Gráfico">↗</div>`:c.tipo==='tabla'?`<div class="card-thumb-ph" title="Tabla">▦</div>`:c.tipo==='vineta'?`<div class="card-thumb-ph" title="Viñeta">▣</div>`:`<div class="card-thumb-ph" style="font-size:9px">T</div>`;
+    const thumbHtml=m?.thumbUrl?`<img class="card-thumb" src="${m.thumbUrl}"/>`:vinThumb?`<img class="card-thumb" src="${vinThumb}"/>`:c.tipo==='media'?`<div class="card-thumb-ph">▣</div>`:c.tipo==='mapa'?`<div class="card-thumb-ph" title="Mapa">🗺</div>`:c.tipo==='nano'?`<div class="card-thumb-ph" title="Nano">✦</div>`:c.tipo==='grafico'?`<div class="card-thumb-ph" title="Gráfico">↗</div>`:c.tipo==='tabla'?`<div class="card-thumb-ph" title="Tabla">▦</div>`:c.tipo==='vineta'?`<div class="card-thumb-ph" title="Viñeta">▣</div>`:c.tipo==='infografia'?`<div class="card-thumb-ph" title="Infografía">◈</div>`:`<div class="card-thumb-ph" style="font-size:9px">T</div>`;
     const listTitle=c.titulo||(c.tipo==='vineta'?(richToPlain(c.cuerpo||'').slice(0,40)||'—'):'—');
     item.innerHTML=`<span class="drag-handle" title="Arrastrar">⠿</span>${thumbHtml}<span class="cn">${c.id}</span><div class="ci"><div class="ci-tipo">${c.tipo}</div><div class="ci-title">${listTitle}</div></div><div class="item-actions"><button class="ia-btn" data-action="dup" title="Duplicar">⧉</button><button class="ia-btn del" data-action="del" title="Eliminar">×</button></div>`;
     item.querySelector('[data-action=dup]').onclick=e=>{e.stopPropagation();duplicateCard(i);};
@@ -6074,7 +6234,7 @@ function renderEditor(c){
     </div>`;
   }
 
-  const bodyLimit=c.tipo==='media'?180:c.tipo==='cover'?120:c.tipo==='mapa'||c.tipo==='nano'||c.tipo==='grafico'?140:c.tipo==='tabla'?90:c.tipo==='vineta'?400:320;
+  const bodyLimit=c.tipo==='media'?180:c.tipo==='cover'?120:c.tipo==='mapa'||c.tipo==='nano'||c.tipo==='grafico'?140:c.tipo==='tabla'?90:c.tipo==='vineta'?400:c.tipo==='infografia'?260:320;
 
   // ── MAPA editor section ──
   let mapaSection='';
@@ -6566,6 +6726,40 @@ function renderEditor(c){
     <div class="field"><label>Kicker</label><input type="text" id="f-kicker" value="${c.kicker||''}" placeholder="ej: EXCLUSIVO · INVESTIGACIÓN"/></div>`;
   }
 
+  // ── INFOGRAFÍA editor section ──
+  let infoSection='';
+  if(c.tipo==='infografia'){
+    const pctI=(c.infoTextH!==undefined?c.infoTextH:34);
+    const hasImg=!!(m&&m.type==='img');
+    infoSection=`
+    <div class="field"><label style="color:#c1121c">◈ Infografía — texto arriba, ilustración abajo</label>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">El texto se edita como en cualquier card (**negrita**, ==resaltado==) y se achica solo para entrar. La ilustración va a sangre, del corte al borde de abajo.</div>
+    </div>
+    <div class="field"><label>Alto del bloque de texto — <b id="sl-infoh-val">${pctI}%</b></label>
+      <input type="range" id="sl-infoh" min="12" max="72" step="1" value="${pctI}"/>
+    </div>
+    <div class="field"><label>Ilustración</label>
+      ${hasImg
+        ? `<img class="img-thumb-ed" src="${m.thumbUrl||m.dataUrl}" style="width:100%;border-radius:4px;background:#fff"/>`
+        : `<div class="img-drop" style="position:relative"><input type="file" id="info-card-file" accept="image/*"/><div class="img-drop-txt">Subí una imagen propia</div></div>`}
+      <textarea id="info-card-prompt" class="ilus-extra" style="min-height:76px;font-family:'IBM Plex Mono',monospace;font-size:10px;margin-top:6px" placeholder="Qué se ve en esta escena, en inglés. El estilo forense lo agrega el editor.">${escapeHtml(c.infoPrompt||'')}</textarea>
+      <div style="display:flex;gap:5px">
+        <button class="btn-g" id="info-card-draw" style="flex:1">✦ ${hasImg?'Volver a dibujar':'Dibujar'}</button>
+        ${hasImg?`<button class="btn-g" id="info-card-replace" style="flex:1">⤒ Subir otra</button>`:''}
+      </div>
+      <input type="file" id="info-card-file2" accept="image/*" style="display:none"/>
+      <div class="aiedit-status" id="info-card-status"></div>
+    </div>
+    ${hasImg?`<div class="field"><label>Encuadre de la ilustración</label>
+      <div class="range-block">
+        <div class="range-row"><label>Zoom</label><input type="range" id="sl-infozoom" min="1" max="3" step="0.05" value="${m.zoom||1}"/><span class="range-val">${(m.zoom||1).toFixed(2)}×</span></div>
+        <div class="range-row"><label>H</label><input type="range" id="sl-infocx" min="0" max="1" step="0.01" value="${m.cx!==undefined?m.cx:.5}"/></div>
+        <div class="range-row"><label>V</label><input type="range" id="sl-infocy" min="0" max="1" step="0.01" value="${m.cy!==undefined?m.cy:.5}"/></div>
+      </div>
+    </div>`:''}
+    <div class="sep"></div>`;
+  }
+
   el.innerHTML=`
     <div class="ed-header">
       <span class="ed-num">Card ${c.id} / ${cards.length}</span>
@@ -6578,6 +6772,7 @@ function renderEditor(c){
         <button class="tipo-btn${c.tipo==='grafico'?' active':''}" data-t="grafico" title="Gráfico">↗</button>
         <button class="tipo-btn${c.tipo==='vineta'?' active':''}" data-t="vineta" title="Viñeta: fotos arriba + texto abajo">▣ Viñeta</button>
         <button class="tipo-btn${c.tipo==='libre'?' active':''}" data-t="libre" title="Bloques de texto libres, cada uno con su estilo">✦ Libre</button>
+        <button class="tipo-btn${c.tipo==='infografia'?' active':''}" data-t="infografia" title="Infografía: texto arriba, ilustración abajo">◈ Info</button>
       </div>
     </div>
     ${libreSection}
@@ -6588,6 +6783,7 @@ function renderEditor(c){
     ${graficoSection}
     ${tablaSection}
     ${vinetaSection}
+    ${infoSection}
     <div class="field" id="capas-field">
       <label>Capas <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">gráficos y textos libres, encima de la card</span></label>
       <div style="display:flex;gap:4px;margin-bottom:6px">
@@ -7829,6 +8025,45 @@ REGLAS IMPORTANTES:
     });
   }
 
+  // ── INFOGRAFÍA controls ──
+  if(c.tipo==='infografia'){
+    const sh=el.querySelector('#sl-infoh');
+    if(sh) sh.oninput=e=>{ cards[sel].infoTextH=parseInt(e.target.value);
+      const v=el.querySelector('#sl-infoh-val'); if(v) v.textContent=e.target.value+'%'; redraw(); };
+    const pr=el.querySelector('#info-card-prompt');
+    if(pr) pr.oninput=e=>{ cards[sel].infoPrompt=e.target.value; };
+    const f1=el.querySelector('#info-card-file'), f2=el.querySelector('#info-card-file2');
+    const cargarImg=async(inp)=>{ const f=inp.files&&inp.files[0]; if(!f) return;
+      setStatus('Cargando imagen…','working');
+      await loadMediaFromFile(f, cards[sel].id);
+      setStatus('Listo','');
+      renderEditor(cards[sel]); renderList(); redraw(); };
+    if(f1) f1.onchange=()=>cargarImg(f1);
+    if(f2) f2.onchange=()=>cargarImg(f2);
+    const bRep=el.querySelector('#info-card-replace'); if(bRep&&f2) bRep.onclick=()=>f2.click();
+    const bDraw=el.querySelector('#info-card-draw');
+    if(bDraw) bDraw.onclick=async()=>{
+      const st=el.querySelector('#info-card-status'), card=cards[sel];
+      bDraw.disabled=true; if(st) st.textContent='Dibujando… puede tardar un minuto';
+      setStatus('Dibujando la ilustración…','working');
+      try{
+        await infoDibujarCard(card);
+        setStatus('Ilustración lista','');
+        renderEditor(cards[sel]); renderList(); redraw();
+      }catch(err){
+        if(st) st.textContent='✕ '+err.message;
+        setStatus('No se pudo dibujar','error');
+        bDraw.disabled=false;
+      }
+    };
+    const mm=mediaCache[c.id];
+    const z=el.querySelector('#sl-infozoom'), qx=el.querySelector('#sl-infocx'), qy=el.querySelector('#sl-infocy');
+    if(z&&mm) z.oninput=e=>{ mm.zoom=parseFloat(e.target.value);
+      const v=z.parentElement.querySelector('.range-val'); if(v) v.textContent=parseFloat(e.target.value).toFixed(2)+'×'; redraw(); };
+    if(qx&&mm) qx.oninput=e=>{ mm.cx=parseFloat(e.target.value); redraw(); };
+    if(qy&&mm) qy.oninput=e=>{ mm.cy=parseFloat(e.target.value); redraw(); };
+  }
+
   // ── Capas: gráficos y textos libres ──
   {
     const cc=cards[sel];
@@ -8086,6 +8321,7 @@ function addCard(tipo){
   if(tipo==='grafico'){defaults.chartType='bar';defaults.chartColor='#D94F1C';defaults.chartData=[];defaults.chartUnit='';defaults.chartSource='';}
   if(tipo==='tabla'){defaults.titulo='';defaults.cuerpo='';defaults.tableRows=[];defaults.titleSz=76;}
   if(tipo==='vineta'){defaults.vinCount=1;defaults.vinCaptions=['',''];defaults.bodySz=46;vinCache[defaults.id]=[];}
+  if(tipo==='infografia'){defaults.infoTextH=34;defaults.bodySz=58;defaults.titleSz=52;defaults.infoPrompt='';}
   if(tipo==='libre'){
     defaults.titulo=''; defaults.cuerpo='';
     defaults.libreVAlign='center';
@@ -8396,6 +8632,353 @@ document.getElementById('add-tabla').onclick=()=>addCard('tabla');
 {const _av=document.getElementById('add-vineta'); if(_av) _av.onclick=()=>addCard('vineta');}
 {const _al=document.getElementById('add-libre'); if(_al) _al.onclick=()=>addCard('libre');}
 {const _as=document.getElementById('add-sintesis'); if(_as) _as.onclick=()=>addSynthesisCard();}
+
+{const _ai=document.getElementById('add-infografia'); if(_ai) _ai.onclick=()=>addCard('infografia');}
+
+// ══════════════════════════════════════════════════════════
+// INFOGRAFÍA FORENSE (v1)
+// Dos pasos, con una parada de control en el medio:
+//   1) Claude parte el hecho en escenas y escribe, por cada una, la
+//      explicación que va en la card y el prompt de imagen en inglés.
+//   2) Recién cuando el guion está revisado, gpt-image dibuja una por una.
+// El estilo (siluetas negras sobre blanco, sin texto adentro) lo pone el
+// prompt base, que es editable y queda guardado en este navegador.
+// ══════════════════════════════════════════════════════════
+const INFO_LS='incertis_info_base';
+const INFO_BASE_DEFAULT=`Minimalist black and white forensic illustration that visually reconstructs an event, situation, accident, movement, interaction or sequence.
+Use solid black silhouettes on a pure white background for people, animals, vehicles or other subjects. Realistic proportions and natural positions, in the spirit of police reconstructions, expert reports, technical manuals and forensic infographics.
+No facial features, no expressions, no unnecessary detail. The figures resolve mainly as continuous black masses, keeping only the contours and details needed to read posture, movement, orientation and action.
+Include only the graphic elements needed to understand the case. Depending on the situation there may be objects, weapons, vehicles, furniture, schematic buildings, obstacles, footprints, trajectories, lines of sight, distances, heights, angles, stopwatches, scales, arrows, points of impact, successive positions or spatial diagrams. None of them is mandatory: if the silhouettes are enough to explain the situation, add nothing.
+Relevant objects are drawn in the same simplified forensic language, with the minimum level of detail needed to identify them clearly.
+Extremely clean and stripped-down composition, with abundant white space. If there are several stages of a sequence, lay them out clearly and in order, without enclosing them in boxes, cards or panels and without dividing lines, unless they are indispensable.
+High contrast: absolute black on absolute white. Clean, precise, slightly organic contours. The figures must not look like signage pictograms: they keep the anatomy, the irregularities and the gesture of silhouettes taken from real people.
+No decorative effects: no shadows, gradients, textures, 3D volume, dramatic lighting, glows, grain, ambient backgrounds, atmospheric perspective, cinematic look, comic style or ornamental elements.
+The result must look like a contemporary forensic reconstruction: objective, precise, cold, neutral and didactic, where every element present has a concrete informative function and nothing was added merely to decorate.`;
+const INFO_SIN_TEXTO=' Absolutely no text, letters, numbers, labels, captions, legends, titles, watermarks or signatures anywhere in the image.';
+const INFO_REF_NOTA=' The attached images are visual references only: use them as a guide for posture, framing, spatial layout and the objects involved. Do not copy their style, their colours or their photographic look, and do not reproduce recognisable faces. Redraw everything in the forensic style described above.';
+const INFO_CADENA=' The last attached image is the previous panel of the same series: keep the same line weight, the same silhouette treatment, the same scale of the figures and the same amount of white space, so that both drawings read as one sequence.';
+
+let INFO_GUION=[];      // [{titulo,texto,prompt,estado,error,card,sintesis}]
+let INFO_REFS=[];       // [{name,dataUrl}]
+let INFO_CORRIENDO=false;
+
+function infoBase(){
+  try{ return localStorage.getItem(INFO_LS)||INFO_BASE_DEFAULT; }catch(e){ return INFO_BASE_DEFAULT; }
+}
+function infoEl(id){ return document.getElementById(id); }
+function infoExtra(){ const e=infoEl('info-extra'); return e?e.value.trim():''; }
+
+// Prompt final que recibe gpt-image: estilo base + qué pasa en la escena + guardas.
+function infoPromptFinal(escena, hayRefs, encadenada){
+  let p=infoBase().trim();
+  p+='\n\nSCENE TO DRAW: '+String(escena||'').trim();
+  const x=infoExtra();
+  if(x) p+=' Additional instruction: '+x+'.';
+  if(hayRefs) p+=INFO_REF_NOTA;
+  if(encadenada) p+=INFO_CADENA;
+  p+=INFO_SIN_TEXTO;
+  return p;
+}
+
+// ── Referencias ───────────────────────────────────────────
+function infoRefsPintar(){
+  const box=infoEl('info-refs'); if(!box) return;
+  box.innerHTML=INFO_REFS.map((r,i)=>
+    `<span class="info-ref"><img src="${r.dataUrl}" alt=""/>${escapeHtml(r.name.slice(0,18))}<button data-ref="${i}" title="Quitar">✕</button></span>`
+  ).join('');
+  box.querySelectorAll('button[data-ref]').forEach(b=>{
+    b.onclick=()=>{ INFO_REFS.splice(parseInt(b.dataset.ref),1); infoRefsPintar(); };
+  });
+}
+function infoRefAgregar(file){
+  return new Promise(res=>{
+    const r=new FileReader();
+    r.onload=ev=>{ INFO_REFS.push({name:file.name||'referencia', dataUrl:ev.target.result}); res(); };
+    r.onerror=()=>res();
+    r.readAsDataURL(file);
+  });
+}
+
+// ── Guion (Claude) ────────────────────────────────────────
+async function infoArmarGuion(){
+  const key=getKey(); if(!key) throw new Error('Cargá la API key de Anthropic arriba');
+  const texto=(infoEl('info-texto')?infoEl('info-texto').value:'').trim();
+  if(!texto) throw new Error('Pegá el texto del hecho');
+  const n=parseInt(infoEl('info-n')?infoEl('info-n').value:'4')||4;
+  const conSintesis=!!(infoEl('info-sintesis')&&infoEl('info-sintesis').checked);
+  const x=infoExtra();
+  const sys=`Sos editor de infografías forenses de un medio argentino. Recibís un texto y lo partís en escenas dibujables: momentos, posiciones o relaciones espaciales que se puedan reconstruir con siluetas.
+
+Devolvés EXACTAMENTE ${n} escena${n>1?'s':''}, en orden y sin repetirse.${conSintesis?' Además devolvés una síntesis final.':''}
+
+POR CADA ESCENA:
+· titulo: 3 a 6 palabras. Sirve para identificarla en el editor, no se imprime en la card.
+· texto: la explicación que va en la card. Castellano rioplatense, entre 120 y 220 caracteres, una sola idea, sin emojis, sin adjetivos decorativos. Números en cifra. Podés marcar UN dato clave con **negrita**.
+· prompt: EN INGLÉS. Describís SOLO lo que se ve: cuántas figuras hay, su postura y orientación, qué sostienen, cómo están dispuestas en el espacio, qué objetos, trayectorias, flechas, líneas de cota, posiciones sucesivas o ángulos aparecen. Entre 30 y 60 palabras. NO describas el estilo del dibujo: eso lo agrega el editor. NO pidas texto, números, rótulos ni etiquetas dentro de la imagen: una distancia se representa con una línea de cota sin número, un tiempo con posiciones sucesivas.
+${conSintesis?`
+SÍNTESIS:
+· titulo: ≤45 caracteres, la conclusión en una frase.
+· texto: entre 3 y 5 bullets, uno por línea, cada uno empezando con "· ", máximo 70 caracteres cada uno.
+· prompt: un único diagrama en inglés que resuma el hecho completo, con las mismas reglas que arriba.
+`:''}
+FIDELIDAD: no inventes datos, distancias, tiempos ni participantes que no estén en el texto. Si el texto no da una medida, no la inventes: mostrala como relación espacial.${x?`\n\nINSTRUCCIÓN DEL EDITOR (tiene prioridad): ${x}`:''}
+
+Respondé ÚNICAMENTE con JSON válido sin markdown:
+{"escenas":[{"titulo":"string","texto":"string","prompt":"string"}]${conSintesis?',"sintesis":{"titulo":"string","texto":"string","prompt":"string"}':''}}`;
+  const res=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({ model:'claude-sonnet-4-6', max_tokens:2500, system:sys,
+      messages:[{role:'user',content:texto.slice(0,14000)}] })
+  });
+  if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error&&e.error.message?e.error.message:('Error '+res.status)); }
+  const data=await res.json();
+  let raw=(data.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+  raw=raw.replace(/```json|```/g,'').trim();
+  const a=raw.indexOf('{'), b=raw.lastIndexOf('}');
+  if(a>=0&&b>a) raw=raw.slice(a,b+1);
+  let obj;
+  try{ obj=JSON.parse(raw); }catch(e){ throw new Error('La IA devolvió un formato inesperado. Probá de nuevo.'); }
+  const out=(obj.escenas||[]).map(e=>({
+    titulo:(e.titulo||'Escena').trim(),
+    texto:(e.texto||'').replace(/\\n/g,'\n').trim(),
+    prompt:(e.prompt||'').trim(),
+    estado:'pendiente', card:null, sintesis:false
+  }));
+  if(conSintesis&&obj.sintesis){
+    let cuerpo=(obj.sintesis.texto||'').trim();
+    let bl=cuerpo.split('\n').map(l=>l.trim()).filter(Boolean)
+      .map(l=>l.replace(/^[·•\-\*]\s*/,'· ')).map(l=>l.startsWith('· ')?l:'· '+l).slice(0,5);
+    out.push({ titulo:(obj.sintesis.titulo||'Síntesis').trim(), texto:bl.join('\n'),
+               prompt:(obj.sintesis.prompt||'').trim(), estado:'pendiente', card:null, sintesis:true });
+  }
+  if(!out.length) throw new Error('No se pudo armar el guion');
+  return out;
+}
+
+// ── Pintar el guion ───────────────────────────────────────
+function infoGuionPintar(){
+  const box=infoEl('info-guion-list'); if(!box) return;
+  const wrap=infoEl('info-guion-wrap'); if(wrap) wrap.style.display=INFO_GUION.length?'block':'none';
+  box.innerHTML=INFO_GUION.map((g,i)=>{
+    const st=g.estado==='lista'?'<span class="info-st ok">Lista</span>'
+           :g.estado==='dibujando'?'<span class="info-st run">Dibujando</span>'
+           :g.estado==='error'?`<span class="info-st err" title="${escapeHtml(g.error||'')}">Error</span>`
+           :'<span class="info-st">En cola</span>';
+    return `<div class="info-esc${g.estado==='lista'?' lista':''}">
+      <div class="info-esc-top">
+        <span class="info-n">${g.sintesis?'S':'E'+(i+1)}</span>
+        <input class="info-tit" data-i="${i}" value="${escapeHtml(g.titulo)}"/>
+        ${st}
+      </div>
+      <textarea class="info-txt" data-i="${i}" rows="2" placeholder="Explicación de la card">${escapeHtml(g.texto)}</textarea>
+      <textarea class="info-pr" data-i="${i}" rows="2" placeholder="Qué se ve, en inglés">${escapeHtml(g.prompt)}</textarea>
+      ${g.card?`<div class="info-esc-fila"><button class="tpl-mini" data-ver="${i}">Ver la card</button><button class="tpl-mini" data-draw="${i}">✦ Dibujar esta</button></div>`:''}
+    </div>`;
+  }).join('');
+  box.querySelectorAll('.info-tit').forEach(inp=>{
+    inp.oninput=()=>{ const g=INFO_GUION[parseInt(inp.dataset.i)]; if(g) g.titulo=inp.value; };
+  });
+  box.querySelectorAll('.info-txt').forEach(ta=>{
+    ta.oninput=()=>{ const g=INFO_GUION[parseInt(ta.dataset.i)]; if(!g) return; g.texto=ta.value;
+      if(g.card){ g.card.cuerpo=ta.value; renderList(); if(cards[sel]===g.card){ renderEditor(g.card); drawCard(g.card,.7); } } };
+  });
+  box.querySelectorAll('.info-pr').forEach(ta=>{
+    ta.oninput=()=>{ const g=INFO_GUION[parseInt(ta.dataset.i)]; if(!g) return; g.prompt=ta.value;
+      if(g.card) g.card.infoPrompt=ta.value; };
+  });
+  box.querySelectorAll('button[data-ver]').forEach(b=>{
+    b.onclick=()=>{ const g=INFO_GUION[parseInt(b.dataset.ver)]; if(!g||!g.card) return;
+      const i=cards.indexOf(g.card); if(i>=0) selectCard(i); };
+  });
+  box.querySelectorAll('button[data-draw]').forEach(b=>{
+    b.onclick=async()=>{ const g=INFO_GUION[parseInt(b.dataset.draw)]; if(!g||!g.card||INFO_CORRIENDO) return;
+      INFO_CORRIENDO=true; g.estado='dibujando'; infoGuionPintar(); setStatus('Dibujando la escena…','working');
+      try{ await infoDibujarCard(g.card); g.estado='lista'; setStatus('Ilustración lista',''); }
+      catch(e){ g.estado='error'; g.error=e.message; setStatus('No se pudo dibujar: '+e.message,'error'); }
+      INFO_CORRIENDO=false; infoGuionPintar(); renderList();
+      if(cards[sel]){ renderEditor(cards[sel]); drawCard(cards[sel],.7); } };
+  });
+}
+
+// ── Imagen (OpenAI · gpt-image) ───────────────────────────
+async function infoImagen(prompt, imagenes, size){
+  const key=getOpenAIKey();
+  if(!key) throw new Error('Cargá tu OpenAI key arriba (sk-…)');
+  let resp;
+  if(imagenes&&imagenes.length){
+    // Con referencias: van como imágenes de entrada al endpoint de edición.
+    const fd=new FormData();
+    fd.append('model','gpt-image-1.5');
+    for(let i=0;i<imagenes.length;i++){
+      const prep=await dataUrlToPngBlob(imagenes[i]);
+      fd.append('image[]', prep.blob, 'ref'+i+'.png');
+    }
+    fd.append('prompt', prompt);
+    fd.append('quality','high');
+    fd.append('size', size);
+    fd.append('output_format','png');
+    resp=await fetch('https://api.openai.com/v1/images/edits',{
+      method:'POST', headers:{'Authorization':'Bearer '+key}, body:fd });
+  } else {
+    resp=await fetch('https://api.openai.com/v1/images/generations',{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},
+      body:JSON.stringify({ model:'gpt-image-1.5', prompt:prompt, size:size, quality:'high', output_format:'png' })
+    });
+  }
+  if(!resp.ok){
+    let msg='Error '+resp.status;
+    try{ const e=await resp.json(); if(e.error&&e.error.message) msg=e.error.message; }catch(_){}
+    throw new Error(msg);
+  }
+  const data=await resp.json();
+  const b64=data&&data.data&&data.data[0]&&data.data[0].b64_json;
+  if(!b64) throw new Error('La API no devolvió imagen');
+  return 'data:image/png;base64,'+b64;
+}
+function infoSetImagen(cardId, dataUrl){
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    img.onload=()=>{ mediaCache[cardId]={...(mediaCache[cardId]||{}), type:'img', el:img,
+      dataUrl:dataUrl, thumbUrl:dataUrl, zoom:1, cx:.5, cy:.5}; res(); };
+    img.onerror=()=>rej(new Error('No se pudo cargar la ilustración'));
+    img.src=dataUrl;
+  });
+}
+
+// Dibuja (o vuelve a dibujar) la ilustración de UNA card de infografía.
+async function infoDibujarCard(card){
+  if(!card) throw new Error('No hay card seleccionada');
+  const escena=(card.infoPrompt||'').trim() || richToPlain(card.cuerpo||'').trim();
+  if(!escena) throw new Error('Escribí qué se ve en esta escena');
+  const pct=(card.infoTextH!==undefined?card.infoTextH:34);
+  const size=bestOutputSize(W, Math.max(200, Math.round(H*(100-pct)/100)));
+  const refs=INFO_REFS.map(r=>r.dataUrl);
+  let previa=null;
+  const enc=infoEl('info-encadenar');
+  if(enc&&enc.checked){
+    const i=cards.indexOf(card);
+    for(let k=i-1;k>=0;k--){
+      const c2=cards[k];
+      if(c2&&c2.tipo==='infografia'&&mediaCache[c2.id]&&mediaCache[c2.id].dataUrl&&String(mediaCache[c2.id].dataUrl).startsWith('data:')){
+        previa=mediaCache[c2.id].dataUrl; break;
+      }
+    }
+  }
+  const entradas=(previa?refs.concat([previa]):refs).slice(0,6);
+  const dataUrl=await infoImagen(infoPromptFinal(escena, refs.length>0, !!previa), entradas, size);
+  await infoSetImagen(card.id, dataUrl);
+  return dataUrl;
+}
+
+// ── Cards + cola de dibujo ────────────────────────────────
+function infoCrearCards(){
+  INFO_GUION.forEach(g=>{
+    addCard('infografia');
+    const c=cards[cards.length-1];
+    c.cuerpo=g.texto||'';
+    c.infoPrompt=g.prompt||'';
+    if(g.sintesis){ c.esSintesis=true; c.volanta='SÍNTESIS'; c.infoTextH=46; }
+    g.card=c; g.estado='pendiente';
+  });
+  renderList(); infoGuionPintar();
+  const fal=infoEl('info-faltan-btn'); if(fal) fal.style.display='block';
+}
+function infoProgreso(hechas,total,txt){
+  const box=infoEl('info-prog'), bar=infoEl('info-prog-bar'), n=infoEl('info-prog-n'), t=infoEl('info-prog-txt');
+  if(!box) return;
+  box.style.display=total?'flex':'none';
+  if(bar) bar.style.width=total?Math.round(hechas/total*100)+'%':'0';
+  if(n) n.textContent=total?(hechas+' / '+total):'';
+  if(t&&txt) t.textContent=txt;
+}
+async function infoCola(soloPrimera){
+  if(INFO_CORRIENDO) return;
+  const pend=INFO_GUION.filter(g=>g.card&&!mediaCache[g.card.id]);
+  const lista=soloPrimera?pend.slice(0,1):pend;
+  if(!lista.length){ setStatus('No queda ninguna escena por dibujar',''); return; }
+  INFO_CORRIENDO=true;
+  let hechas=0;
+  infoProgreso(0,lista.length,'Dibujando');
+  for(let i=0;i<lista.length;i++){
+    const g=lista[i];
+    g.estado='dibujando'; infoGuionPintar();
+    setStatus(`Dibujando ${i+1} de ${lista.length}…`,'working');
+    try{ await infoDibujarCard(g.card); g.estado='lista'; }
+    catch(e){ g.estado='error'; g.error=e.message; setStatus('Error en una escena: '+e.message,'error'); }
+    hechas++; infoProgreso(hechas,lista.length,'Dibujando');
+    infoGuionPintar(); renderList();
+    if(cards[sel]){ renderEditor(cards[sel]); drawCard(cards[sel],.7); }
+  }
+  INFO_CORRIENDO=false;
+  const fallaron=INFO_GUION.filter(g=>g.estado==='error').length;
+  setStatus(fallaron?`Listo, con ${fallaron} escena${fallaron>1?'s':''} sin dibujar`:'Infografía lista','');
+  infoProgreso(hechas,lista.length,'Dibujadas');
+}
+
+// ── Cableado del bloque ───────────────────────────────────
+{
+  const bTexto=infoEl('info-texto'), bBase=infoEl('info-base');
+  if(bBase) bBase.value=infoBase();
+  const est=(msg)=>{ const e=infoEl('info-base-est'); if(e) e.textContent=msg; };
+
+  const bNota=infoEl('info-usar-nota');
+  if(bNota) bNota.onclick=()=>{
+    const n=document.getElementById('article-input');
+    if(n&&n.value.trim()&&bTexto){ bTexto.value=n.value.trim(); setStatus('Texto de la nota copiado',''); }
+    else setStatus('No hay texto en la nota','warn');
+  };
+
+  const bRefs=infoEl('info-refs-file');
+  if(bRefs) bRefs.onchange=async e=>{
+    const fs=Array.from(e.target.files||[]);
+    for(const f of fs){ if(INFO_REFS.length<5) await infoRefAgregar(f); }
+    e.target.value=''; infoRefsPintar();
+  };
+
+  const bSave=infoEl('info-base-save');
+  if(bSave) bSave.onclick=()=>{
+    if(!bBase) return;
+    try{ localStorage.setItem(INFO_LS, bBase.value.trim()); est('✓ Estilo guardado en este navegador'); }
+    catch(err){ est('No se pudo guardar en este navegador'); }
+    // Publicación al equipo: si el almacén no tiene la colección, no pasa nada.
+    try{ storeGuardar('infografia',{nombre:'Estilo forense', prompt:bBase.value.trim(), fecha:new Date().toISOString().slice(0,10)})
+      .then(()=>est('✓ Estilo guardado y publicado al equipo')).catch(()=>{}); }catch(err){}
+  };
+  const bReset=infoEl('info-base-reset');
+  if(bReset) bReset.onclick=()=>{
+    try{ localStorage.removeItem(INFO_LS); }catch(err){}
+    if(bBase) bBase.value=INFO_BASE_DEFAULT;
+    est('Estilo original restablecido');
+  };
+
+  const bGuion=infoEl('info-guion-btn');
+  if(bGuion) bGuion.onclick=async()=>{
+    bGuion.disabled=true; bGuion.textContent='Armando el guion…';
+    setStatus('Armando el guion…','working');
+    try{
+      INFO_GUION=await infoArmarGuion();
+      infoGuionPintar();
+      setStatus(`Guion de ${INFO_GUION.length} escenas — revisalo y creá las cards`,'');
+    }catch(e){ console.error(e); alert('Error: '+e.message); setStatus('No se pudo armar el guion','error'); }
+    finally{ bGuion.disabled=false; bGuion.textContent='Armar guion'; }
+  };
+
+  const bCrear=infoEl('info-crear-btn');
+  if(bCrear) bCrear.onclick=async()=>{
+    if(!INFO_GUION.length){ setStatus('Armá el guion primero','warn'); return; }
+    if(INFO_GUION.some(g=>g.card)){ setStatus('Las cards ya están creadas','warn'); }
+    else infoCrearCards();
+    const modo=infoEl('info-modo');
+    await infoCola(modo&&modo.value==='primera');
+  };
+  const bFaltan=infoEl('info-faltan-btn');
+  if(bFaltan) bFaltan.onclick=()=>infoCola(false);
+
+  infoRefsPintar();
+}
+
 document.getElementById('play-btn').onclick=()=>{
   if(!cards[sel])return;
   if(raf){cancelAnimationFrame(raf);raf=null;
