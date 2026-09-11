@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,700;0,9..144,900;1,9..144,700&family=Archivo+Black&family=Libre+Franklin:ital,wght@0,700;0,800;1,700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,700;0,6..96,900;1,6..96,700&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script type="module">
   // Cliente de Vercel Blob para subir archivos al almacén del equipo.
   // Si no carga (sin red, o el proyecto todavía no tiene el store), el editor
@@ -616,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v157 «infografía forense»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v158 «tapa animada»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -759,6 +760,13 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
           <input type="checkbox" id="info-transp" checked/> Fondo transparente (para pintar la placa)
         </label>
 
+        <div class="slabel" style="margin-top:10px">Numeración</div>
+        <div style="display:flex;gap:5px">
+          <button class="tipo-btn active" id="info-num-on" style="flex:1;font-size:11px">1/5 · Numerar</button>
+          <button class="tipo-btn" id="info-num-off" style="flex:1;font-size:11px">Sin numerar</button>
+        </div>
+        <div class="ilus-guardados">Cae en el ángulo superior izquierdo. Se aplica a las cards de esta infografía; cada card se puede cambiar después desde su panel.</div>
+
         <div class="slabel" style="margin-top:11px">Referencias (opcional)</div>
         <div class="bulk-drop" id="info-drop" style="margin:0">
           <input type="file" id="info-refs-file" accept="image/*" multiple/>
@@ -805,6 +813,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
         <button class="add-btn" id="add-vineta" title="Viñeta: fotos arriba + texto abajo">▣ Viñeta</button>
         <button class="add-btn" id="add-libre" title="Bloques de texto libres, cada uno con su estilo">✦ Libre</button>
         <button class="add-btn" id="add-infografia" title="Infografía: texto arriba, ilustración forense abajo">◈ Infografía</button>
+        <button class="add-btn" id="add-tapa" title="Tapa animada: el diario se arma solo sobre un zoom out">◨ Tapa</button>
         <button class="add-btn" id="add-sintesis" title="Agrega una card de síntesis en bullets al final, sin tocar las cards que ya tenés" style="border-color:var(--text);font-weight:600">↯ Sumar síntesis</button>
         <button class="add-btn" id="templates-btn" title="Guardar y aplicar templates de estilo" style="border-color:var(--text);font-weight:600">◇ Templates</button>
         <button class="add-btn" id="limpiar-btn" style="color:#ef4444;border-color:#ef4444">✕</button>
@@ -919,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v157 «infografía forense»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v158 «tapa animada»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -4415,10 +4424,13 @@ function drawInfografia(card,t){
   // ── Texto encima, arriba de todo ──
   ctx.save(); ctx.globalAlpha=cA; ctx.translate(0,cDy);
   const ruleY=M+10;
-  if(card.infoRule!==false){
+  // Si la card va numerada, el número ocupa ese ángulo: la regla se saca y el
+  // texto baja para no pisarlo.
+  const numerada=!!card.numbered;
+  if(card.infoRule!==false && !numerada){
     ctx.fillStyle=CC.text; ctx.fillRect(M, ruleY, 56, 5);
   }
-  const topTxt=ruleY+(card.infoRule!==false?42:16);
+  const topTxt=ruleY+(numerada?86:(card.infoRule!==false?42:16));
   // Zona reservada al texto: no se dibuja ninguna línea, solo limita el cuerpo.
   const zonaTxt=Math.round(H*Math.max(12,Math.min(72, card.infoTextH!==undefined?card.infoTextH:34))/100);
   let bSz=card.bodySz||58;
@@ -4456,9 +4468,612 @@ function drawInfografia(card,t){
   drawChrome(chromeA,card.id,CC.dark);
   drawGrid();
 }
+// ════════════════════════════════════════════════════════════════════
+// TAPA ANIMADA  ·  la tapa del diario se arma sola sobre un zoom out
+// ════════════════════════════════════════════════════════════════════
+// Puerto del pipeline de Python. Tres partes:
+//   1. análisis   — dónde está la foto y en qué piezas se corta la página
+//   2. plan       — cuándo entra cada pieza, atado al recorrido de la cámara
+//   3. dibujo     — un cuadro, dado t de 0 a 1
+// El video y el audio los pone la máquina de exportación que ya existe.
+
+var tapaCache = {};          // id de card -> {img, foto, piezas, iFoto, iTitulo}
+
+var TAPA = (function(){
+
+// ── utilidades de máscara ────────────────────────────────────────────
+function integral(a, w, h){
+  // suma acumulada, para promedios de ventana en tiempo constante
+  var s = new Float64Array((w+1)*(h+1));
+  for(var y=0;y<h;y++){
+    var fila=0;
+    for(var x=0;x<w;x++){
+      fila += a[y*w+x];
+      s[(y+1)*(w+1)+(x+1)] = s[y*(w+1)+(x+1)] + fila;
+    }
+  }
+  return s;
+}
+function mediaVentana(s, w, h, x, y, r){
+  var x0=Math.max(0,x-r), y0=Math.max(0,y-r);
+  var x1=Math.min(w-1,x+r), y1=Math.min(h-1,y+r);
+  var A=s[y0*(w+1)+x0], B=s[y0*(w+1)+(x1+1)];
+  var C=s[(y1+1)*(w+1)+x0], D=s[(y1+1)*(w+1)+(x1+1)];
+  return (D-B-C+A)/((x1-x0+1)*(y1-y0+1));
+}
+function dilatar(m, w, h, rx, ry){
+  var t=new Uint8Array(w*h), o=new Uint8Array(w*h);
+  for(var y=0;y<h;y++) for(var x=0;x<w;x++){
+    var v=0;
+    for(var i=-rx;i<=rx && !v;i++){ var xx=x+i; if(xx>=0&&xx<w&&m[y*w+xx]) v=1; }
+    t[y*w+x]=v;
+  }
+  for(var y2=0;y2<h;y2++) for(var x2=0;x2<w;x2++){
+    var v2=0;
+    for(var j=-ry;j<=ry && !v2;j++){ var yy=y2+j; if(yy>=0&&yy<h&&t[yy*w+x2]) v2=1; }
+    o[y2*w+x2]=v2;
+  }
+  return o;
+}
+function erosionar(m, w, h, rx, ry){
+  var inv=new Uint8Array(w*h);
+  for(var i=0;i<w*h;i++) inv[i]=m[i]?0:1;
+  var d=dilatar(inv,w,h,rx,ry);
+  for(var k=0;k<w*h;k++) inv[k]=d[k]?0:1;
+  return inv;
+}
+function taparHuecos(m, w, h){
+  // lo que no es máscara y no toca el borde, es hueco: se rellena
+  var fuera=new Uint8Array(w*h), pila=[];
+  for(var x=0;x<w;x++){ pila.push([x,0]); pila.push([x,h-1]); }
+  for(var y=0;y<h;y++){ pila.push([0,y]); pila.push([w-1,y]); }
+  while(pila.length){
+    var p=pila.pop(), px=p[0], py=p[1];
+    if(px<0||py<0||px>=w||py>=h) continue;
+    var i=py*w+px;
+    if(fuera[i]||m[i]) continue;
+    fuera[i]=1;
+    pila.push([px+1,py]);pila.push([px-1,py]);pila.push([px,py+1]);pila.push([px,py-1]);
+  }
+  var o=new Uint8Array(w*h);
+  for(var k=0;k<w*h;k++) o[k]= (m[k]||!fuera[k]) ? 1 : 0;
+  return o;
+}
+function componentes(m, w, h){
+  var lab=new Int32Array(w*h).fill(-1), out=[];
+  for(var i=0;i<w*h;i++){
+    if(!m[i]||lab[i]>=0) continue;
+    var id=out.length, pila=[i], area=0;
+    var x0=w, y0=h, x1=0, y1=0;
+    lab[i]=id;
+    while(pila.length){
+      var p=pila.pop(), px=p%w, py=(p-px)/w;
+      area++;
+      if(px<x0)x0=px; if(px>x1)x1=px;
+      if(py<y0)y0=py; if(py>y1)y1=py;
+      var vec=[[px+1,py],[px-1,py],[px,py+1],[px,py-1]];
+      for(var v=0;v<4;v++){
+        var nx=vec[v][0], ny=vec[v][1];
+        if(nx<0||ny<0||nx>=w||ny>=h) continue;
+        var ni=ny*w+nx;
+        if(m[ni]&&lab[ni]<0){ lab[ni]=id; pila.push(ni); }
+      }
+    }
+    out.push({area:area, caja:[x0,y0,x1+1,y1+1]});
+  }
+  return out;
+}
+
+// ── 1a. la foto principal ────────────────────────────────────────────
+// Una foto es una zona donde el promedio local del gris no es papel: el
+// texto, por más negro que sea, promedia casi blanco porque está espaciado.
+// Los corondeles cortan la mancha para que la foto no se pegue con la
+// columna de al lado. Entre las candidatas gana la más grande con medios
+// tonos, que es lo que distingue una fotografía de un titular grande.
+function buscarFoto(img){
+  var W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  var w=360, h=Math.round(360*H/W);
+  var c=document.createElement('canvas'); c.width=w; c.height=h;
+  var g=c.getContext('2d',{willReadFrequently:true});
+  g.drawImage(img,0,0,w,h);
+  var px=g.getImageData(0,0,w,h).data;
+  var gris=new Float32Array(w*h), sat=new Float32Array(w*h);
+  for(var i=0;i<w*h;i++){
+    var r=px[i*4], vv=px[i*4+1], b=px[i*4+2];
+    gris[i]=(r+vv+b)/3;
+    sat[i]=Math.max(r,vv,b)-Math.min(r,vv,b);
+  }
+  var sg=integral(gris,w,h), ss=integral(sat,w,h);
+  var m=new Uint8Array(w*h);
+  for(var y=0;y<h;y++) for(var x=0;x<w;x++){
+    var k=y*w+x;
+    m[k] = (mediaVentana(sg,w,h,x,y,6)<212 || mediaVentana(ss,w,h,x,y,6)>22) ? 1 : 0;
+  }
+  // corondeles y filetes verticales: columnas casi vacías o casi llenas
+  var cov=new Float32Array(w);
+  for(var x2=0;x2<w;x2++){
+    var n=0; for(var y2=0;y2<h;y2++) if(gris[y2*w+x2]<232) n++;
+    cov[x2]=n/h;
+  }
+  for(var x3=0;x3<w;x3++){
+    if(cov[x3]<0.02||cov[x3]>0.80){
+      for(var d=-1;d<=1;d++){ var xx=x3+d; if(xx<0||xx>=w) continue;
+        for(var y3=0;y3<h;y3++) m[y3*w+xx]=0; }
+    }
+  }
+  m=erosionar(dilatar(m,w,h,1,2),w,h,1,2);      // closing
+  m=dilatar(erosionar(m,w,h,2,2),w,h,2,2);      // opening
+  m=taparHuecos(m,w,h);
+  for(var y4=0;y4<Math.floor(h*0.10);y4++) for(var x4=0;x4<w;x4++) m[y4*w+x4]=0;  // cabezal
+
+  var comps=componentes(m,w,h).sort(function(a,b){return b.area-a.area;}).slice(0,4);
+  if(!comps.length) return null;
+  var k2=W/w, elegida=null;
+  for(var ci=0;ci<comps.length;ci++){
+    var cj=comps[ci].caja;
+    var caja=[Math.round(cj[0]*k2),Math.round(cj[1]*k2),Math.round(cj[2]*k2),Math.round(cj[3]*k2)];
+    if(!elegida) elegida=caja;
+    if(mediosTonos(img,caja)) return caja;
+  }
+  return elegida;
+}
+function mediosTonos(img, caja){
+  var w=Math.max(1,Math.min(120,caja[2]-caja[0])), h=Math.max(1,Math.min(160,caja[3]-caja[1]));
+  var c=document.createElement('canvas'); c.width=w; c.height=h;
+  var g=c.getContext('2d',{willReadFrequently:true});
+  g.drawImage(img,caja[0],caja[1],caja[2]-caja[0],caja[3]-caja[1],0,0,w,h);
+  var px=g.getImageData(0,0,w,h).data, n=0;
+  for(var i=0;i<w*h;i++){
+    var l=(px[i*4]+px[i*4+1]+px[i*4+2])/3;
+    if(l>60&&l<200) n++;
+  }
+  return n/(w*h) > 0.35;
+}
+
+// ── 1b. el corte en piezas ───────────────────────────────────────────
+// Corte XY: se parte por las calles blancas horizontales, dentro de cada
+// franja por los corondeles, y así hasta llegar a bloques.
+function cortarPiezas(img, foto){
+  var W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  var w=560, h=Math.round(560*H/W), esc=w/W, k=1/esc;
+  var c=document.createElement('canvas'); c.width=w; c.height=h;
+  var g=c.getContext('2d',{willReadFrequently:true});
+  g.drawImage(img,0,0,w,h);
+  var px=g.getImageData(0,0,w,h).data;
+  var tinta=new Uint8Array(w*h);
+  for(var i=0;i<w*h;i++) tinta[i]=((px[i*4]+px[i*4+1]+px[i*4+2])/3 < 232)?1:0;
+  if(foto){
+    var f=[Math.round(foto[0]*esc),Math.round(foto[1]*esc),Math.round(foto[2]*esc),Math.round(foto[3]*esc)];
+    for(var y=Math.max(0,f[1]-3);y<Math.min(h,f[3]+3);y++)
+      for(var x=Math.max(0,f[0]-3);x<Math.min(w,f[2]+3);x++) tinta[y*w+x]=0;
+  }
+  // filetes: filas y columnas casi llenas
+  for(var y2=0;y2<h;y2++){ var n=0; for(var x2=0;x2<w;x2++) n+=tinta[y2*w+x2];
+    if(n>w*0.80) for(var x3=0;x3<w;x3++) tinta[y2*w+x3]=0; }
+  for(var x4=0;x4<w;x4++){ var n2=0; for(var y3=0;y3<h;y3++) n2+=tinta[y3*w+x4];
+    if(n2>h*0.80) for(var y4=0;y4<h;y4++) tinta[y4*w+x4]=0; }
+
+  var GH=Math.max(5,Math.round(h*0.010)), GV=Math.max(4,Math.round(w*0.008));
+  var salida=[];
+  function filaTiene(y,x0,x1){ for(var x=x0;x<x1;x++) if(tinta[y*w+x]) return true; return false; }
+  function colTiene(x,y0,y1){ for(var y=y0;y<y1;y++) if(tinta[y*w+x]) return true; return false; }
+  function huecos(vacio,minimo){
+    var tramos=[], ini=null;
+    for(var i=0;i<=vacio.length;i++){
+      var v = i<vacio.length ? vacio[i] : false;
+      if(v&&ini===null) ini=i;
+      else if(!v&&ini!==null){ if(i-ini>=minimo) tramos.push([ini,i]); ini=null; }
+    }
+    return tramos;
+  }
+  function cortar(x0,y0,x1,y1,horizontal,prof){
+    var fy0=-1,fy1=-1,fx0=-1,fx1=-1, y, x;
+    for(y=y0;y<y1;y++) if(filaTiene(y,x0,x1)){ if(fy0<0) fy0=y; fy1=y+1; }
+    if(fy0<0) return;
+    for(x=x0;x<x1;x++) if(colTiene(x,fy0,fy1)){ if(fx0<0) fx0=x; fx1=x+1; }
+    if(fx0<0) return;
+    x0=fx0; x1=fx1; y0=fy0; y1=fy1;
+    if(prof>6||(x1-x0)<w*0.02||(y1-y0)<h*0.004){ salida.push([x0,y0,x1,y1]); return; }
+    var vacio=[], largo;
+    if(horizontal){ largo=y1-y0; for(y=y0;y<y1;y++) vacio.push(!filaTiene(y,x0,x1)); }
+    else          { largo=x1-x0; for(x=x0;x<x1;x++) vacio.push(!colTiene(x,y0,y1)); }
+    var hs=huecos(vacio, horizontal?GH:GV);
+    if(hs.length){
+      var cortes=[0];
+      for(var i=0;i<hs.length;i++){ cortes.push(hs[i][0]); cortes.push(hs[i][1]); }
+      cortes.push(largo);
+      for(var j=0;j<cortes.length-1;j+=2){
+        var a=cortes[j], b=cortes[j+1];
+        if(b<=a) continue;
+        if(horizontal) cortar(x0,y0+a,x1,y0+b,false,prof+1);
+        else           cortar(x0+a,y0,x0+b,y1,true,prof+1);
+      }
+      return;
+    }
+    if(horizontal&&prof<6) return cortar(x0,y0,x1,y1,false,prof+1);
+    salida.push([x0,y0,x1,y1]);
+  }
+  cortar(0,0,w,h,true,0);
+
+  var out=[];
+  for(var s=0;s<salida.length;s++){
+    var b=salida[s];
+    var cj=[Math.round(b[0]*k),Math.round(b[1]*k),Math.round(b[2]*k),Math.round(b[3]*k)];
+    if((cj[2]-cj[0])*(cj[3]-cj[1]) < W*H*0.0006) continue;
+    out.push(cj);
+  }
+  out.sort(function(a,b2){
+    var fa=Math.round(a[1]/(H*0.05)), fb=Math.round(b2[1]/(H*0.05));
+    return fa!==fb ? fa-fb : a[0]-b2[0];
+  });
+  return {piezas:out, tinta:tinta, w:w, h:h, esc:esc};
+}
+
+// ── 1c. peso tipográfico ─────────────────────────────────────────────
+// El cuerpo de un titular se mide por la altura de línea: cuántas bandas
+// de tinta hay en su alto. Un titular tiene pocas líneas muy altas; el
+// texto de cuerpo, muchas y bajas.
+function alturaLinea(an, caja){
+  var x0=Math.round(caja[0]*an.esc), y0=Math.round(caja[1]*an.esc);
+  var x1=Math.round(caja[2]*an.esc), y1=Math.round(caja[3]*an.esc);
+  var lineas=0, prev=false;
+  for(var y=y0;y<y1;y++){
+    var hay=false;
+    for(var x=x0;x<x1&&!hay;x++) if(an.tinta[y*an.w+x]) hay=true;
+    if(hay&&!prev) lineas++;
+    prev=hay;
+  }
+  return (caja[3]-caja[1])/Math.max(1,lineas);
+}
+function indiceTitulo(an, lista, H, W, saltear){
+  var mejor=null, cuerpo=0;
+  for(var i=0;i<lista.length;i++){
+    var c=lista[i];
+    if(saltear.indexOf(i)>=0 || (c[1]+c[3])/2 < H*0.12) continue;
+    if((c[2]-c[0])*(c[3]-c[1]) < W*H*0.004) continue;
+    var al=alturaLinea(an,c);
+    if(al>cuerpo){ cuerpo=al; mejor=i; }
+  }
+  return mejor;
+}
+function porPeso(img, an, lista, iFoto){
+  var W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  var pesos=[];
+  for(var i=0;i<lista.length;i++){
+    var c=lista[i];
+    var area=(c[2]-c[0])*(c[3]-c[1])/(W*H);
+    if(i===iFoto){ pesos.push([1e6+area,i]); continue; }
+    if((c[1]+c[3])/2 < H*0.13 || area < 0.010) continue;
+    if(satMedia(img,c) > 18) continue;         // tiene foto: no es titular
+    pesos.push([alturaLinea(an,c)*Math.sqrt(area), i]);
+  }
+  pesos.sort(function(a,b){return b[0]-a[0];});
+  return pesos.map(function(p){return p[1];});
+}
+function satMedia(img, caja){
+  var w=Math.max(1,Math.min(80,caja[2]-caja[0])), h=Math.max(1,Math.min(80,caja[3]-caja[1]));
+  var c=document.createElement('canvas'); c.width=w; c.height=h;
+  var g=c.getContext('2d',{willReadFrequently:true});
+  g.drawImage(img,caja[0],caja[1],caja[2]-caja[0],caja[3]-caja[1],0,0,w,h);
+  var px=g.getImageData(0,0,w,h).data, s=0;
+  for(var i=0;i<w*h;i++){
+    var r=px[i*4],v=px[i*4+1],b=px[i*4+2];
+    s += Math.max(r,v,b)-Math.min(r,v,b);
+  }
+  return s/(w*h);
+}
+
+// ── análisis completo ────────────────────────────────────────────────
+function analizar(img){
+  var W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  var foto=buscarFoto(img);
+  var an=cortarPiezas(img,foto);
+  var lista=an.piezas;
+  var iFoto=null;
+  if(foto){
+    lista=lista.filter(function(c){
+      var ix=Math.max(0,Math.min(c[2],foto[2])-Math.max(c[0],foto[0]));
+      var iy=Math.max(0,Math.min(c[3],foto[3])-Math.max(c[1],foto[1]));
+      var ar=(c[2]-c[0])*(c[3]-c[1]);
+      return !(ar>0 && (ix*iy)/ar > 0.5);
+    });
+    lista.push(foto.slice());
+    lista.sort(function(a,b){
+      var fa=Math.round(a[1]/(H*0.05)), fb=Math.round(b[1]/(H*0.05));
+      return fa!==fb ? fa-fb : a[0]-b[0];
+    });
+    iFoto=lista.findIndex(function(c){return c[0]===foto[0]&&c[1]===foto[1]&&c[2]===foto[2]&&c[3]===foto[3];});
+  }
+  var iTitulo=indiceTitulo(an,lista,H,W,iFoto===null?[]:[iFoto]);
+  var ranking=porPeso(img,an,lista,iFoto);
+  return {W:W,H:H,foto:foto,piezas:lista,iFoto:iFoto,iTitulo:iTitulo,ranking:ranking};
+}
+
+// ── 2. el plan: cámara y agenda ──────────────────────────────────────
+function suavisimo(t){ t=Math.min(1,Math.max(0,t)); return t*t*t*(t*(t*6-15)+10); }
+function suave(t){ return t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
+function curvaCamara(s){ s=Math.min(1,Math.max(0,s)); return 0.72*s + 0.28*suavisimo(s); }
+
+var CFG = {
+  MARGEN:1.035, PAPEL:'#e9eef4',
+  ARRANQUE:1.28, INICIO_ARMADO:0.50, PASO_TITULOS:0.70,
+  ENTRA_GRANDE:1.30, ENTRA_BORRON:3.2, ENTRA_DESDE:0.30, DUR_GRANDE:0.85,
+  ENTRA_ZOOM:0.18, ENTRA_CORRE:0.22, DUR_PIEZA:0.46, PROTAGONISTAS:3
+};
+
+function plan(a, opt){
+  var o={}; for(var k in CFG) o[k]=CFG[k];
+  for(var k2 in (opt||{})) if(opt[k2]!==undefined) o[k2]=opt[k2];
+  var asp=o.asp, PW=a.W, PH=a.H, tZoom=o.tZoom;
+
+  var medioX=PW/2*o.MARGEN, medioY=PH/2*o.MARGEN;
+  if(medioX/medioY < asp) medioX=medioY*asp; else medioY=medioX/asp;
+  var LW=Math.round(medioX*2), LH=Math.round(medioY*2);
+  var ox=Math.round(medioX-PW/2), oy=Math.round(medioY-PH/2);
+  var CX=LW/2, CY=LH/2;
+  var PX=o.punto.x*PW+ox, PY=o.punto.y*PH+oy;
+
+  var iDe = a.iFoto!==null ? a.iFoto : 0;
+  var c0=a.piezas[iDe];
+  var wIni=Math.max(Math.min(c0[2]-c0[0],(c0[3]-c0[1])*asp)*o.ARRANQUE, LW*0.045);
+  // el cuadro de arranque no puede desbordar la pieza
+  var e0=[c0[0]+ox,c0[1]+oy,c0[2]+ox,c0[3]+oy];
+  if(e0[2]-e0[0]>=wIni) PX=Math.min(Math.max(PX,e0[0]+wIni/2),e0[2]-wIni/2);
+  if(e0[3]-e0[1]>=wIni/asp) PY=Math.min(Math.max(PY,e0[1]+wIni/(2*asp)),e0[3]-wIni/(2*asp));
+  var R=LW/wIni;
+
+  function encuadre(u){
+    var w=Math.min(wIni*Math.pow(R,u), LW);
+    var h=Math.min(w/asp, LH);
+    var k=suavisimo(u);
+    var ex=PX+(CX-PX)*k, ey=PY+(CY-PY)*k;
+    ex=Math.min(Math.max(ex,w/2),LW-w/2);
+    ey=Math.min(Math.max(ey,h/2),LH-h/2);
+    return [ex-w/2, ey-h/2, ex+w/2, ey+h/2];
+  }
+
+  // cuándo asoma cada pieza: contra el encuadre real, no contra el centro
+  var muestras=240, recorrido=[];
+  for(var i=0;i<=muestras;i++) recorrido.push(encuadre(curvaCamara(i/muestras)));
+  function tAsoma(c){
+    var x0=c[0]+ox, y0=c[1]+oy, x1=c[2]+ox, y1=c[3]+oy;
+    for(var i2=0;i2<recorrido.length;i2++){
+      var e=recorrido[i2];
+      if(x0<e[2]&&x1>e[0]&&y0<e[3]&&y1>e[1]) return tZoom*i2/muestras;
+    }
+    return tZoom;
+  }
+
+  // orden: título principal, secundario, y después el resto por peso
+  var otros=[]; for(var j=0;j<a.piezas.length;j++) if(j!==iDe) otros.push(j);
+  var iA = (a.iTitulo!==null && a.iTitulo!==iDe) ? a.iTitulo : otros[0];
+  var orden=[iA];
+  a.ranking.forEach(function(j){ if(j!==iDe&&orden.indexOf(j)<0) orden.push(j); });
+  otros.forEach(function(j){ if(orden.indexOf(j)<0) orden.push(j); });
+
+  var grande={}; orden.slice(0,o.PROTAGONISTAS).forEach(function(j){grande[j]=1;});
+  function dur(j){ return grande[j] ? o.DUR_GRANDE : o.DUR_PIEZA; }
+
+  var t0=o.INICIO_ARMADO*tZoom;
+  var cabeza=[t0, t0+o.PASO_TITULOS];
+  var arranqueResto=t0+o.PASO_TITULOS*2;
+  var resto=orden.slice(2);
+  var fin=tZoom-o.DUR_PIEZA;
+  var paso = resto.length>1 ? (fin-arranqueResto)/(resto.length-1) : 0;
+  var agenda={};
+  orden.forEach(function(j,k3){
+    var base = k3<2 ? cabeza[k3] : arranqueResto+paso*(k3-2);
+    agenda[j]=Math.min(Math.max(base, tAsoma(a.piezas[j])), tZoom-dur(j));
+  });
+
+  return {o:o, LW:LW, LH:LH, ox:ox, oy:oy, encuadre:encuadre, wIni:wIni,
+          iDe:iDe, orden:orden, grande:grande, agenda:agenda, dur:dur};
+}
+
+// ── 3. dibujo de un cuadro ───────────────────────────────────────────
+function dibujar(ctx, img, a, p, seg, W, H, tZoom){
+  var o=p.o;
+  var u = curvaCamara(Math.min(1, seg/Math.max(1e-6, tZoom-1/30)));
+  var enc = p.encuadre(u);
+  var sc = W/(enc[2]-enc[0]);
+  var SX=function(v){return (v-enc[0])*sc;}, SY=function(v){return (v-enc[1])*sc;};
+
+  ctx.save();
+  ctx.fillStyle=o.PAPEL; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#ffffff';
+  ctx.fillRect(SX(p.ox),SY(p.oy),a.W*sc,a.H*sc);
+
+  function pegar(c, escala, corre, alfa, borron){
+    var w=c[2]-c[0], h=c[3]-c[1];
+    var dw=w*sc*escala, dh=h*sc*escala;
+    var dx=SX(p.ox+c[0])-(dw-w*sc)/2+corre[0];
+    var dy=SY(p.oy+c[1])-(dh-h*sc)/2+corre[1];
+    ctx.globalAlpha=alfa;
+    if(borron>0.4) ctx.filter='blur('+borron.toFixed(1)+'px)';
+    ctx.drawImage(img, c[0], c[1], w, h, dx, dy, dw, dh);
+    ctx.filter='none';
+    ctx.globalAlpha=1;
+  }
+
+  // la pieza de arranque —la foto— está desde el cuadro uno
+  pegar(a.piezas[p.iDe],1,[0,0],1,0);
+
+  var ecx=(enc[0]+enc[2])/2, ecy=(enc[1]+enc[3])/2;
+  var visibles=p.orden.filter(function(j){ return seg>=p.agenda[j]; });
+  visibles.sort(function(j1,j2){
+    var f=function(j){ return seg>=p.agenda[j]+p.dur(j) ? 1 : (p.grande[j]?2:0); };
+    return f(j1)-f(j2) || p.agenda[j1]-p.agenda[j2];
+  });
+  visibles.forEach(function(j){
+    var c=a.piezas[j];
+    var e=suave(Math.min((seg-p.agenda[j])/p.dur(j),1));
+    if(e>=0.995){ pegar(c,1,[0,0],1,0); return; }
+    var w=c[2]-c[0], h=c[3]-c[1];
+    var vx=(p.ox+c[0]+w/2)-ecx, vy=(p.oy+c[1]+h/2)-ecy;
+    var n=Math.hypot(vx,vy)||1;
+    if(p.grande[j]){
+      // llega acercándose y viniendo un poco desde afuera
+      var f=1+(o.ENTRA_GRANDE-1)*(1-e);
+      var d=o.ENTRA_DESDE*(1-e)*Math.min(w,h)*sc;
+      pegar(c,f,[vx/n*d, vy/n*d], Math.min(1,e/0.40), o.ENTRA_BORRON*(1-e));
+    }else{
+      var f2=1+o.ENTRA_ZOOM*(1-e);
+      var d2=o.ENTRA_CORRE*(1-e)*Math.min(w,h)*sc;
+      pegar(c,f2,[vx/n*d2, vy/n*d2], Math.min(1,e/0.55), 0);
+    }
+  });
+  ctx.restore();
+}
+
+return {analizar:analizar, plan:plan, dibujar:dibujar, CFG:CFG,
+        curvaCamara:curvaCamara};
+})();
+
+
+// ── carga del PDF ────────────────────────────────────────────────────
+// pdf.js rasteriza a la escala que se le pida, así que la tapa entra a la
+// resolución que haga falta para el arranque cerrado. Es la diferencia
+// entre un primer plano legible y uno deshecho.
+if(window.pdfjsLib&&pdfjsLib.GlobalWorkerOptions)
+  pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+async function tapaRasterizar(file){
+  if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
+    return await new Promise(function(res,rej){
+      var fr=new FileReader(); fr.onload=function(){res(fr.result);}; fr.onerror=rej;
+      fr.readAsDataURL(file);
+    });
+  }
+  if(!window.pdfjsLib) throw new Error('pdf.js no cargó; probá con una imagen de la tapa');
+  var buf=await file.arrayBuffer();
+  var pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  var pagina=await pdf.getPage(1);
+  var vp=pagina.getViewport({scale:1});
+  var escala=Math.min(4.5, 2400/vp.width);
+  vp=pagina.getViewport({scale:escala});
+  var c=document.createElement('canvas');
+  c.width=Math.round(vp.width); c.height=Math.round(vp.height);
+  await pagina.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
+  return c.toDataURL('image/jpeg',0.93);
+}
+
+async function tapaCargar(file, card, aviso){
+  if(aviso) aviso('Rasterizando la tapa…');
+  var url=await tapaRasterizar(file);
+  var img=await new Promise(function(res,rej){
+    var im=new Image(); im.onload=function(){res(im);}; im.onerror=rej; im.src=url;
+  });
+  if(aviso) aviso('Buscando la foto y cortando las piezas…');
+  await new Promise(function(r){setTimeout(r,30);});     // que el aviso se pinte
+  var a=TAPA.analizar(img);
+  tapaCache[card.id]={img:img, a:a, plan:null};
+  card.tapaSrc=url;
+  if(a.foto) card.tapaPunto={x:(a.foto[0]+a.foto[2])/2/a.W, y:(a.foto[1]+a.foto[3])/2/a.H};
+  if(aviso) aviso(a.piezas.length+' piezas · foto '+(a.foto?'detectada':'no encontrada'));
+  return a;
+}
+
+// ── el golpe final de la música ──────────────────────────────────────
+// El flash cae sobre el último ataque fuerte después de un silencio. La
+// pista se recorta por delante, nunca por detrás: el final es sagrado.
+async function tapaBuscarClick(file){
+  var buf=await file.arrayBuffer();
+  var ac=new (window.AudioContext||window.webkitAudioContext)();
+  var ab=await ac.decodeAudioData(buf);
+  var a=ab.getChannelData(0), sr=ab.sampleRate, dur=ab.duration;
+  var h=Math.round(sr*0.005), n=Math.floor(a.length/h);
+  var env=new Float32Array(n);
+  for(var i=0;i<n;i++){
+    var mx=0;
+    for(var k=i*h;k<(i+1)*h;k++){ var v=Math.abs(a[k]); if(v>mx) mx=v; }
+    env[i]=mx;
+  }
+  var mejor=null, valor=0;
+  for(var j=Math.floor(n*0.6);j<n;j++){
+    var s=0, c=0;
+    for(var k2=Math.max(0,j-24);k2<j;k2++){ s+=env[k2]; c++; }
+    var salto=env[j]-(c?s/c:0);
+    if(salto>valor && env[j]>0.25){ valor=salto; mejor=j; }
+  }
+  try{ac.close();}catch(e){}
+  return {click: mejor!==null ? mejor*0.005 : dur*0.92, dur:dur};
+}
+
+function tapaDur(card){
+  return (card.tapaZoom||8)+(card.tapaFlash||0.17)+(card.tapaHold||1.8);
+}
+function tapaSincronizar(card){
+  // recorta la música por delante para que el golpe caiga en el flash
+  var m=mediaCache[card.id];
+  if(!m||m.type!=='audio'||!card.tapaClick) return;
+  m.trimIn=Math.max(0, card.tapaClick-(card.tapaZoom||8));
+  m.trimOut=m.duration;
+  if(m.el) m.el.loop=false;
+}
+
+// ── dibujo de la card ────────────────────────────────────────────────
+function tapaPlan(card){
+  var d=tapaCache[card.id];
+  if(!d||!d.a) return null;
+  var firma=[currentFmt,W,H,card.tapaZoom,card.tapaArranque,card.tapaInicio,
+             card.tapaPunto.x,card.tapaPunto.y].join('|');
+  if(!d.plan||d.firma!==firma){
+    d.plan=TAPA.plan(d.a,{asp:W/H, tZoom:card.tapaZoom||8, punto:card.tapaPunto,
+                          ARRANQUE:card.tapaArranque, INICIO_ARMADO:card.tapaInicio});
+    d.firma=firma;
+  }
+  return d.plan;
+}
+
+function drawTapa(card,t){
+  var d=tapaCache[card.id];
+  if(!d||!d.a){
+    pintarFondo(card);
+    ctx.save();
+    ctx.fillStyle=PAL.meta; ctx.textAlign='center';
+    ctx.font='300 38px "IBM Plex Sans"'; ctx.letterSpacing='0px';
+    ctx.fillText('Soltá el PDF de la tapa', W/2, H/2-14);
+    ctx.font='300 26px "IBM Plex Sans"';
+    ctx.fillText('el diario se arma solo sobre el zoom out', W/2, H/2+30);
+    ctx.restore();
+    return;
+  }
+  var p=tapaPlan(card); if(!p) return;
+  var tZoom=card.tapaZoom||8, FLASH=card.tapaFlash||0.17;
+  var dur=tapaDur(card);
+  // Mientras se marca el punto, la card muestra la tapa entera: se hace clic
+  // sobre la página, no sobre un encuadre intermedio.
+  var seg = card._marcando ? tZoom : Math.min(1,Math.max(0,t))*dur;
+
+  if(seg<tZoom || card._marcando){
+    TAPA.dibujar(ctx,d.img,d.a,p,Math.min(seg,tZoom),W,H,tZoom);
+  }else if(seg<tZoom+FLASH){
+    TAPA.dibujar(ctx,d.img,d.a,p,tZoom,W,H,tZoom);
+    var f=(seg-tZoom)/FLASH;
+    ctx.save(); ctx.globalAlpha=f<0.35?(f/0.35):(1-(f-0.35)/0.65);
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H); ctx.restore();
+  }else{
+    TAPA.dibujar(ctx,d.img,d.a,p,tZoom,W,H,tZoom);
+  }
+
+  // guía del punto de arranque, solo en pantalla
+  if(card._marcando){
+    var e=p.encuadre(1), sc=W/(e[2]-e[0]);
+    var px=(card.tapaPunto.x*d.a.W+p.ox-e[0])*sc, py=(card.tapaPunto.y*d.a.H+p.oy-e[1])*sc;
+    card._tapaMapa={e:e, sc:sc, ox:p.ox, oy:p.oy, W:d.a.W, H:d.a.H};
+    ctx.save();
+    ctx.strokeStyle='#D82027'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.arc(px,py,26,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px-40,py); ctx.lineTo(px+40,py);
+    ctx.moveTo(px,py-40); ctx.lineTo(px,py+40); ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawCard(card,t){
   _drawingCardId = card?card.id:null;
   if(card){ card._capaBoxes=[]; card._capaHandle=null; }
+  if(card.tipo==='tapa'){drawTapa(card,t);return;}
   if(card.tipo==='cover'){drawCover(card,t);return;}
   if(card.tipo==='mapa'){drawMapa(card,t);return;}
   if(card.tipo==='nano'){drawNano(card,t);return;}
@@ -4860,7 +5475,9 @@ function play(card,onEnd){
   if(raf)cancelAnimationFrame(raf);
   const dur=getCardDur(card),t0=performance.now();
   const m=mediaCache[card.id];
-  const isAudioCard=m?.type==='audio';
+  // La tapa lleva música, pero su duración la manda la animación: no es una
+  // card de audio en loop.
+  const isAudioCard=m?.type==='audio'&&card.tipo!=='tapa';
   const vinVids=vinetaVideoSlots(card);
   const isLooping=card.tipo==='nano'||(card.tipo==='mapa'&&!card.mapAnimOff)||vinVids.length>0;
   // Arrancar/loopear los videos de una viñeta
@@ -5506,6 +6123,17 @@ canvas.addEventListener('wheel', e=>{
 canvas.addEventListener('mousedown',e=>{
   const card=cards[sel]; if(!card) return;
   const cxC=e.offsetX*(W/CVW), cyC=e.offsetY*(H/cvH());
+  // ── Tapa: marcar el punto de arranque sobre la página ──
+  if(card.tipo==='tapa'&&card._marcando&&card._tapaMapa){
+    const mp=card._tapaMapa;
+    card.tapaPunto={
+      x:Math.min(1,Math.max(0,(cxC/mp.sc+mp.e[0]-mp.ox)/mp.W)),
+      y:Math.min(1,Math.max(0,(cyC/mp.sc+mp.e[1]-mp.oy)/mp.H))
+    };
+    const d=tapaCache[card.id]; if(d) d.plan=null;
+    renderEditor(card); drawCard(card,1);
+    e.preventDefault(); return;
+  }
   // ── Capas: primero la manija de escala, después el cuerpo del elemento ──
   if(capaSel!==null && card._capaHandle){
     const hh=card._capaHandle;
@@ -6762,6 +7390,41 @@ function renderEditor(c){
   }
 
   // ── INFOGRAFÍA editor section ──
+  // ── TAPA ANIMADA editor section ──
+  let tapaSection='';
+  if(c.tipo==='tapa'){
+    const _d=tapaCache[c.id];
+    const _mus=mediaCache[c.id];
+    tapaSection=`
+    <div class="field"><label style="color:#c1121c">◨ Tapa animada</label>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">Soltá el PDF del día. El editor busca la foto principal, corta la página en piezas y arma el video: zoom out sobre la foto y, pasada la mitad, las piezas entran desde afuera hasta completar la tapa.</div>
+    </div>
+    <div class="field"><label>Tapa del día</label>
+      <div class="img-drop" style="position:relative"><input type="file" id="tapa-file" accept="application/pdf,image/*"/><div class="img-drop-txt">${_d&&_d.a?'✓ '+_d.a.piezas.length+' piezas · cambiar':'PDF o imagen de la tapa'}</div></div>
+      <div class="aiedit-status" id="tapa-status"></div>
+    </div>
+    ${_d&&_d.a?`
+    <div class="field"><label>Punto de arranque</label>
+      <button class="btn-g" id="tapa-marcar" style="width:100%">${c._marcando?'✓ Listo, guardar el punto':'◎ Marcar sobre la tapa'}</button>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">${c._marcando?'Hacé clic en el rostro o el detalle donde querés que empiece.':'Ahora empieza en '+Math.round(c.tapaPunto.x*100)+'% / '+Math.round(c.tapaPunto.y*100)+'%'}</div>
+    </div>
+    <div class="field"><label>Música <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">el flash cae sobre el golpe final</span></label>
+      <div class="img-drop" style="position:relative"><input type="file" id="tapa-audio" accept="audio/*,video/*"/><div class="img-drop-txt">${_mus&&_mus.type==='audio'?'♪ '+(_mus.filename||'pista')+' · golpe a los '+(c.tapaClick||0).toFixed(2)+'s':'Soltá la pista'}</div></div>
+    </div>
+    <div class="field"><label>Duración del zoom — <b id="sl-tz-val">${(c.tapaZoom||8).toFixed(1)}s</b> <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">total <b id="sl-tz-tot">${tapaDur(c).toFixed(1)}</b>s</span></label>
+      <input type="range" id="sl-tz" min="4" max="14" step="0.5" value="${c.tapaZoom||8}"/>
+    </div>
+    <div class="field"><label>Qué tan cerca arranca — <b id="sl-ta-val">${(c.tapaArranque||1.28).toFixed(2)}</b></label>
+      <input type="range" id="sl-ta" min="0.25" max="2" step="0.01" value="${c.tapaArranque||1.28}"/>
+      <div style="font-size:11px;color:var(--text3)">Más bajo, más cerrado. Con tapas de poca resolución conviene no bajar de 1.</div>
+    </div>
+    <div class="field"><label>Cuándo empieza el armado — <b id="sl-ti-val">${Math.round((c.tapaInicio||.5)*100)}%</b></label>
+      <input type="range" id="sl-ti" min="0.15" max="0.8" step="0.01" value="${c.tapaInicio||.5}"/>
+      <div style="font-size:11px;color:var(--text3)">Hasta ahí no hay un solo texto en cuadro: solo la foto abriéndose.</div>
+    </div>`:''}
+    <div class="sep"></div>`;
+  }
+
   let infoSection='';
   if(c.tipo==='infografia'){
     const pctI=(c.infoTextH!==undefined?c.infoTextH:34);
@@ -6820,6 +7483,7 @@ function renderEditor(c){
         <button class="tipo-btn${c.tipo==='vineta'?' active':''}" data-t="vineta" title="Viñeta: fotos arriba + texto abajo">▣ Viñeta</button>
         <button class="tipo-btn${c.tipo==='libre'?' active':''}" data-t="libre" title="Bloques de texto libres, cada uno con su estilo">✦ Libre</button>
         <button class="tipo-btn${c.tipo==='infografia'?' active':''}" data-t="infografia" title="Infografía: texto arriba, ilustración abajo">◈ Info</button>
+        <button class="tipo-btn${c.tipo==='tapa'?' active':''}" data-t="tapa" title="Tapa animada del diario">◨ Tapa</button>
       </div>
     </div>
     ${libreSection}
@@ -6830,6 +7494,7 @@ function renderEditor(c){
     ${graficoSection}
     ${tablaSection}
     ${vinetaSection}
+    ${tapaSection}
     ${infoSection}
     <div class="field" id="capas-field">
       <label>Capas <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">gráficos y textos libres, encima de la card</span></label>
@@ -8072,6 +8737,59 @@ REGLAS IMPORTANTES:
     });
   }
 
+  // ── TAPA controls ──
+  if(c.tipo==='tapa'){
+    const st=el.querySelector('#tapa-status');
+    const aviso=m=>{ if(st) st.textContent=m; };
+    const fT=el.querySelector('#tapa-file');
+    if(fT) fT.onchange=async()=>{
+      const f=fT.files&&fT.files[0]; if(!f) return;
+      setStatus('Analizando la tapa…','working');
+      try{
+        await tapaCargar(f, cards[sel], aviso);
+        tapaSincronizar(cards[sel]);
+        setStatus('Tapa lista','');
+        renderEditor(cards[sel]); renderList(); play(cards[sel]);
+      }catch(err){ aviso('✕ '+err.message); setStatus('No se pudo leer la tapa','error'); }
+    };
+    const bM=el.querySelector('#tapa-marcar');
+    if(bM) bM.onclick=()=>{
+      cards[sel]._marcando=!cards[sel]._marcando;
+      if(raf){cancelAnimationFrame(raf);raf=null;}
+      renderEditor(cards[sel]);
+      if(cards[sel]._marcando) drawCard(cards[sel],1); else play(cards[sel]);
+    };
+    const fA=el.querySelector('#tapa-audio');
+    if(fA) fA.onchange=async()=>{
+      const f=fA.files&&fA.files[0]; if(!f) return;
+      setStatus('Buscando el golpe final…','working');
+      try{
+        const r=await tapaBuscarClick(f);
+        cards[sel].tapaClick=r.click;
+        await loadMediaFromFile(f, cards[sel].id);
+        const mm=mediaCache[cards[sel].id];
+        if(mm&&mm.el){ mm.el.loop=false; mm.el.pause(); }
+        tapaSincronizar(cards[sel]);
+        setStatus('Golpe a los '+r.click.toFixed(2)+'s','');
+        renderEditor(cards[sel]); play(cards[sel]);
+      }catch(err){ setStatus('No se pudo leer la música','error'); }
+    };
+    const _re=()=>{ const d=tapaCache[cards[sel].id]; if(d) d.plan=null;
+                    tapaSincronizar(cards[sel]); redraw(); };
+    const sz=el.querySelector('#sl-tz');
+    if(sz) sz.oninput=e=>{ const v=parseFloat(e.target.value);
+      cards[sel].tapaZoom=v; cards[sel].fixedDur=tapaDur(cards[sel]);
+      const t=el.querySelector('#sl-tz-val'); if(t) t.textContent=v.toFixed(1)+'s';
+      const tt=el.querySelector('#sl-tz-tot'); if(tt) tt.textContent=tapaDur(cards[sel]).toFixed(1);
+      _re(); };
+    const sa=el.querySelector('#sl-ta');
+    if(sa) sa.oninput=e=>{ const v=parseFloat(e.target.value); cards[sel].tapaArranque=v;
+      const t=el.querySelector('#sl-ta-val'); if(t) t.textContent=v.toFixed(2); _re(); };
+    const si=el.querySelector('#sl-ti');
+    if(si) si.oninput=e=>{ const v=parseFloat(e.target.value); cards[sel].tapaInicio=v;
+      const t=el.querySelector('#sl-ti-val'); if(t) t.textContent=Math.round(v*100)+'%'; _re(); };
+  }
+
   // ── INFOGRAFÍA controls ──
   if(c.tipo==='infografia'){
     const sh=el.querySelector('#sl-infoh');
@@ -8380,6 +9098,14 @@ function addCard(tipo){
   if(tipo==='tabla'){defaults.titulo='';defaults.cuerpo='';defaults.tableRows=[];defaults.titleSz=76;}
   if(tipo==='vineta'){defaults.vinCount=1;defaults.vinCaptions=['',''];defaults.bodySz=46;vinCache[defaults.id]=[];}
   if(tipo==='infografia'){defaults.infoTextH=34;defaults.bodySz=58;defaults.titleSz=52;defaults.infoPrompt='';defaults.mediaH=100;defaults.mediaW=100;defaults.anchor='bc';defaults.infoTransp=true;}
+  if(tipo==='tapa'){
+    // La tapa dura lo que dura: zoom + flash + congelado. Con fixedDur, la
+    // máquina de exportación que ya existe la graba entera sin tocar nada.
+    defaults.tapaZoom=8.0; defaults.tapaFlash=0.17; defaults.tapaHold=1.8;
+    defaults.tapaArranque=1.28; defaults.tapaInicio=0.50;
+    defaults.tapaPunto={x:0.5,y:0.5};
+    defaults.fixedDur=8.0+0.17+1.8;
+  }
   if(tipo==='libre'){
     defaults.titulo=''; defaults.cuerpo='';
     defaults.libreVAlign='center';
@@ -8692,6 +9418,7 @@ document.getElementById('add-tabla').onclick=()=>addCard('tabla');
 {const _as=document.getElementById('add-sintesis'); if(_as) _as.onclick=()=>addSynthesisCard();}
 
 {const _ai=document.getElementById('add-infografia'); if(_ai) _ai.onclick=()=>addCard('infografia');}
+{const _at=document.getElementById('add-tapa'); if(_at) _at.onclick=()=>addCard('tapa');}
 
 // ══════════════════════════════════════════════════════════
 // INFOGRAFÍA FORENSE (v1)
@@ -8719,6 +9446,7 @@ const INFO_REF_NOTA=' The attached images are visual references only: use them a
 const INFO_CADENA=' The last attached image is the previous panel of the same series: keep the same line weight, the same silhouette treatment, the same scale of the figures and the same amount of white space, so that both drawings read as one sequence.';
 
 let INFO_ORIGEN='texto';   // 'texto' | 'link' | 'pregunta'
+let INFO_NUM=true;         // las escenas son una secuencia: numeradas por defecto
 let INFO_GUION=[];      // [{titulo,texto,prompt,estado,error,card,sintesis}]
 let INFO_REFS=[];       // [{name,dataUrl}]
 let INFO_CORRIENDO=false;
@@ -9038,6 +9766,7 @@ function infoCrearCards(){
     c.infoPrompt=g.prompt||'';
     const tr=infoEl('info-transp');
     c.infoTransp=tr?!!tr.checked:true;
+    c.numbered=INFO_NUM;
     if(g.sintesis){ c.esSintesis=true; c.volanta='SÍNTESIS'; c.infoTextH=46; }
     g.card=c; g.estado='pendiente';
   });
@@ -9085,6 +9814,21 @@ async function infoCola(soloPrimera){
   const bTexto=infoEl('info-texto'), bBase=infoEl('info-base');
   if(bBase) bBase.value=infoBase();
   const est=(msg)=>{ const e=infoEl('info-base-est'); if(e) e.textContent=msg; };
+
+  const bNumOn=infoEl('info-num-on'), bNumOff=infoEl('info-num-off');
+  const pintarNum=()=>{
+    if(bNumOn) bNumOn.classList.toggle('active', INFO_NUM);
+    if(bNumOff) bNumOff.classList.toggle('active', !INFO_NUM);
+  };
+  const aplicarNum=(v)=>{
+    INFO_NUM=v; pintarNum();
+    // Se aplica a las cards de esta infografía, si ya están creadas.
+    let tocadas=0;
+    INFO_GUION.forEach(g=>{ if(g.card){ g.card.numbered=v; tocadas++; } });
+    if(tocadas){ renderList(); if(cards[sel]){ renderEditor(cards[sel]); drawCard(cards[sel],.7); } }
+  };
+  if(bNumOn) bNumOn.onclick=()=>aplicarNum(true);
+  if(bNumOff) bNumOff.onclick=()=>aplicarNum(false);
 
   const rowOrg=infoEl('info-origen-row');
   if(rowOrg) rowOrg.querySelectorAll('.fmt-btn').forEach(b=>{ b.onclick=()=>infoSetOrigen(b.dataset.org); });
@@ -10256,7 +11000,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
-    ['v157','Infografía forense','Bloque nuevo en el panel izquierdo: pegás el texto de un hecho y Claude lo parte en escenas dibujables. Devuelve, por cada una, el título, la explicación que va en la card y el prompt de imagen en inglés, todo editable antes de gastar una sola imagen. Recién ahí gpt-image dibuja, de a una y con progreso a la vista, sobre un prompt base de estilo forense —siluetas negras sobre blanco puro, sin rasgos, sin sombras y sin texto adentro del dibujo— que se puede editar y queda guardado. Se pueden cargar fotos, planos o croquis como referencia de postura y disposición, y encadenar las escenas para que cada una vea la anterior y el trazo no baile. El contenido puede entrar de tres maneras: pegando el texto, pegando un link —una nota, un posteo de X, cualquier página— o escribiendo una pregunta, y en ese caso Claude la responde con lo que sabe, sin buscar en la web, que sirve para explicativos y procedimientos pero no para datos de actualidad. Suma el tipo de card «infografía»: una sola superficie, con el texto arriba —se achica solo para entrar— y la ilustración en PNG con fondo transparente, así el color de fondo de la placa se ve detrás del dibujo y la card se puede pintar como cualquier otra. Cada escena se vuelve a dibujar sola, sin tocar el resto, y la card se puede reemplazar por una imagen propia.'],
+    ['v158','Tapa animada','Tipo de card nuevo: la tapa del diario armándose sola sobre un zoom out, para publicar todos los días en X y en WhatsApp. Se suelta el PDF del día —o una imagen de la tapa— y el editor hace tres cosas sin preguntar: busca la foto principal midiendo el promedio local de gris y de color, corta la página en piezas con un corte XY sobre las calles blancas y los corondeles, y ordena esas piezas por peso tipográfico, que es la altura de línea de cada bloque. Con eso arma el video. La cámara es un zoom puro que arranca cerrado sobre la foto y se abre hasta la tapa entera, con velocidad de apertura pareja de punta a punta. La primera mitad del recorrido no tiene un solo texto ni un solo gráfico en cuadro: solo la foto abriéndose. Pasada esa marca entran las piezas, y entran de afuera: el título principal primero, el secundario después y el resto repartido hasta el final, cada una acercándose y corrida hacia el borde por el que aparece hasta aterrizar en su lugar. El punto de arranque lo marca el editor con un clic sobre la tapa —el rostro de la foto, un detalle, lo que sea— y el encuadre final queda siempre con el diario centrado sobre un gris celeste. Se le carga una pista de música y el editor le busca el golpe final; la pista se recorta por delante, nunca por detrás, para que ese golpe caiga exactamente sobre el flash que revela la tapa. Tres controles: duración del zoom, qué tan cerca arranca y en qué punto empieza el armado. El MP4 sale con los botones de siempre, con la música adentro.'],
+    ['v157','Infografía forense','Bloque nuevo en el panel izquierdo: pegás el texto de un hecho y Claude lo parte en escenas dibujables. Devuelve, por cada una, el título, la explicación que va en la card y el prompt de imagen en inglés, todo editable antes de gastar una sola imagen. Recién ahí gpt-image dibuja, de a una y con progreso a la vista, sobre un prompt base de estilo forense —siluetas negras sobre blanco puro, sin rasgos, sin sombras y sin texto adentro del dibujo— que se puede editar y queda guardado. Se pueden cargar fotos, planos o croquis como referencia de postura y disposición, y encadenar las escenas para que cada una vea la anterior y el trazo no baile. El contenido puede entrar de tres maneras: pegando el texto, pegando un link —una nota, un posteo de X, cualquier página— o escribiendo una pregunta, y en ese caso Claude la responde con lo que sabe, sin buscar en la web, que sirve para explicativos y procedimientos pero no para datos de actualidad. Suma el tipo de card «infografía»: una sola superficie, con el texto arriba —se achica solo para entrar— y la ilustración en PNG con fondo transparente, así el color de fondo de la placa se ve detrás del dibujo y la card se puede pintar como cualquier otra. Cada escena se vuelve a dibujar sola, sin tocar el resto, y la card se puede reemplazar por una imagen propia. Las cards salen numeradas —1/5 en el ángulo superior izquierdo, porque son una secuencia— y el bloque tiene el botón para sacarles la numeración.'],
     ['v156','Recortar o no recortar','El fondo de la ilustración ahora se elige con dos botones, «Recortar fondo» y «No recortar fondo»: cada estilo trae su default y se puede cambiar en el momento. Suma un cuarto estilo de la casa, editorial de línea calcada tipo rotring con color plano desaturado, que conserva el fondo porque la escena es parte del recurso. Y se arregló el guardado de prompts propios: los avisos de «falta el nombre» aparecían al pie del panel, fuera de vista, y parecía que el botón no hacía nada. Ahora van dentro del formulario, el guardado local es lo que manda (el almacén del equipo es un extra que ya no puede hacerlo fracasar), hay un contador de prompts guardados y el borrador sobrevive si cambiás de card.'],
     ['v155','El texto no se mueve','Escribir una bajada corría el título hacia arriba y, si era larga, lo empujaba fuera de la placa sin manera de recuperarlo. Ahora cada bloque tiene su coordenada propia: se fija donde está y solo se mueve si lo arrastrás. Las posiciones se guardan en el template, así un colaborador reemplaza el texto y la placa no se desarma. Suma un botón para traer al cuadro lo que se haya ido. Las fotos se arrastran 1:1 con el mouse y sin tope: ya se pueden sacar de cuadro para abajo, que antes era imposible. Y hay un menú de ilustraciones (línea con color plano, crosshatching en blanco y negro, línea simple de viñeta) al que se le pueden sumar prompts propios, compartidos con todo el equipo.'],
     ['v154','Los templates llegan al equipo','Guardar publicaba solo en el navegador de cada uno. La clave que el almacén pide para aceptar un guardado se leía del cuadro de contraseña, pero al recargar la sesión ya está validada, ese cuadro no aparece y su valor queda vacío: el almacén rechazaba el guardado y el editor caía a la copia local. Ahora la clave se toma de la propia página, así que guardar publica siempre.'],
