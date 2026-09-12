@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v176 «cámara en la animación»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v177 «cámara sobre toda la card»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v176 «cámara en la animación»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v177 «cámara sobre toda la card»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1942,15 +1942,6 @@ function drawMedia(m,x,y,w,h,t_anim){
   const srcH=m.type==='video'?el.videoHeight:el.naturalHeight;
   if(!srcW||!srcH)return;
   let zoom=m.zoom||1;
-  // Cámara de la animación de entrada: la foto arranca metida y se abre
-  // mientras los elementos van entrando. Multiplica el encuadre elegido a
-  // mano, no lo reemplaza.
-  {
-    const _ac=(typeof cards!=='undefined')
-      ? (cards.find(c=>c&&c.id===_drawingCardId) || cards[sel]) : null;
-    if(_ac && _ac.animOn && (_ac.animZoom||0)>0 && t_anim!==undefined)
-      zoom = zoom * (1 + _ac.animZoom*(1-eo3(Math.max(0,Math.min(1,t_anim)))));
-  }
   let cx=m.cx!==undefined?m.cx:.5,cy=m.cy!==undefined?m.cy:.5;
 
   // ── CINEMÁTICO ──
@@ -5328,7 +5319,21 @@ function animCapas(card, t){
   return function(capa){ return animEntrar(card,'capa:'+capa.id,t); };
 }
 
+// La cámara de la animación de entrada envuelve TODO el dibujo de la card:
+// la foto, el bloque de color, el título y las capas. Por eso está acá afuera
+// y no adentro de la foto —así funciona igual con cualquier tipo de card, con
+// el fondo desenfocado, con una viñeta o con una cover— y todo se abre junto,
+// como una cámara que retrocede.
 function drawCard(card,t){
+  var _z = (card && card.animOn && (card.animZoom||0)>0)
+    ? 1 + card.animZoom*(1-eo3(Math.max(0,Math.min(1,t||0)))) : 1;
+  if(_z<=1.0005) return drawCardBase(card,t);
+  ctx.save();
+  ctx.translate(W/2,H/2); ctx.scale(_z,_z); ctx.translate(-W/2,-H/2);
+  try{ drawCardBase(card,t); } finally { ctx.restore(); }
+}
+
+function drawCardBase(card,t){
   _drawingCardId = card?card.id:null;
   // El cuadro en curso, para que las capas sepan en qué momento están aunque
   // las dibuje otra función más abajo.
@@ -11483,6 +11488,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v177','La cámara mueve la card entera','La versión anterior aplicaba el zoom de apertura adentro del dibujo de la foto, así que solo funcionaba en las cards de foto comunes: si la imagen iba con fondo desenfocado, o era una viñeta, o una cover, no se movía nada. Y además el bloque de color y el título quedaban quietos mientras la foto se abría, que no es lo que hacía la placa. Ahora la cámara envuelve TODO el dibujo de la card —la foto, el fondo, el título, la bajada y las capas— y se abre como una cámara que retrocede, con cualquier tipo de card. En 0 no hay transformación y el dibujo es idéntico al de siempre.'],
     ['v176','La cámara vuelve a la animación','Al sacar la card «placa» se fue con ella el zoom de apertura, y la animación quedaba con los elementos entrando sobre una foto quieta. Volvió, ahora como un control más del bloque «Animación de entrada» y para cualquier card con foto: «Cámara», de 0 a 60%. La imagen arranca metida adentro y se va abriendo hasta el encuadre que elegiste a mano, mientras el título, la bajada y las capas van entrando en su orden. Multiplica el encuadre propio de la foto en vez de reemplazarlo, así que el zoom y el punto de interés que hayas ajustado se respetan. En 0 la foto queda quieta y todo sigue como antes. Viaja en el template con el resto de la animación.'],
     ['v175','El panel se queda quieto, y typewriter en los textos que sumás','Dos cosas. La primera es de uso y era una molestia seria: el panel derecho se reconstruye entero en cada cambio, así que cada clic en una flecha lo devolvía al principio y había que volver a bajar hasta el control. Ahora guarda dónde estaba la barra y la restituye; y los campos de espera de la animación ni siquiera reconstruyen el panel: recalculan los segundos en el lugar, así que se puede quedar apretando la flechita sin que nada se mueva. La segunda: una capa de texto puede escribirse a máquina. Botón «⌨ Typewriter» en la ficha de la capa, con el tiempo que tarda en escribirse y un cursor parpadeante opcional. Arranca cuando a esa capa le toca entrar según el orden, así que se puede encadenar: primero el nombre, después el dato, y al final la cita escribiéndose. El corte se hace sobre las líneas ya compuestas, no sobre el texto crudo, para que el bloque no se reacomode mientras escribe.'],
     ['v174','Veladura de la foto','«Sombra del texto» oscurece el pie de la card, que es donde vive el título. Cuando la foto no llega hasta abajo —una imagen arriba y un bloque de color abajo— esa sombra cae sobre el color y no sirve para nada; y si lo que hay que hacer legible es una cita puesta encima de la imagen, no la toca. Control nuevo, «Veladura de la foto», que se queda DENTRO del rectángulo de la foto: intensidad de 0 a 100, dirección —desde abajo, desde arriba o pareja sobre toda la imagen— y color, con negro y blanco a un clic para velar sobre fotos claras. Es independiente de la sombra del texto: se pueden usar las dos, o ninguna. Viaja en el template junto con el resto de los ajustes de la foto.'],
