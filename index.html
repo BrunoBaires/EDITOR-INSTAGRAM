@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v163 «tapa animada»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v166 «portada animada»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -814,6 +814,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
         <button class="add-btn" id="add-libre" title="Bloques de texto libres, cada uno con su estilo">✦ Libre</button>
         <button class="add-btn" id="add-infografia" title="Infografía: texto arriba, ilustración forense abajo">◈ Infografía</button>
         <button class="add-btn" id="add-tapa" title="Tapa animada: el diario se arma solo sobre un zoom out">◨ Tapa</button>
+        <button class="add-btn" id="add-portada" title="Portada animada: la foto a sangre y la marca, el índice y el título entrando encima">◻ Portada</button>
         <button class="add-btn" id="add-sintesis" title="Agrega una card de síntesis en bullets al final, sin tocar las cards que ya tenés" style="border-color:var(--text);font-weight:600">↯ Sumar síntesis</button>
         <button class="add-btn" id="templates-btn" title="Guardar y aplicar templates de estilo" style="border-color:var(--text);font-weight:600">◇ Templates</button>
         <button class="add-btn" id="limpiar-btn" style="color:#ef4444;border-color:#ef4444">✕</button>
@@ -928,7 +929,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v163 «tapa animada»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v166 «portada animada»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -4940,21 +4941,29 @@ function plan(a, opt){
   });
   // Cada filete entra con el bloque que tiene más cerca: es parte de ese bloque,
   // no un elemento propio. Sin viaje ni escala, aparece y ya está.
+  var grupo={};
   orden.forEach(function(j){
     if(!fino[j]) return;
-    var c=a.piezas[j], mejor=null, dist=Infinity;
+    var c=a.piezas[j];
+    var vertical = (c[3]-c[1]) >= (c[2]-c[0]);
+    var mejor=null, puntaje=-Infinity;
     gordos.forEach(function(g){
       var q=a.piezas[g];
+      // cuánto se solapan en el eje largo del filete, y cuánto los separa
+      var sol = vertical ? Math.max(0, Math.min(q[3],c[3]) - Math.max(q[1],c[1]))
+                         : Math.max(0, Math.min(q[2],c[2]) - Math.max(q[0],c[0]));
       var dx=Math.max(0, Math.max(q[0]-c[2], c[0]-q[2]));
       var dy=Math.max(0, Math.max(q[1]-c[3], c[1]-q[3]));
-      var d=Math.hypot(dx,dy);
-      if(d<dist){ dist=d; mejor=g; }
+      var p2 = sol - Math.hypot(dx,dy)*3;
+      if(p2>puntaje){ puntaje=p2; mejor=g; }
     });
+    grupo[j]=mejor;
     agenda[j] = mejor!==null ? agenda[mejor] : t0;
   });
 
   return {o:o, LW:LW, LH:LH, ox:ox, oy:oy, encuadre:encuadre, wIni:wIni,
-          iDe:iDe, orden:orden, grande:grande, fino:fino, agenda:agenda, dur:dur};
+          iDe:iDe, orden:orden, grande:grande, fino:fino, grupo:grupo,
+          agenda:agenda, dur:dur};
 }
 
 // ── 3. dibujo de un cuadro ───────────────────────────────────────────
@@ -4970,11 +4979,16 @@ function dibujar(ctx, img, a, p, seg, W, H, tZoom){
   ctx.fillStyle='#ffffff';
   ctx.fillRect(SX(p.ox),SY(p.oy),a.W*sc,a.H*sc);
 
-  function pegar(c, escala, corre, alfa, borron){
+  // `anc` es la caja que manda el movimiento. Para un bloque es él mismo; para
+  // un filete es el bloque al que pertenece, así viaja pegado a él —con su misma
+  // escala y su mismo corrimiento— en vez de moverse por su cuenta. Si no, la
+  // tira aterriza donde no le corresponde y se ven pedazos de letras sueltos.
+  function pegar(c, anc, escala, corre, alfa, borron){
     var w=c[2]-c[0], h=c[3]-c[1];
     var dw=w*sc*escala, dh=h*sc*escala;
-    var dx=SX(p.ox+c[0])-(dw-w*sc)/2+corre[0];
-    var dy=SY(p.oy+c[1])-(dh-h*sc)/2+corre[1];
+    var ax=SX(p.ox+(anc[0]+anc[2])/2), ay=SY(p.oy+(anc[1]+anc[3])/2);
+    var dx=ax+(SX(p.ox+c[0])-ax)*escala+corre[0];
+    var dy=ay+(SY(p.oy+c[1])-ay)*escala+corre[1];
     ctx.globalAlpha=alfa;
     if(borron>0.4) ctx.filter='blur('+borron.toFixed(1)+'px)';
     ctx.drawImage(img, c[0], c[1], w, h, dx, dy, dw, dh);
@@ -4983,31 +4997,33 @@ function dibujar(ctx, img, a, p, seg, W, H, tZoom){
   }
 
   // la pieza de arranque —la foto— está desde el cuadro uno
-  pegar(a.piezas[p.iDe],1,[0,0],1,0);
+  pegar(a.piezas[p.iDe],a.piezas[p.iDe],1,[0,0],1,0);
 
   var ecx=(enc[0]+enc[2])/2, ecy=(enc[1]+enc[3])/2;
-  var visibles=p.orden.filter(function(j){ return seg>=p.agenda[j]; });
+  // cada filete se mueve con su bloque: mismo reloj, misma escala, mismo viaje
+  var jefe=function(j){ return (p.fino[j]&&p.grupo[j]!==null&&p.grupo[j]!==undefined) ? p.grupo[j] : j; };
+  var visibles=p.orden.filter(function(j){ return seg>=p.agenda[jefe(j)]; });
   visibles.sort(function(j1,j2){
-    var f=function(j){ return seg>=p.agenda[j]+p.dur(j) ? 1 : (p.grande[j]?2:0); };
-    return f(j1)-f(j2) || p.agenda[j1]-p.agenda[j2];
+    var f=function(j){ var r=jefe(j);
+      return seg>=p.agenda[r]+p.dur(r) ? 1 : (p.grande[r]?2:0); };
+    return f(j1)-f(j2) || p.agenda[jefe(j1)]-p.agenda[jefe(j2)];
   });
   visibles.forEach(function(j){
-    var c=a.piezas[j];
-    if(p.fino[j]){ pegar(c,1,[0,0],1,0); return; }
-    var e=suave(Math.min((seg-p.agenda[j])/p.dur(j),1));
-    if(e>=0.995){ pegar(c,1,[0,0],1,0); return; }
-    var w=c[2]-c[0], h=c[3]-c[1];
-    var vx=(p.ox+c[0]+w/2)-ecx, vy=(p.oy+c[1]+h/2)-ecy;
+    var c=a.piezas[j], r=jefe(j), anc=a.piezas[r];
+    var e=suave(Math.min((seg-p.agenda[r])/p.dur(r),1));
+    if(e>=0.995){ pegar(c,anc,1,[0,0],1,0); return; }
+    var w=anc[2]-anc[0], h=anc[3]-anc[1];
+    var vx=(p.ox+anc[0]+w/2)-ecx, vy=(p.oy+anc[1]+h/2)-ecy;
     var n=Math.hypot(vx,vy)||1;
-    if(p.grande[j]){
+    if(p.grande[r]){
       // llega acercándose y viniendo un poco desde afuera
       var f=1+(o.ENTRA_GRANDE-1)*(1-e);
       var d=o.ENTRA_DESDE*(1-e)*Math.min(w,h)*sc;
-      pegar(c,f,[vx/n*d, vy/n*d], Math.min(1,e/0.40), o.ENTRA_BORRON*(1-e));
+      pegar(c,anc,f,[vx/n*d, vy/n*d], Math.min(1,e/0.40), o.ENTRA_BORRON*(1-e));
     }else{
       var f2=1+o.ENTRA_ZOOM*(1-e);
       var d2=o.ENTRA_CORRE*(1-e)*Math.min(w,h)*sc;
-      pegar(c,f2,[vx/n*d2, vy/n*d2], Math.min(1,e/0.55), 0);
+      pegar(c,anc,f2,[vx/n*d2, vy/n*d2], Math.min(1,e/0.55), 0);
     }
   });
   ctx.restore();
@@ -5108,12 +5124,23 @@ function tapaDur(card){
   return (card.tapaZoom||8)+(card.tapaFlash||0.17)+(card.tapaHold||1.8);
 }
 function tapaSincronizar(card){
-  // recorta la música por delante para que el golpe caiga en el flash
+  // La música SIEMPRE se monta de atrás para adelante: primero se decide en qué
+  // segundo del video tiene que caer su ancla, y recién entonces se ve qué hacer
+  // con lo que sobra por delante. Nunca se toca el final de la pista.
+  //   · si se encontró el golpe, el ancla es el golpe y cae en el flash
+  //   · si no, el ancla es el final de la pista y cae en el final del video
+  // Si sobra pista, se recorta la cabeza. Si falta, la música entra más tarde
+  // —con silencio al principio— en vez de adelantar el final.
   var m=mediaCache[card.id];
-  if(!m||m.type!=='audio'||!card.tapaClick) return;
-  m.trimIn=Math.max(0, card.tapaClick-(card.tapaZoom||8));
+  if(!m||(m.type!=='audio'&&m.type!=='video')||!m.el) return;
+  var total=tapaDur(card), ancla, destino;
+  if(card.tapaClick){ ancla=card.tapaClick; destino=card.tapaZoom||8; }
+  else { ancla=m.duration||total; destino=total; }
+  var corr=ancla-destino;
+  m.trimIn=Math.max(0, corr);
   m.trimOut=m.duration;
-  if(m.el) m.el.loop=false;
+  card.tapaRetraso=Math.max(0, -corr);   // cuánto espera la música para entrar
+  m.el.loop=false;
 }
 
 // ── dibujo de la card ────────────────────────────────────────────────
@@ -5176,10 +5203,195 @@ function drawTapa(card,t){
   }
 }
 
+// ════════════════════════════════════════════════════════════════════
+// CARD PORTADA  ·  la tapa de revista que se arma sobre la foto
+// ════════════════════════════════════════════════════════════════════
+// La card es una portada entera: una banda blanca arriba con la caja de
+// marca y el índice, la foto a sangre abajo, y el título sobre la foto.
+// La cámara arranca metida dentro de la foto —así la banda todavía no se
+// ve— y se abre hasta la portada completa. Cuando la banda aparece, sus
+// elementos ya están entrando. Nada de esto sale de una imagen ya hecha:
+// se compone acá, y por eso el índice puede leer los títulos de las otras
+// cards y mantenerse solo.
+
+function portadaIndice(card){
+  var i=cards.indexOf(card), out=[];
+  for(var k=i+1;k<cards.length && out.length<5;k++){
+    var t=(cards[k].titulo||'').replace(/\*\*|==/g,'').replace(/\s+/g,' ').trim();
+    if(t) out.push(t);
+  }
+  return out;
+}
+
+function portadaLineas(card){
+  if(card.portIndice!==undefined && card.portIndice!==null){
+    return String(card.portIndice).split('\n').map(function(s){return s.trim();}).filter(Boolean).slice(0,6);
+  }
+  return portadaIndice(card);
+}
+
+// entrada de un elemento: 0 antes de tiempo, 1 cuando terminó de asentarse
+function portadaEntra(seg, t0, d){
+  return eo3(Math.max(0, Math.min(1, (seg-t0)/Math.max(0.01,d))));
+}
+
+function drawPortada(card,t){
+  var dur=card.fixedDur||6;
+  var tt=Math.min(1,Math.max(0,t));
+  var seg=tt*dur;
+  var mg=Math.round(W*0.055);
+  var bandaH=Math.round(H*(card.portBanda||0.20));
+  var m=mediaCache[card.id];
+
+  pintarFondo(card);
+
+  // La cámara: un solo movimiento, de dentro de la foto a la portada entera.
+  var k=1+(card.portZoom!==undefined?card.portZoom:0.28)*(1-eo3(tt));
+  var anclaY=bandaH+(H-bandaH)*0.42;
+  ctx.save();
+  ctx.translate(W/2,anclaY); ctx.scale(k,k); ctx.translate(-W/2,-anclaY);
+
+  // ── la foto, a sangre, debajo de la banda ──
+  var fy=bandaH, fh=H-bandaH;
+  if(m&&m.el){
+    var el=m.el;
+    var sw=m.type==='video'?el.videoWidth:el.naturalWidth;
+    var sh=m.type==='video'?el.videoHeight:el.naturalHeight;
+    if(sw&&sh){
+      var esc=Math.max(W/sw,fh/sh)*(m.zoom||1);
+      var dw=sw*esc, dh=sh*esc;
+      var cx=(m.cx!==undefined?m.cx:.5), cy=(m.cy!==undefined?m.cy:.5);
+      // cubrir sin dejar huecos: el punto de interés al centro y freno contra
+      // los bordes, para que nunca asome el fondo
+      var dx=Math.min(0,Math.max(W-dw, W*0.5-dw*cx));
+      var dy=Math.min(fy,Math.max(fy+fh-dh, fy+fh*0.5-dh*cy));
+      ctx.save(); ctx.beginPath(); ctx.rect(0,fy,W,fh); ctx.clip();
+      try{ ctx.drawImage(el,dx,dy,dw,dh); }catch(e){}
+      ctx.restore();
+    }
+  }else{
+    ctx.save();
+    ctx.fillStyle=PAL.rule; ctx.fillRect(0,fy,W,fh);
+    ctx.fillStyle=PAL.meta; ctx.textAlign='center';
+    ctx.font='300 36px "IBM Plex Sans"'; ctx.letterSpacing='0px';
+    ctx.fillText('Soltá la foto de portada', W/2, fy+fh/2);
+    ctx.restore();
+  }
+
+  // velo abajo: el título va sobre la foto y tiene que leerse siempre
+  ctx.save();
+  var gv=ctx.createLinearGradient(0,H-fh*0.42,0,H);
+  gv.addColorStop(0,'rgba(0,0,0,0)'); gv.addColorStop(1,'rgba(0,0,0,0.60)');
+  ctx.fillStyle=gv; ctx.fillRect(0,H-fh*0.42,W,fh*0.42);
+  ctx.restore();
+
+  var t0=(card.portInicio!==undefined?card.portInicio:0.18)*dur;
+  var color=card.portColor||'#D82027';
+
+  // ── caja de marca, arriba a la izquierda ──
+  var bh=Math.round(bandaH-mg*1.15), bw=Math.round(bh*2.15);
+  var by0=Math.round((bandaH-bh)/2);
+  var eM=portadaEntra(seg,t0,0.50);
+  if(eM>0){
+    ctx.save();
+    ctx.globalAlpha=eM;
+    var f=1+0.06*(1-eM);
+    var bx=mg-(bw*f-bw)/2, by=by0-(bh*f-bh)/2+(1-eM)*10;
+    ctx.fillStyle=color;
+    ctx.fillRect(bx,by,bw*f,bh*f);
+    var img=null;
+    try{ img=pickLogoImg(true,'white'); }catch(e){}
+    if(img&&(img.naturalWidth||img.width)){
+      try{
+        var pad=bh*0.24, iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
+        var kk=Math.min((bw*f-pad*2)/iw,(bh*f-pad*2)/ih);
+        var lw=iw*kk, lh=ih*kk;
+        var pintar=img;
+        if(!window.__logoWhite){ try{ pintar=tintedLogo(img,'#ffffff'); }catch(e){} }
+        ctx.drawImage(pintar, bx+(bw*f-lw)/2, by+(bh*f-lh)/2, lw, lh);
+      }catch(e){}
+    }
+    ctx.restore();
+  }
+
+  // ── índice: lo que viene en las cards siguientes ──
+  var lineas=portadaLineas(card);
+  var ix=mg+bw+Math.round(W*0.042), iw2=W-ix-mg;
+  var isz=Math.round(W*0.0235), ilh=Math.round(isz*1.72);
+  var alto=lineas.length*ilh+(lineas.length?Math.round(isz*1.2):0);
+  var iy=Math.round((bandaH-alto)/2+isz);
+  ctx.save();
+  ctx.textAlign='left';
+  for(var i=0;i<lineas.length;i++){
+    var eI=portadaEntra(seg,t0+0.22+i*0.07,0.42);
+    if(eI<=0) continue;
+    ctx.globalAlpha=eI;
+    var dyi=(1-eI)*9;
+    ctx.font='400 '+isz+'px "IBM Plex Serif","IBM Plex Sans",serif';
+    ctx.letterSpacing='0px';
+    ctx.fillStyle='#111';
+    var txt=lineas[i];
+    if(ctx.measureText(txt).width>iw2){
+      while(ctx.measureText(txt+'…').width>iw2 && txt.length>4) txt=txt.slice(0,-1);
+      txt=txt.replace(/[\s,;:.]+$/,'')+'…';
+    }
+    ctx.fillText(txt, ix, iy+i*ilh+dyi);
+    ctx.strokeStyle='rgba(0,0,0,.26)'; ctx.lineWidth=1;
+    ctx.beginPath();
+    var ry=Math.round(iy+i*ilh+isz*0.52+dyi)+0.5;
+    ctx.moveTo(ix,ry); ctx.lineTo(ix+iw2,ry); ctx.stroke();
+  }
+  var eF=portadaEntra(seg,t0+0.22+lineas.length*0.07,0.42);
+  if(eF>0){
+    ctx.globalAlpha=eF;
+    ctx.font='500 '+Math.round(isz*0.66)+'px "IBM Plex Sans"';
+    ctx.letterSpacing='1.6px';
+    ctx.fillStyle='rgba(0,0,0,.55)';
+    ctx.fillText((card.fecha||formatCardDate(new Date())).toUpperCase(),
+                 ix, iy+lineas.length*ilh+Math.round(isz*0.5)+(1-eF)*9);
+  }
+  ctx.restore();
+
+  // ── título y bajada, sobre la foto ──
+  if(card.titulo||card.cuerpo){
+    var eT=portadaEntra(seg,t0+0.48,0.62);
+    if(eT>0){
+      ctx.save();
+      ctx.textAlign='center';
+      var tsz=card.portTitleSz||Math.round(W*0.086);
+      var fam=titleFontFamily(card), wt=titleFontWeight(card);
+      ctx.font=wt+' '+tsz+'px '+fam; ctx.letterSpacing='-0.5px';
+      var ls=card.titulo?wrapTitle(card.titulo, W-mg*2, tsz, fam, wt):[];
+      var lh=Math.round(tsz*1.10);
+      var ssz=Math.round(tsz*0.30);
+      var baseY=H-Math.round(H*0.075)-(card.cuerpo?Math.round(ssz*2.0):0);
+      var yT=baseY-(ls.length-1)*lh;
+      ctx.globalAlpha=eT;
+      ctx.fillStyle='#fff';
+      ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=20;
+      for(var j=0;j<ls.length;j++) ctx.fillText(ls[j], W/2, yT+j*lh+(1-eT)*22);
+      ctx.shadowBlur=0;
+      if(card.cuerpo){
+        var eB=portadaEntra(seg,t0+0.62,0.55);
+        ctx.globalAlpha=eB;
+        ctx.font='700 '+ssz+'px "IBM Plex Sans"'; ctx.letterSpacing='0.4px';
+        ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=14;
+        ctx.fillText(card.cuerpo.replace(/\n/g,' '), W/2,
+                     baseY+Math.round(ssz*1.95)+(1-eB)*16);
+        ctx.shadowBlur=0;
+      }
+      ctx.restore();
+    }
+  }
+
+  ctx.restore();   // cierra la cámara
+}
+
 function drawCard(card,t){
   _drawingCardId = card?card.id:null;
   if(card){ card._capaBoxes=[]; card._capaHandle=null; }
   if(card.tipo==='tapa'){drawTapa(card,t);return;}
+  if(card.tipo==='portada'){drawPortada(card,t);return;}
   if(card.tipo==='cover'){drawCover(card,t);return;}
   if(card.tipo==='mapa'){drawMapa(card,t);return;}
   if(card.tipo==='nano'){drawNano(card,t);return;}
@@ -5589,14 +5801,25 @@ function play(card,onEnd){
   // Arrancar/loopear los videos de una viñeta
   vinVids.forEach(function(s){ try{ if(s.el.paused){ s.el.currentTime=0; s.el.play().catch(function(){}); } }catch(e){} });
   // Seek to trimIn
+  const _tapaEspera = card.tipo==='tapa' ? (card.tapaRetraso||0) : 0;
+  let _musicaPendiente = false;
   if(m&&(m.type==='video'||m.type==='audio')&&m.el){
     const trimIn=m.trimIn||0;
     if(Math.abs(m.el.currentTime-trimIn)>0.2) m.el.currentTime=trimIn;
-    if(m.el.paused) m.el.play().catch(()=>{});
+    if(_tapaEspera>0.02){
+      // La pista es más corta que el video: entra más tarde para que su final
+      // siga cayendo donde tiene que caer.
+      try{ m.el.pause(); }catch(e){}
+      _musicaPendiente = true;
+    }else if(m.el.paused) m.el.play().catch(()=>{});
   }
   // Loop por tiempo real — garantiza sincronía con el audio real
   const loop=()=>{
     const elapsed=(performance.now()-t0)/1000;
+    if(_musicaPendiente && elapsed>=_tapaEspera && m&&m.el){
+      _musicaPendiente=false;
+      try{ m.el.currentTime=m.trimIn||0; m.el.play().catch(()=>{}); }catch(e){}
+    }
     const t=Math.min(elapsed/dur,1);
     _lastAnimT=t;
     drawCard(card,t);
@@ -6469,6 +6692,13 @@ canvas.addEventListener('drop',async e=>{
   if(cards[sel] && cards[sel].tipo==='tapa'){
     const f0=[...e.dataTransfer.files][0];
     if(f0){ await tapaRecibir(f0); }
+    return;
+  }
+  if(cards[sel] && cards[sel].tipo==='portada'){
+    const f1=[...e.dataTransfer.files][0];
+    if(f1){ setStatus('Cargando la foto…','working');
+            await loadMediaFromFile(f1,cards[sel].id);
+            setStatus('Listo',''); renderEditor(cards[sel]); renderList(); play(cards[sel]); }
     return;
   }
   const files=[...e.dataTransfer.files].filter(f=>
@@ -7510,6 +7740,48 @@ function renderEditor(c){
   }
 
   // ── INFOGRAFÍA editor section ──
+  // ── PORTADA editor section ──
+  let portadaSection='';
+  if(c.tipo==='portada'){
+    const _mp=mediaCache[c.id];
+    const _lin=portadaLineas(c);
+    portadaSection=`
+    <div class="field"><label style="color:#c1121c">◻ Portada animada</label>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">La foto va a sangre y se abre despacio. Pasado el primer tercio entran la caja de marca, el índice de lo que viene y el título. El índice se llena solo con los títulos de las cards que siguen.</div>
+    </div>
+    <div class="field"><label>Foto</label>
+      ${_mp&&_mp.type==='img'
+        ? `<img class="img-thumb-ed" src="${_mp.thumbUrl||_mp.dataUrl}" style="width:100%;border-radius:4px"/>`
+        : ''}
+      <div class="img-drop" style="position:relative"><input type="file" id="port-file"/><div class="img-drop-txt">${_mp?'Cambiar la foto':'Soltá la foto de portada'}</div></div>
+    </div>
+    <div class="field"><label>Índice <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">una línea por renglón</span></label>
+      <textarea id="port-indice" style="min-height:86px;font-size:12px" placeholder="Se llena solo con los títulos de las cards que siguen">${escapeHtml(c.portIndice!==undefined&&c.portIndice!==null?c.portIndice:_lin.join('\n'))}</textarea>
+      <button class="btn-g" id="port-traer" style="width:100%;margin-top:4px">↻ Traer de las cards que siguen</button>
+    </div>
+    <div class="field"><label>Color de la caja de marca</label>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="color" id="port-color" value="${c.portColor||'#D82027'}" style="width:44px;height:30px;border:1px solid var(--border);background:none;cursor:pointer"/>
+        <input type="text" id="port-color-hex" value="${c.portColor||'#D82027'}" style="flex:1;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:7px;outline:none"/>
+      </div>
+    </div>
+    <div class="field"><label>Duración — <b id="sl-pd-val">${(c.fixedDur||6).toFixed(1)}s</b></label>
+      <input type="range" id="sl-pd" min="3" max="12" step="0.5" value="${c.fixedDur||6}"/>
+    </div>
+    <div class="field"><label>Cuándo entran los elementos — <b id="sl-pi-val">${Math.round((c.portInicio!==undefined?c.portInicio:.18)*100)}%</b></label>
+      <input type="range" id="sl-pi" min="0.05" max="0.6" step="0.01" value="${c.portInicio!==undefined?c.portInicio:.18}"/>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">Hasta ahí, solo la foto.</div>
+    </div>
+    <div class="field"><label>Apertura de la cámara — <b id="sl-pz-val">${Math.round((c.portZoom!==undefined?c.portZoom:.28)*100)}%</b></label>
+      <input type="range" id="sl-pz" min="0" max="0.7" step="0.01" value="${c.portZoom!==undefined?c.portZoom:.28}"/>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">Cuánto arranca metida dentro de la foto. En 0 la portada se ve entera desde el principio.</div>
+    </div>
+    <div class="field"><label>Alto de la banda — <b id="sl-pb-val">${Math.round((c.portBanda||0.20)*100)}%</b></label>
+      <input type="range" id="sl-pb" min="0.12" max="0.32" step="0.01" value="${c.portBanda||0.20}"/>
+    </div>
+    <div class="sep"></div>`;
+  }
+
   // ── TAPA ANIMADA editor section ──
   let tapaSection='';
   if(c.tipo==='tapa'){
@@ -7528,8 +7800,9 @@ function renderEditor(c){
       <button class="btn-g" id="tapa-marcar" style="width:100%">${c._marcando?'✓ Listo, guardar el punto':'◎ Marcar sobre la tapa'}</button>
       <div style="font-size:11px;color:var(--text3);margin-top:4px">${c._marcando?'Hacé clic en el rostro o el detalle donde querés que empiece.':'Ahora empieza en '+Math.round(c.tapaPunto.x*100)+'% / '+Math.round(c.tapaPunto.y*100)+'%'}</div>
     </div>
-    <div class="field"><label>Música <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">el flash cae sobre el golpe final</span></label>
-      <div class="img-drop" style="position:relative"><input type="file" id="tapa-audio"/><div class="img-drop-txt">${_mus&&_mus.type==='audio'?'♪ '+(_mus.filename||'pista')+' · golpe a los '+(c.tapaClick||0).toFixed(2)+'s':'Soltá la pista'}</div></div>
+    <div class="field"><label>Música <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">se monta de atrás para adelante</span></label>
+      <div class="img-drop" style="position:relative"><input type="file" id="tapa-audio"/><div class="img-drop-txt">${_mus&&(_mus.type==='audio'||_mus.type==='video')?'♪ '+(_mus.filename||'pista')+(c.tapaClick?' · golpe a los '+c.tapaClick.toFixed(2)+'s':' · sin golpe: cierra con el video'):'MP3, WAV, M4A, MP4, MOV…'}</div></div>
+      ${_mus&&(_mus.type==='audio'||_mus.type==='video')?`<div style="font-size:11px;color:var(--text3);line-height:1.45;margin-top:4px">${(c.tapaRetraso||0)>0.02?'La pista es más corta que el video: entra a los '+(c.tapaRetraso).toFixed(1)+'s para que su final caiga en su lugar.':'Se recortan '+((_mus.trimIn)||0).toFixed(1)+'s del principio. El final nunca se toca.'}</div>`:''}
     </div>
     <div class="field"><label>Duración del zoom — <b id="sl-tz-val">${(c.tapaZoom||8).toFixed(1)}s</b> <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">total <b id="sl-tz-tot">${tapaDur(c).toFixed(1)}</b>s</span></label>
       <input type="range" id="sl-tz" min="4" max="14" step="0.5" value="${c.tapaZoom||8}"/>
@@ -7604,8 +7877,10 @@ function renderEditor(c){
         <button class="tipo-btn${c.tipo==='libre'?' active':''}" data-t="libre" title="Bloques de texto libres, cada uno con su estilo">✦ Libre</button>
         <button class="tipo-btn${c.tipo==='infografia'?' active':''}" data-t="infografia" title="Infografía: texto arriba, ilustración abajo">◈ Info</button>
         <button class="tipo-btn${c.tipo==='tapa'?' active':''}" data-t="tapa" title="Tapa animada del diario">◨ Tapa</button>
+        <button class="tipo-btn${c.tipo==='portada'?' active':''}" data-t="portada" title="Portada animada">◻ Portada</button>
       </div>
     </div>
+    ${portadaSection}
     ${tapaSection}
     ${libreSection}
     ${coverSection}
@@ -8857,6 +9132,40 @@ REGLAS IMPORTANTES:
     });
   }
 
+  // ── PORTADA controls ──
+  if(c.tipo==='portada'){
+    const fP=el.querySelector('#port-file');
+    if(fP) fP.onchange=async()=>{
+      const f=fP.files&&fP.files[0]; if(!f) return;
+      setStatus('Cargando la foto…','working');
+      await loadMediaFromFile(f, cards[sel].id);
+      setStatus('Listo','');
+      renderEditor(cards[sel]); renderList(); play(cards[sel]);
+    };
+    const ti=el.querySelector('#port-indice');
+    if(ti) ti.oninput=e=>{ cards[sel].portIndice=e.target.value; redraw(); };
+    const bt=el.querySelector('#port-traer');
+    if(bt) bt.onclick=()=>{ cards[sel].portIndice=portadaIndice(cards[sel]).join('\n');
+                            renderEditor(cards[sel]); redraw(); };
+    const pc=el.querySelector('#port-color'), ph=el.querySelector('#port-color-hex');
+    const ponerColor=v=>{ cards[sel].portColor=v; if(pc) pc.value=v; if(ph) ph.value=v; redraw(); };
+    if(pc) pc.oninput=e=>ponerColor(e.target.value);
+    if(ph) ph.onchange=e=>{ const v=e.target.value.trim();
+      if(/^#[0-9a-fA-F]{6}$/.test(v)) ponerColor(v); };
+    const sd=el.querySelector('#sl-pd');
+    if(sd) sd.oninput=e=>{ const v=parseFloat(e.target.value); cards[sel].fixedDur=v;
+      const n=el.querySelector('#sl-pd-val'); if(n) n.textContent=v.toFixed(1)+'s'; redraw(); };
+    const si2=el.querySelector('#sl-pi');
+    if(si2) si2.oninput=e=>{ const v=parseFloat(e.target.value); cards[sel].portInicio=v;
+      const n=el.querySelector('#sl-pi-val'); if(n) n.textContent=Math.round(v*100)+'%'; redraw(); };
+    const sz2=el.querySelector('#sl-pz');
+    if(sz2) sz2.oninput=e=>{ const v=parseFloat(e.target.value); cards[sel].portZoom=v;
+      const n=el.querySelector('#sl-pz-val'); if(n) n.textContent=Math.round(v*100)+'%'; redraw(); };
+    const sb2=el.querySelector('#sl-pb');
+    if(sb2) sb2.oninput=e=>{ const v=parseFloat(e.target.value); cards[sel].portBanda=v;
+      const n=el.querySelector('#sl-pb-val'); if(n) n.textContent=Math.round(v*100)+'%'; redraw(); };
+  }
+
   // ── TAPA controls ──
   if(c.tipo==='tapa'){
     const st=el.querySelector('#tapa-status');
@@ -8882,17 +9191,7 @@ REGLAS IMPORTANTES:
     const fA=el.querySelector('#tapa-audio');
     if(fA) fA.onchange=async()=>{
       const f=fA.files&&fA.files[0]; if(!f) return;
-      setStatus('Buscando el golpe final…','working');
-      try{
-        const r=await tapaBuscarClick(f);
-        cards[sel].tapaClick=r.click;
-        await loadMediaFromFile(f, cards[sel].id);
-        const mm=mediaCache[cards[sel].id];
-        if(mm&&mm.el){ mm.el.loop=false; mm.el.pause(); }
-        tapaSincronizar(cards[sel]);
-        setStatus('Golpe a los '+r.click.toFixed(2)+'s','');
-        renderEditor(cards[sel]); play(cards[sel]);
-      }catch(err){ setStatus('No se pudo leer la música','error'); }
+      await tapaMusica(f);
     };
     const _re=()=>{ const d=tapaCache[cards[sel].id]; if(d) d.plan=null;
                     tapaSincronizar(cards[sel]); redraw(); };
@@ -9218,6 +9517,11 @@ function addCard(tipo){
   if(tipo==='tabla'){defaults.titulo='';defaults.cuerpo='';defaults.tableRows=[];defaults.titleSz=76;}
   if(tipo==='vineta'){defaults.vinCount=1;defaults.vinCaptions=['',''];defaults.bodySz=46;vinCache[defaults.id]=[];}
   if(tipo==='infografia'){defaults.infoTextH=34;defaults.bodySz=58;defaults.titleSz=52;defaults.infoPrompt='';defaults.mediaH=100;defaults.mediaW=100;defaults.anchor='bc';defaults.infoTransp=true;}
+  if(tipo==='portada'){
+    defaults.fixedDur=6; defaults.portColor='#D82027';
+    defaults.portInicio=0.18; defaults.portZoom=0.28; defaults.portBanda=0.20;
+    defaults.titulo=''; defaults.cuerpo='';
+  }
   if(tipo==='tapa'){
     // La tapa dura lo que dura: zoom + flash + congelado. Con fixedDur, la
     // máquina de exportación que ya existe la graba entera sin tocar nada.
@@ -9337,20 +9641,41 @@ document.getElementById('nav-next').onclick=()=>navigate(1);
 // ── Pegar imágenes con Ctrl/Cmd+V ──
 // Un archivo suelto sobre una card de tapa: si es sonido, es la música; si no,
 // es la tapa del día. Se decide acá para que soltar y pegar hagan lo mismo.
+// La música, venga de donde venga: MP3, WAV, M4A o un MP4 —de un MOV del
+// celular, por ejemplo—. Del video se usa solo la pista de sonido.
+async function tapaMusica(file){
+  const card=cards[sel];
+  setStatus('Leyendo la música…','working');
+  // El golpe se busca decodificando el sonido. Si el archivo no tiene pista de
+  // audio, la decodificación falla: eso es lo que lo delata, no su extensión.
+  let click=null, haySonido=true;
+  try{ click=(await tapaBuscarClick(file)).click; }
+  catch(err){ haySonido=false; }
+  await loadMediaFromFile(file,card.id);
+  const mm=mediaCache[card.id];
+  if(!mm||!mm.el||(mm.type!=='audio'&&mm.type!=='video')){
+    card.tapaClick=null; card.tapaRetraso=0;
+    setStatus('No pude abrir ese archivo','error');
+    renderEditor(cards[sel]); return;
+  }
+  card.tapaClick=click;
+  mm.el.loop=false; try{ mm.el.pause(); }catch(e){}
+  tapaSincronizar(card);
+  setStatus(!haySonido ? 'Ese archivo no parece traer sonido: el video va a salir mudo'
+            : (click!==null ? 'Música lista · golpe a los '+click.toFixed(2)+'s'
+                            : 'Música lista · sin golpe claro, cierra con el video'),
+            haySonido?'':'warn');
+  renderEditor(cards[sel]); renderList(); play(cards[sel]);
+}
+
 async function tapaRecibir(file){
   const card=cards[sel];
   const esAudio=(file.type||'').startsWith('audio/')||(file.type||'').startsWith('video/')
               ||/\.(mp3|wav|m4a|aac|ogg|flac|aiff?|mp4|mov|m4v|webm)$/i.test(file.name||'');
   try{
     if(esAudio){
-      setStatus('Buscando el golpe final…','working');
-      const r=await tapaBuscarClick(file);
-      card.tapaClick=r.click;
-      await loadMediaFromFile(file,card.id);
-      const mm=mediaCache[card.id];
-      if(mm&&mm.el){ mm.el.loop=false; mm.el.pause(); }
-      tapaSincronizar(card);
-      setStatus('Música lista · golpe a los '+r.click.toFixed(2)+'s','');
+      await tapaMusica(file);
+      return;
     }else{
       setStatus('Analizando la tapa…','working');
       await tapaCargar(file, card, m=>setStatus(m,'working'));
@@ -9364,6 +9689,12 @@ async function tapaRecibir(file){
 async function pasteImageFile(file){
   let card=cards[sel];
   if(card && card.tipo==='tapa'){ await tapaRecibir(file); return; }
+  if(card && card.tipo==='portada'){
+    setStatus('Cargando la foto…','working');
+    await loadMediaFromFile(file,card.id);
+    setStatus('Listo','');
+    renderEditor(cards[sel]); renderList(); play(cards[sel]); return;
+  }
   // Si la card ya tiene su foto de fondo, la que pegás ahora va como capa
   // encima: así se pueden apilar varias.
   if(card && mediaCache[card.id] && card.tipo!=='vineta'){
@@ -9566,6 +9897,7 @@ document.getElementById('add-tabla').onclick=()=>addCard('tabla');
 
 {const _ai=document.getElementById('add-infografia'); if(_ai) _ai.onclick=()=>addCard('infografia');}
 {const _at=document.getElementById('add-tapa'); if(_at) _at.onclick=()=>addCard('tapa');}
+{const _ap=document.getElementById('add-portada'); if(_ap) _ap.onclick=()=>addCard('portada');}
 
 // ══════════════════════════════════════════════════════════
 // INFOGRAFÍA FORENSE (v1)
@@ -11147,6 +11479,9 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v166','Card portada animada','Tipo de card nuevo, hermano de la tapa pero sin depender de una imagen ya hecha: la portada se compone acá. Una banda blanca arriba con la caja de marca —el logo del editor sobre un color que se elige— y, al lado, el índice de lo que viene; la foto a sangre ocupando el resto; y el título con su bajada sobre la foto, abajo. La cámara arranca metida dentro de la foto, así que en el primer tramo la banda todavía no se ve, y se abre hasta la portada entera; cuando la banda aparece, sus elementos ya están entrando: primero la caja de marca, después las líneas del índice escalonadas, y al final el título y la bajada. El índice se llena solo con los títulos de las cards que siguen en el carrusel —la portada es el índice real de lo que viene, no una lista que hay que mantener a mano— y se puede editar o volver a traer con un botón. Se le suelta la foto encima del preview, como a cualquier card. Cinco controles: color de la caja, duración, en qué punto entran los elementos, cuánto arranca metida la cámara y el alto de la banda.'],
+    ['v165','Tapa animada — la música, de atrás para adelante','Dos cosas en el campo de música. Ahora acepta cualquier archivo con sonido, incluido un MP4 o un MOV: del video se usa solo la pista de audio, nunca la imagen, así que se puede tirar directamente lo que salió del celular sin pasar por un conversor. Si el archivo no trae sonido, lo detecta al intentar decodificarlo y lo dice, en vez de dejar un video mudo sin explicación. Y el montaje pasó a ser siempre de atrás para adelante: primero se decide en qué segundo del video tiene que caer el ancla de la pista —el golpe final si se encontró, y si no el final de la música— y recién entonces se ve qué hacer con lo que sobra por delante. Si sobra pista se recorta la cabeza, como hasta ahora. Si la pista es más corta que el video, en vez de adelantar el final la música entra más tarde, con silencio al principio, para que su remate siga cayendo exactamente donde tiene que caer. El final de la pista no se toca nunca.'],
+    ['v164','Tapa animada — el filete viaja con su bloque','Seguían apareciendo pedazos de letras sueltos durante el zoom out. El filete ya llegaba en el momento correcto, pero se dibujaba como un rectángulo independiente: mientras su bloque venía acercándose —más grande y corrido hacia afuera— la tira se quedaba quieta en su posición final, así que durante medio segundo quedaba fuera de registro y lo que asomaba de ella eran fragmentos de la tipografía de al lado. Ahora el movimiento de cada pieza se calcula desde la caja que manda: para un bloque es él mismo, para un filete es el bloque al que pertenece. La tira viaja pegada a su bloque, con su misma escala y su mismo corrimiento, como si fueran una sola pieza. Además el bloque de cada filete ya no se elige por cercanía a secas sino por cuánto se solapan en el eje largo de la tira, que es lo que de verdad dice a qué columna pertenece un corondel.'],
     ['v163','Tapa animada — los filetes vuelven','La corrección anterior sacaba de la lista las tiras angostas para que no se animaran solas, pero las sacaba del todo: los filetes que no tocaban ningún bloque se quedaban sin dueño y desaparecían de la tapa. Ahora no se borran, se marcan. Un filete sigue sin animarse por su cuenta y sigue sin competir por ser el título, pero entra de golpe —sin viaje ni escala— en el mismo instante que el bloque que tiene más cerca, porque es parte de ese bloque y no un elemento aparte. El resultado final vuelve a ser idéntico a la tapa impresa, con todos sus corondeles y filetes en su lugar.'],
     ['v162','Tapa animada — sin tiritas sueltas','Durante el zoom out se veía cruzar la página una tira angosta con letras cortadas al medio. Eran dos cosas. Una: el corte descontaba como filete el borde izquierdo de las columnas justificadas, porque al arrancar todas las líneas en la misma posición esa columna de píxeles está casi llena de tinta igual que una raya; ahora un filete tiene que ser fino Y estar aislado, con blanco de los dos lados, que es lo que lo distingue del borde de un bloque de texto. Dos: un corondel entre columnas sobrevivía al corte como una pieza propia, larguísima y de veinte píxeles de ancho, y se animaba solo; peor todavía, como su altura de línea es todo su alto, el detector de titulares lo coronaba título principal y lo hacía entrar primero. Las tiras ya no son piezas: se sacan de la lista y su tinta la recupera la pieza que la toca, y una tira angosta tampoco compite por ser el título.'],
     ['v161','Tapa animada — la banda roja entera','La línea blanca que cruzaba el cabezal. El corte de la página descuenta los filetes —las rayas finas que separan columnas y bloques— para poder partir por ahí, y los detectaba como «filas casi llenas de tinta». Una banda de color maciza, como el rojo del cabezal de Clarín, también es una fila llena de tinta: el corte la trataba como filete, la partía al medio y entre las dos mitades quedaba el papel a la vista, una raya blanca atravesando el logo. Ahora solo se descuentan las tiras finas —un filete tiene dos o tres píxeles, una banda tiene veinte— y, terminado el corte, cada pieza se estira para recuperar los filetes que la tocan, así entre dos piezas nunca queda papel al descubierto. De paso la tapa se corta en bloques más enteros y menos fragmentos sueltos.'],
