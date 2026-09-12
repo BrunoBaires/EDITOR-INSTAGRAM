@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v161 «tapa animada»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v162 «tapa animada»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v161 «tapa animada»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v162 «tapa animada»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -4654,24 +4654,32 @@ function cortarPiezas(img, foto){
   // banda tiene veinte. Lo que se saca se guarda para devolverlo después.
   var tintaOrig=tinta.slice();
   var GRUESO_F=Math.max(2,Math.round(h*0.006)), GRUESO_C=Math.max(2,Math.round(w*0.008));
-  function borrarTiras(llena, largo, grueso, borrar){
+  // Un filete es una tira fina y SOLA: tiene blanco de los dos lados. El borde
+  // izquierdo de una columna justificada también da una tira llena —todas las
+  // líneas arrancan en la misma x— pero está pegada al texto, no aislada. Si no
+  // se distingue, el corte parte ahí y queda una tirita de letras cortadas
+  // moviéndose por su cuenta durante el zoom.
+  function borrarTiras(cob, largo, grueso, borrar){
     var ini=null;
     for(var i=0;i<=largo;i++){
-      var v = i<largo ? llena[i] : false;
+      var v = i<largo && cob[i]>0.88;
       if(v&&ini===null) ini=i;
       else if(!v&&ini!==null){
-        if(i-ini<=grueso) for(var k=ini;k<i;k++) borrar(k);
+        var antes = ini-1>=0 ? cob[ini-1] : 0;
+        var luego = i<largo ? cob[i] : 0;
+        if(i-ini<=grueso && antes<0.25 && luego<0.25)
+          for(var k=ini;k<i;k++) borrar(k);
         ini=null;
       }
     }
   }
-  var filaLlena=[], colLlena=[];
+  var covF=[], covC=[];
   for(var y2=0;y2<h;y2++){ var n=0; for(var x2=0;x2<w;x2++) n+=tinta[y2*w+x2];
-    filaLlena.push(n>w*0.80); }
+    covF.push(n/w); }
   for(var x4=0;x4<w;x4++){ var n2=0; for(var y3=0;y3<h;y3++) n2+=tinta[y3*w+x4];
-    colLlena.push(n2>h*0.80); }
-  borrarTiras(filaLlena,h,GRUESO_F,function(y){ for(var x=0;x<w;x++) tinta[y*w+x]=0; });
-  borrarTiras(colLlena,w,GRUESO_C,function(x){ for(var y=0;y<h;y++) tinta[y*w+x]=0; });
+    covC.push(n2/h); }
+  borrarTiras(covF,h,GRUESO_F,function(y){ for(var x=0;x<w;x++) tinta[y*w+x]=0; });
+  borrarTiras(covC,w,GRUESO_C,function(x){ for(var y=0;y<h;y++) tinta[y*w+x]=0; });
 
   var GH=Math.max(5,Math.round(h*0.010)), GV=Math.max(4,Math.round(w*0.008));
   var salida=[];
@@ -4715,11 +4723,26 @@ function cortarPiezas(img, foto){
   }
   cortar(0,0,w,h,true,0);
 
+  // Las tiras no son piezas. Un corondel aislado entre dos columnas sobrevive al
+  // corte como un rectángulo larguísimo y angosto: si se lo anima aparte, entra
+  // por su cuenta y se ve una tirita de nada cruzando la página —y como su
+  // «altura de línea» es todo su alto, el detector de titulares lo corona como
+  // título principal—. Se sacan de la lista y su tinta se marca para que la
+  // recupere la pieza que la toca.
+  var MINW=Math.max(4,Math.round(w*0.018)), MINH=Math.max(4,Math.round(h*0.006));
+  var gordas=[];
+  for(var t0=0;t0<salida.length;t0++){
+    var tb=salida[t0];
+    if((tb[2]-tb[0])>=MINW && (tb[3]-tb[1])>=MINH){ gordas.push(tb); continue; }
+    for(var ty=tb[1];ty<tb[3];ty++) for(var tx=tb[0];tx<tb[2];tx++) tinta[ty*w+tx]=0;
+  }
+  salida=gordas;
+
   // Devolver los filetes: cada pieza se estira hacia los lados mientras lo que
   // hay pegado a ella sea tinta que se descontó. Así el filete vuelve a la pieza
   // que lo toca y entre dos piezas no queda papel al descubierto.
   function huboTinta(i,j){ return tintaOrig[j*w+i]&&!tinta[j*w+i]; }
-  var MAX_PEGA=Math.max(2,Math.round(h*0.008));
+  var MAX_PEGA=Math.max(MINW,MINH)+2;
   for(var s0=0;s0<salida.length;s0++){
     var bb=salida[s0], p2;
     for(p2=0;p2<MAX_PEGA&&bb[1]-1>=0;p2++){
@@ -4761,6 +4784,9 @@ function cortarPiezas(img, foto){
 function alturaLinea(an, caja){
   var x0=Math.round(caja[0]*an.esc), y0=Math.round(caja[1]*an.esc);
   var x1=Math.round(caja[2]*an.esc), y1=Math.round(caja[3]*an.esc);
+  // Una tira angosta no tiene cuerpo tipográfico: su tinta es una sola banda
+  // continua y daría la altura de línea más alta de la página. No compite.
+  if(x1-x0 < an.w*0.03) return 0;
   var lineas=0, prev=false;
   for(var y=y0;y<y1;y++){
     var hay=false;
@@ -11104,6 +11130,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v162','Tapa animada — sin tiritas sueltas','Durante el zoom out se veía cruzar la página una tira angosta con letras cortadas al medio. Eran dos cosas. Una: el corte descontaba como filete el borde izquierdo de las columnas justificadas, porque al arrancar todas las líneas en la misma posición esa columna de píxeles está casi llena de tinta igual que una raya; ahora un filete tiene que ser fino Y estar aislado, con blanco de los dos lados, que es lo que lo distingue del borde de un bloque de texto. Dos: un corondel entre columnas sobrevivía al corte como una pieza propia, larguísima y de veinte píxeles de ancho, y se animaba solo; peor todavía, como su altura de línea es todo su alto, el detector de titulares lo coronaba título principal y lo hacía entrar primero. Las tiras ya no son piezas: se sacan de la lista y su tinta la recupera la pieza que la toca, y una tira angosta tampoco compite por ser el título.'],
     ['v161','Tapa animada — la banda roja entera','La línea blanca que cruzaba el cabezal. El corte de la página descuenta los filetes —las rayas finas que separan columnas y bloques— para poder partir por ahí, y los detectaba como «filas casi llenas de tinta». Una banda de color maciza, como el rojo del cabezal de Clarín, también es una fila llena de tinta: el corte la trataba como filete, la partía al medio y entre las dos mitades quedaba el papel a la vista, una raya blanca atravesando el logo. Ahora solo se descuentan las tiras finas —un filete tiene dos o tres píxeles, una banda tiene veinte— y, terminado el corte, cada pieza se estira para recuperar los filetes que la tocan, así entre dos piezas nunca queda papel al descubierto. De paso la tapa se corta en bloques más enteros y menos fragmentos sueltos.'],
     ['v160','Tapa animada — acepta cualquier archivo','El buscador de archivos grisaba archivos perfectamente válidos: el filtro por tipo que traía el campo dejaba afuera imágenes que el sistema no sabía clasificar. Se quitó el filtro de los dos campos —la tapa y la música—, así que ahora se puede elegir cualquier archivo y el editor decide qué hacer con él mirando su contenido, no lo que diga el sistema: si los primeros bytes dicen %PDF se rasteriza como PDF, si abre como imagen se usa como imagen, y si es sonido o video se toma como la música. Cuando un archivo no se puede abrir, lo dice con el nombre del archivo en vez de fallar en silencio.'],
     ['v159','Tapa animada — se suelta y listo','Corrección de uso sobre la v158. Soltar o pegar un archivo encima del preview convertía la card en una card de foto, así que el PDF de la tapa no llegaba nunca al analizador y no pasaba nada. Ahora, cuando la card es una tapa, lo que se suelta sobre el preview ES la tapa: si el archivo es un PDF o una imagen, se analiza; si es sonido, se toma como la música y se le busca el golpe final. Soltar y pegar hacen lo mismo. Además el bloque «Tapa animada» pasó al primer lugar del panel derecho, arriba de todo, en vez de quedar enterrado entre los controles de las otras cards.'],
