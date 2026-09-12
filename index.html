@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v177 «cámara sobre toda la card»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v178 «estilos de tapa, video y música»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v177 «cámara sobre toda la card»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v178 «estilos de tapa, video y música»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1611,6 +1611,10 @@ function richLineCount(raw,maxW,sz){
   return Math.max(1,Math.ceil(n));
 }
 function drawRichText(raw,x,startY,maxW,sz,lh,bodyColor,boldColor,forceItalic){
+  // Bajada con color propio (v178): manda sobre lo que le pasen, en cualquier
+  // tipo de card, porque todas dibujan el cuerpo por acá.
+  var _cdb=(typeof _drawingCardId!=='undefined'&&_drawingCardId!=null)?cards.filter(function(c){return c.id===_drawingCardId;})[0]:null;
+  if(_cdb&&_cdb.bodyColor&&raw===_cdb.cuerpo){ bodyColor=_cdb.bodyColor; boldColor=_cdb.bodyColor; }
   const paras=parseRich(raw);
   let y=startY;
   ctx.letterSpacing='0px';
@@ -1950,7 +1954,7 @@ function drawMedia(m,x,y,w,h,t_anim){
   // Y no cortamos acá: seguimos por el pipeline normal para que brillo,
   // contraste, exposición y enderezar sigan funcionando con el efecto puesto.
   let _cineGrade=false;
-  if(m.cinematic&&t_anim!==undefined&&m.type!=='video'){
+  if(m.cinematic&&t_anim!==undefined){
     const preset=m.cinematicPreset||'drift_right';
     const te=eo3(Math.max(0,Math.min(1,t_anim)));
     const intensity=0.06; // sutil — 6% de recorrido
@@ -1969,7 +1973,7 @@ function drawMedia(m,x,y,w,h,t_anim){
     _cineGrade=(m.cineGrade!==false);   // el viraje cálido se puede apagar
   }
 
-  if(m.kenBurns&&t_anim!==undefined&&m.type!=='video'){
+  if(m.kenBurns&&t_anim!==undefined){
     const te=eo3(Math.max(0,Math.min(1,t_anim)));
     const intensity=m.kbIntensity||0.12;
     const dir=m.kbDirection||'in';
@@ -2239,7 +2243,7 @@ function drawMediaBlurBg(m,x,y,w,h,t_anim){
   ctx.restore();
   ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
   let z2=1;
-  if(m.kenBurns&&t_anim!==undefined&&m.type!=='video'){
+  if(m.kenBurns&&t_anim!==undefined){
     const te=eo3(Math.max(0,Math.min(1,t_anim)));
     const intensity=(m.kbIntensity||0.12)*0.5;
     z2=m.kbDirection==='in'?(1+intensity*te):(1+intensity*(1-te));
@@ -2713,7 +2717,7 @@ function drawCover(card,t){
   if(m){
     const imgH=H-imgYpx;
     ctx.save(); ctx.globalAlpha=cA;
-    drawMedia(m,0,imgYpx,W,imgH,t);
+    fotoEntrada(card,t,0,imgYpx,W,imgH,function(){ drawMedia(m,0,imgYpx,W,imgH,t); });
     ctx.restore();
 
     if(showBand && imgYpx>0){
@@ -2743,8 +2747,8 @@ function drawCover(card,t){
   }
 
   // TEXT — drawn last, always on top
-  const tc = !showBand ? (m?(_cvBlack?'#0a0a0a':'#ffffff'):PAL.text) : textColor;
-  const mc = !showBand ? (m?(_cvBlack?'rgba(0,0,0,0.62)':'rgba(255,255,255,0.55)'):metaColor) : metaColor;
+  const tc = card.titleColor || (!showBand ? (m?(_cvBlack?'#0a0a0a':'#ffffff'):PAL.text) : textColor);
+  const mc = card.kickerColor || (!showBand ? (m?(_cvBlack?'rgba(0,0,0,0.62)':'rgba(255,255,255,0.55)'):metaColor) : metaColor);
   const isCenter = align==='center';
   const textX = isCenter ? W/2 : M;
   const maxTW  = isCenter ? W-M*2 : W-M*1.7;
@@ -3486,7 +3490,7 @@ function drawMapa(card,t){
     if(card.titulo){
       ctx.save(); var _dTm=deltaTexto(card,'tit',M,ty); ctx.translate(_dTm.dx,_dTm.dy); var _ae3=animEntrar(card,'titulo',t); ctx.globalAlpha*=_ae3.a; ctx.translate(0,_ae3.dy);
       ctx.font=`${titleFontWeight(card)} ${tSz}px ${titleFontFamily(card)}`;ctx.letterSpacing='-0.5px';
-      ctx.fillStyle=_mapTxt;
+      ctx.fillStyle=card.titleColor||_mapTxt;
       if(textOverMap){ ctx.shadowColor=_mapHalo+'0.45)'; ctx.shadowBlur=Math.round(tSz*0.16); }
       const tl=wrapTitle(card.titulo,W-M*2,tSz,titleFontFamily(card),titleFontWeight(card));
       tl.forEach((l,i)=>ctx.fillText(l,M,ty+i*tLH));
@@ -3746,7 +3750,7 @@ function drawNano(card,t){
   const tLH=Math.round(tSz*1.14),bLH=Math.round(bSz*1.36);
   let ty=190;
   if(card.titulo){
-    ctx.font=`${titleFontWeight(card)} ${tSz}px ${titleFontFamily(card)}`;ctx.letterSpacing='-0.5px';ctx.fillStyle=tc;
+    ctx.font=`${titleFontWeight(card)} ${tSz}px ${titleFontFamily(card)}`;ctx.letterSpacing='-0.5px';ctx.fillStyle=card.titleColor||tc;
     const tl=wrap(card.titulo,W-M*2);tl.forEach((l,i)=>ctx.fillText(l,M,ty+i*tLH));ty+=tl.length*tLH+28;
     ctx.strokeStyle=isDark?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.15)';ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(M,ty);ctx.lineTo(W-M,ty);ctx.stroke();ty+=48;
@@ -4021,7 +4025,10 @@ function getCardColors(card){
   const rule   = dark?'rgba(255,255,255,0.18)':'rgba(0,0,0,0.14)';
   const meta   = dark?'rgba(255,255,255,0.42)':'#8a8680';
   const white  = dark?'#f0ede8':'#ffffff';
-  return {text,body,rule,meta,white,dark};
+  // Color elegido a mano para el título o la bajada: pisa el automático (v178).
+  const text2=(card.titleColor)?card.titleColor:text;
+  const body2=(card.bodyColor)?card.bodyColor:body;
+  return {text:text2,body:body2,rule,meta,white,dark};
 }
 
 let _drawingCardId=null;   // qué card se está dibujando (el ZIP no usa cards[sel])
@@ -4455,7 +4462,7 @@ function drawInfografia(card,t){
   const anc=ANCHORS[card.anchor||'bc']||ANCHORS['bc'];
   const zx=Math.round((W-zoneW)*anc.x), zy=Math.round((H-zoneH)*anc.y);
   ctx.save(); ctx.globalAlpha=cA;
-  if(m){ drawMedia(m, zx, zy, zoneW, zoneH, t); }
+  if(m){ fotoEntrada(card,t,zx,zy,zoneW,zoneH,function(){ drawMedia(m, zx, zy, zoneW, zoneH, t); }); }
   else {
     ctx.font='300 34px "IBM Plex Sans"'; ctx.letterSpacing='0px';
     ctx.fillStyle=PAL.meta; ctx.textAlign='center';
@@ -5296,7 +5303,7 @@ function animSegundo(card, clave){
   var o=animOrden(card), i=o.indexOf(clave);
   if(i<0) return 0;
   var dur=(typeof getCardDur==='function')?getCardDur(card):4;
-  var t=(card.animInicio!==undefined?card.animInicio:0.05)*dur;
+  var t=animFotoLargo(card)+(card.animInicio!==undefined?card.animInicio:0.05)*dur;
   // se acumulan las esperas: el primero entra en t, y cada uno después espera
   // lo suyo. Así se puede dejar respirar un nombre antes de que llegue el dato.
   for(var j=1;j<=i;j++) t+=animEspera(card,o[j]);
@@ -5317,6 +5324,136 @@ function animEntrar(card, clave, t){
 function animCapas(card, t){
   if(!card || !card.animOn) return null;
   return function(capa){ return animEntrar(card,'capa:'+capa.id,t); };
+}
+
+// ════════════════════════════════════════════════════════════════════
+// ESTILOS DE TAPA  ·  cómo entra la FOTO, antes que los textos (v178)
+// ════════════════════════════════════════════════════════════════════
+// Un estilo no es una caja negra: fija cómo entra la foto y deja los tiempos
+// de la animación de entrada como punto de partida. Después se afinan a mano.
+// Los elementos (título, bajada, capas) recién arrancan cuando la foto terminó.
+var ANIM_ESTILOS=[
+  ['caida',   'Caída',          'La foto cae desde arriba y se planta con un rebote corto. Los textos entran después.', {fotoDur:0.9,  inicio:0.04, paso:0.30, largo:0.55}],
+  ['golpe',   'Golpe',          'La foto aparece de golpe con un flash blanco que se apaga. Los textos entran enseguida.', {fotoDur:0.45, inicio:0.03, paso:0.25, largo:0.45}],
+  ['fundido', 'Fundido lento',  'La foto sube de negro despacio. Los textos llegan encima, con aire.',               {fotoDur:2.5,  inicio:0.03, paso:0.45, largo:0.90}],
+  ['zoomout', 'Zoom out lento', 'La foto arranca cerrada y se abre hasta el encuadre. Los textos entran al final.',   {fotoDur:3.5,  inicio:0.02, paso:0.35, largo:0.70}],
+  ['revelado','Revelado',       'Primero el fondo; la foto se descubre con una cortina de izquierda a derecha.',     {fotoDur:1.2,  inicio:0.04, paso:0.30, largo:0.55}]
+];
+function animEstiloDef(id){ return ANIM_ESTILOS.filter(function(e){return e[0]===id;})[0]||null; }
+function animFotoLargo(card){
+  if(!card||!card.animOn||!card.animEstilo) return 0;
+  var d=animEstiloDef(card.animEstilo); if(!d) return 0;
+  return (typeof card.animFotoDur==='number'&&isFinite(card.animFotoDur)) ? card.animFotoDur : d[3].fotoDur;
+}
+function animAplicarEstilo(card, id){
+  card.animEstilo=id||'';
+  if(!id){ card.animFotoDur=undefined; return; }
+  var d=animEstiloDef(id); if(!d) return;
+  card.animOn=true;
+  card.animFotoDur=d[3].fotoDur;
+  card.animInicio=d[3].inicio; card.animPaso=d[3].paso; card.animLargo=d[3].largo;
+  card.animEspera={};
+}
+// Caída con rebote corto: baja pasada de largo y vuelve.
+function _easeCaida(p){
+  if(p<0.72){ var q=p/0.72; return 1-Math.pow(1-q,3)*1; }
+  var r=(p-0.72)/0.28;                      // rebote: sube un poco y vuelve
+  return 1+Math.sin(r*Math.PI)*0.045*(1-r);
+}
+// Envuelve el dibujo de la foto con la entrada del estilo. Con el estilo
+// apagado, o una vez que la foto ya entró, dibuja tal cual.
+function fotoEntrada(card,t,x,y,w,h,fn){
+  var L=animFotoLargo(card);
+  if(!L){ fn(); return; }
+  var dur=(typeof getCardDur==='function')?getCardDur(card):4;
+  var seg=Math.min(1,Math.max(0,t||0))*dur;
+  var p=Math.min(1, seg/Math.max(0.05,L));
+  var est=card.animEstilo;
+  if(p>=1){ fn(); return; }
+  ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
+  try{
+    if(est==='caida'){
+      var e=_easeCaida(p);
+      ctx.translate(0, -(1-e)*(y+h));
+      fn();
+    }else if(est==='golpe'){
+      fn();
+      ctx.globalAlpha=Math.pow(1-p,1.6);
+      ctx.fillStyle='#ffffff'; ctx.fillRect(x,y,w,h);
+    }else if(est==='fundido'){
+      var q=p<0.5 ? 2*p*p : 1-Math.pow(-2*p+2,2)/2;   // ease in-out
+      ctx.fillStyle='#000000'; ctx.fillRect(x,y,w,h);
+      ctx.globalAlpha=q;
+      fn();
+    }else if(est==='zoomout'){
+      var e2=eo3(p), sc=1+0.35*(1-e2);
+      ctx.translate(x+w/2,y+h/2); ctx.scale(sc,sc); ctx.translate(-(x+w/2),-(y+h/2));
+      fn();
+    }else if(est==='revelado'){
+      var e3=eo3(p);
+      ctx.beginPath(); ctx.rect(x,y,Math.max(1,w*e3),h); ctx.clip();
+      fn();
+    }else{ fn(); }
+  } finally { ctx.restore(); }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// MÚSICA DE LA CARD  ·  MP3 / WAV / M4A / MP4, de atrás para adelante (v178)
+// ════════════════════════════════════════════════════════════════════
+// Va aparte de la foto o el video de fondo (mediaCache): una card puede tener
+// un video de fondo Y una música. La pista se monta desde el final: su último
+// segundo cae en el último segundo de la card. Si sobra pista se recorta la
+// cabeza; si falta, la música entra más tarde. Nunca loopea.
+const musicaCache={};
+function musicaSincronizar(card){
+  var mus=musicaCache[card&&card.id]; if(!mus||!mus.el) return;
+  var dur=getCardDur(card);
+  var corr=(mus.duration||dur)-dur;
+  mus.trimIn=Math.max(0,corr);
+  mus.retraso=Math.max(0,-corr);
+  mus.el.loop=false;
+}
+function musicaParar(){
+  Object.keys(musicaCache).forEach(function(k){ var m=musicaCache[k]; if(m&&m.el){ try{ m.el.pause(); }catch(e){} } });
+}
+async function musicaCargar(file, card){
+  if(!file||!card) return;
+  setStatus('Leyendo la música…','working');
+  var url=URL.createObjectURL(file);
+  var esVideo=(file.type||'').startsWith('video/')||/\.(mp4|mov|webm|m4v)$/i.test(file.name||'');
+  var el=document.createElement(esVideo?'video':'audio');
+  el.src=url; el.loop=false; el.preload='auto'; if(esVideo) el.playsInline=true;
+  await new Promise(function(res){ el.onloadedmetadata=res; el.onerror=res; setTimeout(res,8000); });
+  var duration=await resolveVideoDuration(el);
+  if(!isFinite(duration)||duration<=0){ setStatus('No pude leer ese archivo','error'); return; }
+  var prev=musicaCache[card.id]; if(prev&&prev.el){ try{ prev.el.pause(); }catch(e){} }
+  musicaCache[card.id]={el:el, duration:duration, filename:file.name||'música', trimIn:0, retraso:0};
+  musicaSincronizar(card);
+  setStatus('Música lista · '+duration.toFixed(1)+'s, cierra con la card','');
+  renderEditor(cards[sel]); play(cards[sel]);
+}
+function musicaQuitar(card){
+  var mus=musicaCache[card&&card.id]; if(!mus) return;
+  try{ mus.el.pause(); }catch(e){}
+  delete musicaCache[card.id];
+}
+// Conecta la música al stream de grabación (mismo grafo que el video de fondo).
+async function musicaAlStream(card, stream){
+  var mus=musicaCache[card&&card.id]; if(!mus||!mus.el) return false;
+  try{
+    if(!mus._audioCtx){
+      mus._audioCtx=new AudioContext();
+      mus._audioSrc=mus._audioCtx.createMediaElementSource(mus.el);
+      mus._audioDest=mus._audioCtx.createMediaStreamDestination();
+      mus._audioSrc.connect(mus._audioDest);
+      mus._audioSrc.connect(mus._audioCtx.destination);
+    }
+    if(mus._audioCtx.state==='suspended') await mus._audioCtx.resume();
+    mus.el.muted=false; if(mus.el.volume===0) mus.el.volume=1;
+    var tk=mus._audioDest.stream.getAudioTracks();
+    tk.forEach(function(t){ t.enabled=true; stream.addTrack(t); });
+    return tk.length>0;
+  }catch(e){ console.warn('Música: error de captura',e); return false; }
 }
 
 // La cámara de la animación de entrada envuelve TODO el dibujo de la card:
@@ -5365,7 +5502,7 @@ function drawCardBase(card,t){
     const isFullBleed=zoneW>=W-80&&zoneH>=H-80;
 
     ctx.save();ctx.globalAlpha=cA;
-    if(m){if(card.blurBg)drawMediaBlurBg(m,zx,zy,zoneW,zoneH,t);else drawMedia(m,zx,zy,zoneW,zoneH,t);}
+    if(m){fotoEntrada(card,t,zx,zy,zoneW,zoneH,function(){ if(card.blurBg)drawMediaBlurBg(m,zx,zy,zoneW,zoneH,t);else drawMedia(m,zx,zy,zoneW,zoneH,t); });}
     else{ctx.fillStyle=PAL.rule;ctx.fillRect(zx,zy,zoneW,zoneH);ctx.font='300 34px "IBM Plex Sans"';ctx.letterSpacing='0px';ctx.fillStyle=PAL.meta;ctx.textAlign='center';ctx.fillText('Sin media',zx+zoneW/2,zy+zoneH/2);}
     // ── Veladura de la foto ──
     // Distinta de «Sombra del texto»: aquella oscurece el pie de la CARD, que
@@ -5484,7 +5621,7 @@ function drawCardBase(card,t){
         // fondo aunque el degradé esté en 0, sin ensuciar la foto.
         ctx.shadowColor=_fbShadow+(0.30+0.35*_scrim).toFixed(3)+')';
         ctx.shadowBlur=Math.round(tSz*0.14)+8*_scrim;
-        ctx.font=`${_wtT} ${tSz}px ${_famT}`;ctx.letterSpacing='-0.5px';ctx.fillStyle=_fbTxt;
+        ctx.font=`${_wtT} ${tSz}px ${_famT}`;ctx.letterSpacing='-0.5px';ctx.fillStyle=card.titleColor||_fbTxt;
         tl.forEach((l,i)=>{ ctx.fillText(l,M,ty+i*tLH+tLH); });
         ctx.restore();
         card._titleBox={x:M,y:ty,w:W-M*2,h:tl.length*tLH+tLH};
@@ -5754,7 +5891,7 @@ function getCardDur(card){
     if(vs.length){ var d=Math.max.apply(null, vs.map(function(s){return s.duration||BASE_DUR;})); return Math.max(d,0.5); }
     return BASE_DUR;
   }
-  if(card?.tipo==='media'&&m&&(m.type==='video'||m.type==='audio')&&m.duration){
+  if(card?.tipo!=='tapa'&&m&&(m.type==='video'||m.type==='audio')&&m.duration){
     const trimIn=m.trimIn||0;
     let dur=m.duration;
     if(!isFinite(dur)||dur<=0) dur=BASE_DUR;         // WebM sin duración en el header
@@ -5789,9 +5926,18 @@ function play(card,onEnd){
       _musicaPendiente = true;
     }else if(m.el.paused) m.el.play().catch(()=>{});
   }
+  // Música propia de la card (v178): entra en su momento, de atrás para adelante.
+  musicaParar();
+  const mus=(card.tipo!=='tapa')?musicaCache[card.id]:null;
+  let _musPend=false;
+  if(mus&&mus.el){ musicaSincronizar(card); try{ mus.el.currentTime=mus.trimIn||0; }catch(e){} _musPend=true; }
   // Loop por tiempo real — garantiza sincronía con el audio real
   const loop=()=>{
     const elapsed=(performance.now()-t0)/1000;
+    if(_musPend && mus && elapsed>=(mus.retraso||0)){
+      _musPend=false;
+      try{ mus.el.currentTime=mus.trimIn||0; mus.el.play().catch(()=>{}); }catch(e){}
+    }
     if(_musicaPendiente && elapsed>=_tapaEspera && m&&m.el){
       _musicaPendiente=false;
       try{ m.el.currentTime=m.trimIn||0; m.el.play().catch(()=>{}); }catch(e){}
@@ -5802,9 +5948,11 @@ function play(card,onEnd){
     if(t<1||isAudioCard||isLooping)raf=requestAnimationFrame(loop);
     else{
       raf=null;
+      if(m&&m.type==='video'&&m.el){ try{ m.el.pause(); }catch(e){} }
       // La tapa termina cuando termina la animación: la música se corta ahí,
       // si no seguía sonando sobre la tapa ya revelada.
       if(card.tipo==='tapa'&&m&&m.el){ try{ m.el.pause(); }catch(e){} }
+      if(mus&&mus.el){ try{ mus.el.pause(); }catch(e){} }
       if(onEnd)onEnd();
     }
   };
@@ -5817,8 +5965,11 @@ async function recordCard(card){
   dur=Math.min(dur, 600);                     // tope de 10 min por seguridad
   const m=mediaCache[card.id];
   // ¿La card lleva sonido? (video con audio, audio suelto, o viñeta con video)
+  const _mus=(card.tipo!=='tapa')?musicaCache[card.id]:null;
   const _hasAudio = !!( (m && (m.type==='video'||m.type==='audio') && m.el)
-                     || vinetaVideoSlots(card).length );
+                     || vinetaVideoSlots(card).length
+                     || (_mus && _mus.el) );
+  musicaParar();
   // MP4 nativo (Chrome 94+). CLAVE: si la card tiene audio hay que declarar
   // TAMBIÉN el codec de audio (mp4a.40.2 = AAC). Con un mimeType que lista
   // solo el codec de video, MediaRecorder descarta la pista de audio y el
@@ -5860,6 +6011,9 @@ async function recordCard(card){
       if(!_tk.length) console.warn('Audio: el video no tiene pista de sonido');
     }catch(e){console.warn('Audio capture error:',e);}
   }
+
+  // Música de la card (v178): misma captura, de atrás para adelante.
+  if(_mus&&_mus.el){ musicaSincronizar(card); await musicaAlStream(card, stream); }
 
   // Audio de la VIÑETA con video: capturamos el audio del primer slot de video
   // y lo sumamos al stream, para que el MP4 salga con sonido (destino WhatsApp).
@@ -5925,7 +6079,9 @@ async function recordCard(card){
     // 33ms timeslice = ~1 frame at 30fps → máxima resolución de keyframes
     rec.start(33);
     let _stopped=false;
-    const _stopRec=()=>{ if(_stopped)return; _stopped=true; showGrid=_gw; _isExporting=false; try{rec.stop();}catch(_){} };
+    const _stopRec=()=>{ if(_stopped)return; _stopped=true; showGrid=_gw; _isExporting=false; if(_mus&&_mus.el){ try{ _mus.el.pause(); }catch(_){} } try{rec.stop();}catch(_){} };
+    let _musPendRec=!!(_mus&&_mus.el);
+    if(_musPendRec){ try{ _mus.el.pause(); _mus.el.currentTime=_mus.trimIn||0; }catch(_){} }
     // Watchdog: pase lo que pase, cortar a dur+3s. Evita "Grabando…" eterno.
     const _watchdog=setTimeout(_stopRec, (dur+3)*1000);
     // Loop guiado por tiempo real (no por conteo de frames)
@@ -5933,6 +6089,10 @@ async function recordCard(card){
     const loop=()=>{
       if(_stopped) return;
       const elapsed=(performance.now()-recStart)/1000;
+      if(_musPendRec && elapsed>=(_mus.retraso||0)){
+        _musPendRec=false;
+        try{ _mus.el.currentTime=_mus.trimIn||0; _mus.el.play().catch(()=>{}); }catch(_){}
+      }
       const t=Math.min(elapsed/dur,1);
       ctx.setTransform(REC_SCALE,0,0,REC_SCALE,0,0);
       drawCard(card,t);
@@ -6251,7 +6411,7 @@ async function loadMediaFromFile(file,cardId){
     });
   } else if(isVideo){
     const url=URL.createObjectURL(file);
-    const vid=document.createElement('video');vid.src=url;vid.playsInline=true;vid.loop=true;
+    const vid=document.createElement('video');vid.src=url;vid.playsInline=true;vid.loop=false;
     return new Promise(resolve=>{
       vid.onloadedmetadata=async()=>{
         // Resolver duración real (WebM puede reportar Infinity).
@@ -7829,6 +7989,16 @@ function renderEditor(c){
         <button class="tipo-btn${!c.animOn?' active':''}" id="anim-no" style="flex:1">Todo junto</button>
       </div>
       ${c.animOn?`
+      <div style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin:2px 0 4px">Estilo de tapa <span style="letter-spacing:0;text-transform:none;font-size:10px">· cómo entra la foto, antes que los textos</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">
+        <button class="tipo-btn${!c.animEstilo?' active':''}" data-aest="" style="font-size:11px">Solo textos</button>
+        ${ANIM_ESTILOS.map(e=>`<button class="tipo-btn${c.animEstilo===e[0]?' active':''}" data-aest="${e[0]}" style="font-size:11px" title="${escapeHtml(e[2])}">${e[1]}</button>`).join('')}
+      </div>
+      ${c.animEstilo&&animEstiloDef(c.animEstilo)?`
+      <div style="font-size:11px;color:var(--text3);line-height:1.45;margin-bottom:4px">${escapeHtml(animEstiloDef(c.animEstilo)[2])}</div>
+      <div class="range-block" style="margin-bottom:6px">
+        <div class="range-row"><label>Foto</label><input type="range" id="sl-afd" min="0.2" max="5" step="0.05" value="${animFotoLargo(c)}"/><span class="range-val">${animFotoLargo(c).toFixed(2)}s</span></div>
+      </div>`:''}
       ${animOrden(c).length?`<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-bottom:6px">
         <div style="display:flex;align-items:center;gap:6px;padding:4px 7px;background:var(--bg);border-bottom:1px solid var(--border);font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3)">
           <span style="width:16px"></span><span style="flex:1">Elemento</span>
@@ -7852,7 +8022,20 @@ function renderEditor(c){
         <div class="range-row"><label>Duración</label><input type="range" id="sl-al" min="0.15" max="1.5" step="0.05" value="${c.animLargo!==undefined?c.animLargo:.55}"/><span class="range-val">${(c.animLargo!==undefined?c.animLargo:.55).toFixed(2)}s</span></div>
         <div class="range-row"><label>Cámara</label><input type="range" id="sl-az" min="0" max="0.6" step="0.01" value="${c.animZoom||0}"/><span class="range-val">${Math.round((c.animZoom||0)*100)}%</span></div>
       </div>
-      <div style="font-size:11px;color:var(--text3);line-height:1.45">«Cámara» abre la foto mientras entran los elementos: arranca metida adentro y se va abriendo hasta el encuadre que elegiste. En 0 queda quieta. El número de cada fila es lo que ESE elemento espera desde el anterior: subilo para que un nombre respire antes de que llegue el dato. A la derecha, el segundo en que entra. «Entrada» es cuánto espera el primero; «paso», el valor por defecto de los que no tocaste; «duración», lo que tarda cada uno en aparecer. El largo total se fija más abajo, en DURACIÓN DE LA CARD.</div>`:''}
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">«Cámara» abre la foto mientras entran los elementos: arranca metida adentro y se va abriendo hasta el encuadre que elegiste. En 0 queda quieta. El número de cada fila es lo que ESE elemento espera desde el anterior: subilo para que un nombre respire antes de que llegue el dato. A la derecha, el segundo en que entra. «Entrada» es cuánto espera el primero; «paso», el valor por defecto de los que no tocaste; «duración», lo que tarda cada uno en aparecer. El largo total se fija más abajo, en DURACIÓN DE LA CARD.${c.animEstilo?' Con un estilo puesto, «Foto» es lo que tarda la foto en entrar: los textos arrancan recién después.':''}</div>`:''}
+      ${c.tipo!=='tapa'?(function(){
+        var mus=musicaCache[c.id];
+        var lbl=function(v){return v>=60?Math.floor(v/60)+'m '+Math.round(v%60)+'s':v.toFixed(1)+'s';};
+        var nota='';
+        if(mus){ musicaSincronizar(c);
+          if((mus.retraso||0)>0.02) nota='<br>La pista es más corta que la card: entra a los '+lbl(mus.retraso)+' y termina con ella.';
+          else if((mus.trimIn||0)>0.02) nota='<br>Sobra pista: se recortan '+lbl(mus.trimIn)+' del principio. El final cae con el final de la card.';
+          else nota='<br>Mide justo lo que dura la card.'; }
+        return `<div style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin:10px 0 4px">Música <span style="letter-spacing:0;text-transform:none;font-size:10px">· MP3, WAV, M4A o MP4 · se monta de atrás para adelante, sin loop</span></div>
+        ${mus?`<div class="video-info">♪ ${escapeHtml(mus.filename||'pista')} · ${lbl(mus.duration)}${nota}</div>
+        <button class="img-clear" id="mus-clear">Quitar música</button>`
+        :`<div class="img-drop" style="position:relative"><input type="file" id="mus-file" accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.mp4,.mov,.webm"/><div class="img-drop-txt">Soltá la música acá</div></div>`}`;
+      })():''}
     </div>
     <div class="field" id="capas-field">
       <label>Capas <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">gráficos y textos libres, encima de la card</span></label>
@@ -8092,6 +8275,15 @@ function renderEditor(c){
         <button class="txt-color-btn${(!c.cardTextColor||c.cardTextColor==='auto')?' active':''}" id="tc-auto">Auto</button>
         <button class="txt-color-btn${c.cardTextColor==='white'?' active':''}" id="tc-white" style="background:#1a1a1a;color:#f0ede8;border-color:#1a1a1a">Blanco</button>
         <button class="txt-color-btn${c.cardTextColor==='black'?' active':''}" id="tc-black" style="background:#f5f3ef;color:#0a0a0a;border-color:#ccc">Negro</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin:8px 0 4px">Color propio de cada texto · pisa el automático</div>
+      <div style="display:flex;gap:6px">
+        ${[['titleColor','Título'],['bodyColor','Bajada']].concat(c.tipo==='cover'?[['kickerColor','Kicker']]:[]).map(([k,l])=>`
+        <div style="flex:1;display:flex;align-items:center;gap:5px;border:1px solid var(--border);border-radius:3px;padding:4px 6px;background:var(--bg)">
+          <div class="bg-custom-wrap" style="border-color:${c[k]?c[k]:'var(--border)'};background:${c[k]||'transparent'}"><input type="color" data-colk="${k}" value="${c[k]||'#ffffff'}"/></div>
+          <span style="flex:1;font-size:11px;color:${c[k]?'var(--text)':'var(--text3)'}">${l}${c[k]?'':' · auto'}</span>
+          ${c[k]?`<button class="capa-b" data-colclr="${k}" title="Volver al automático">×</button>`:''}
+        </div>`).join('')}
       </div>
     </div>
     <div class="sep"></div>
@@ -9238,6 +9430,12 @@ REGLAS IMPORTANTES:
     slA('#sl-ap','animPaso',v=>v.toFixed(2)+'s');
     slA('#sl-al','animLargo',v=>v.toFixed(2)+'s');
     slA('#sl-az','animZoom',v=>Math.round(v*100)+'%');
+    slA('#sl-afd','animFotoDur',v=>v.toFixed(2)+'s');
+    el.querySelectorAll('[data-aest]').forEach(b=>{ b.onclick=()=>{ animAplicarEstilo(cards[sel], b.dataset.aest); renderEditor(cards[sel]); if(!raf) play(cards[sel]); else redraw(); }; });
+    const musF=el.querySelector('#mus-file');
+    if(musF) musF.onchange=async e=>{ const f=e.target.files[0]; if(f) await musicaCargar(f, cards[sel]); };
+    const musC=el.querySelector('#mus-clear');
+    if(musC) musC.onclick=()=>{ musicaQuitar(cards[sel]); renderEditor(cards[sel]); redraw(); };
     const moverA=(clave,d)=>{
       const o=animOrden(cards[sel]), i=o.indexOf(clave), j=i+d;
       if(i<0||j<0||j>=o.length) return;
@@ -9428,6 +9626,11 @@ REGLAS IMPORTANTES:
   if(_tcA) _tcA.onclick=()=>{ cards[sel].cardTextColor='auto';  delete cards[sel]._autoSig; renderEditor(cards[sel]); redraw(); };
   if(_tcW) _tcW.onclick=()=>{ cards[sel].cardTextColor='white'; renderEditor(cards[sel]); redraw(); };
   if(_tcB) _tcB.onclick=()=>{ cards[sel].cardTextColor='black'; renderEditor(cards[sel]); redraw(); };
+  el.querySelectorAll('[data-colk]').forEach(inp=>{
+    inp.oninput=e=>{ cards[sel][inp.dataset.colk]=e.target.value; delete cards[sel]._autoSig; redraw(); };
+    inp.onchange=()=>{ renderEditor(cards[sel]); redraw(); };
+  });
+  el.querySelectorAll('[data-colclr]').forEach(b=>{ b.onclick=()=>{ cards[sel][b.dataset.colclr]=null; delete cards[sel]._autoSig; renderEditor(cards[sel]); redraw(); }; });
   const bgCustom=el.querySelector('#bg-custom');
   if(bgCustom){bgCustom.oninput=e=>{cards[sel].cardBg=e.target.value;e.target.closest('.bg-custom-wrap').style.background=e.target.value;redraw();};}
 
@@ -10422,7 +10625,7 @@ document.getElementById('png-btn').onclick=()=>{
 // ════════════════════════════════
 const TPL_LS='incertis_templates';
 // Estilo que comparten todos los tipos de card
-const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animZoom','cardBg','cardTextColor','frameW','frameColor','numbered',
+const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animZoom','animEstilo','animFotoDur','titleColor','bodyColor','kickerColor','cardBg','cardTextColor','frameW','frameColor','numbered',
   'titleSz','bodySz','titleFont','titleItalic','bodyItalic','volantaColor',
   'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur',
   // Posición exacta del título y de la bajada. Es lo que permite dejar la placa
@@ -11488,6 +11691,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v178','Estilos de tapa, video de fondo y música en cualquier card','Tres cosas, todas en el bloque «Animación de entrada». La primera: ESTILOS DE TAPA. Hasta ahora la foto estaba quieta desde el primer cuadro y solo entraban los textos. Ahora la foto tiene su propia entrada, y recién cuando terminó arrancan el título, la bajada y las capas. Cinco estilos: Caída (la foto cae desde arriba y se planta con un rebote corto), Golpe (aparece de golpe con un flash blanco), Fundido lento (sube de negro, con aire), Zoom out lento (arranca cerrada y se abre hasta el encuadre) y Revelado (una cortina la descubre sobre el fondo). Cada estilo deja los tiempos como punto de partida —el control «Foto» es lo que tarda la foto en entrar— y después se afina todo a mano, como siempre. Funciona en cards de foto, cover e infografía, y viaja en el template. La segunda: VIDEO DE FONDO. Un video en una cover o en una card de foto ahora manda la duración de la card, igual que en la card de video; y Ken Burns y los presets cinemáticos, que estaban apagados sobre video, ahora también lo mueven. El video de fondo no loopea: la card termina cuando termina el video. La tercera: MÚSICA en cualquier card, aparte del fondo. Soltás un MP3, WAV, M4A o un MP4 —del video se usa solo el sonido— y se monta de atrás para adelante: el final de la pista cae en el final de la card, para que el cierre pegue. Si sobra pista se recorta la cabeza; si falta, entra más tarde. Nunca loopea, porque WhatsApp e Instagram no loopean y en X el loop lo pone la red. Sale en el MP4 con su pista de audio. Y una cuarta, en «Color de texto»: cada texto puede llevar su color propio —título, bajada, y kicker en la cover— con un selector al lado de Auto/Blanco/Negro. Pisa el automático solo en ese texto; el × vuelve al automático. Viaja en el template.'],
     ['v177','La cámara mueve la card entera','La versión anterior aplicaba el zoom de apertura adentro del dibujo de la foto, así que solo funcionaba en las cards de foto comunes: si la imagen iba con fondo desenfocado, o era una viñeta, o una cover, no se movía nada. Y además el bloque de color y el título quedaban quietos mientras la foto se abría, que no es lo que hacía la placa. Ahora la cámara envuelve TODO el dibujo de la card —la foto, el fondo, el título, la bajada y las capas— y se abre como una cámara que retrocede, con cualquier tipo de card. En 0 no hay transformación y el dibujo es idéntico al de siempre.'],
     ['v176','La cámara vuelve a la animación','Al sacar la card «placa» se fue con ella el zoom de apertura, y la animación quedaba con los elementos entrando sobre una foto quieta. Volvió, ahora como un control más del bloque «Animación de entrada» y para cualquier card con foto: «Cámara», de 0 a 60%. La imagen arranca metida adentro y se va abriendo hasta el encuadre que elegiste a mano, mientras el título, la bajada y las capas van entrando en su orden. Multiplica el encuadre propio de la foto en vez de reemplazarlo, así que el zoom y el punto de interés que hayas ajustado se respetan. En 0 la foto queda quieta y todo sigue como antes. Viaja en el template con el resto de la animación.'],
     ['v175','El panel se queda quieto, y typewriter en los textos que sumás','Dos cosas. La primera es de uso y era una molestia seria: el panel derecho se reconstruye entero en cada cambio, así que cada clic en una flecha lo devolvía al principio y había que volver a bajar hasta el control. Ahora guarda dónde estaba la barra y la restituye; y los campos de espera de la animación ni siquiera reconstruyen el panel: recalculan los segundos en el lugar, así que se puede quedar apretando la flechita sin que nada se mueva. La segunda: una capa de texto puede escribirse a máquina. Botón «⌨ Typewriter» en la ficha de la capa, con el tiempo que tarda en escribirse y un cursor parpadeante opcional. Arranca cuando a esa capa le toca entrar según el orden, así que se puede encadenar: primero el nombre, después el dato, y al final la cita escribiéndose. El corte se hace sobre las líneas ya compuestas, no sobre el texto crudo, para que el bloque no se reacomode mientras escribe.'],
