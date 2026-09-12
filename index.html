@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v160 «tapa animada»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v161 «tapa animada»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v160 «tapa animada»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v161 «tapa animada»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -4647,11 +4647,31 @@ function cortarPiezas(img, foto){
     for(var y=Math.max(0,f[1]-3);y<Math.min(h,f[3]+3);y++)
       for(var x=Math.max(0,f[0]-3);x<Math.min(w,f[2]+3);x++) tinta[y*w+x]=0;
   }
-  // filetes: filas y columnas casi llenas
+  // Filetes: filas y columnas casi llenas. OJO: una banda de color maciza —el
+  // rojo del cabezal— también da filas llenas. Si se la trata como filete, el
+  // corte la parte al medio y queda una línea blanca cruzando el logo. Por eso
+  // solo se descuentan las TIRAS FINAS: un filete tiene dos o tres píxeles, una
+  // banda tiene veinte. Lo que se saca se guarda para devolverlo después.
+  var tintaOrig=tinta.slice();
+  var GRUESO_F=Math.max(2,Math.round(h*0.006)), GRUESO_C=Math.max(2,Math.round(w*0.008));
+  function borrarTiras(llena, largo, grueso, borrar){
+    var ini=null;
+    for(var i=0;i<=largo;i++){
+      var v = i<largo ? llena[i] : false;
+      if(v&&ini===null) ini=i;
+      else if(!v&&ini!==null){
+        if(i-ini<=grueso) for(var k=ini;k<i;k++) borrar(k);
+        ini=null;
+      }
+    }
+  }
+  var filaLlena=[], colLlena=[];
   for(var y2=0;y2<h;y2++){ var n=0; for(var x2=0;x2<w;x2++) n+=tinta[y2*w+x2];
-    if(n>w*0.80) for(var x3=0;x3<w;x3++) tinta[y2*w+x3]=0; }
+    filaLlena.push(n>w*0.80); }
   for(var x4=0;x4<w;x4++){ var n2=0; for(var y3=0;y3<h;y3++) n2+=tinta[y3*w+x4];
-    if(n2>h*0.80) for(var y4=0;y4<h;y4++) tinta[y4*w+x4]=0; }
+    colLlena.push(n2>h*0.80); }
+  borrarTiras(filaLlena,h,GRUESO_F,function(y){ for(var x=0;x<w;x++) tinta[y*w+x]=0; });
+  borrarTiras(colLlena,w,GRUESO_C,function(x){ for(var y=0;y<h;y++) tinta[y*w+x]=0; });
 
   var GH=Math.max(5,Math.round(h*0.010)), GV=Math.max(4,Math.round(w*0.008));
   var salida=[];
@@ -4694,6 +4714,31 @@ function cortarPiezas(img, foto){
     salida.push([x0,y0,x1,y1]);
   }
   cortar(0,0,w,h,true,0);
+
+  // Devolver los filetes: cada pieza se estira hacia los lados mientras lo que
+  // hay pegado a ella sea tinta que se descontó. Así el filete vuelve a la pieza
+  // que lo toca y entre dos piezas no queda papel al descubierto.
+  function huboTinta(i,j){ return tintaOrig[j*w+i]&&!tinta[j*w+i]; }
+  var MAX_PEGA=Math.max(2,Math.round(h*0.008));
+  for(var s0=0;s0<salida.length;s0++){
+    var bb=salida[s0], p2;
+    for(p2=0;p2<MAX_PEGA&&bb[1]-1>=0;p2++){
+      var hay=false; for(var xi=bb[0];xi<bb[2];xi++) if(huboTinta(xi,bb[1]-1)) {hay=true;break;}
+      if(!hay) break; bb[1]--;
+    }
+    for(p2=0;p2<MAX_PEGA&&bb[3]<h;p2++){
+      var hay2=false; for(var xj=bb[0];xj<bb[2];xj++) if(huboTinta(xj,bb[3])) {hay2=true;break;}
+      if(!hay2) break; bb[3]++;
+    }
+    for(p2=0;p2<MAX_PEGA&&bb[0]-1>=0;p2++){
+      var hay3=false; for(var yi=bb[1];yi<bb[3];yi++) if(huboTinta(bb[0]-1,yi)) {hay3=true;break;}
+      if(!hay3) break; bb[0]--;
+    }
+    for(p2=0;p2<MAX_PEGA&&bb[2]<w;p2++){
+      var hay4=false; for(var yj=bb[1];yj<bb[3];yj++) if(huboTinta(bb[2],yj)) {hay4=true;break;}
+      if(!hay4) break; bb[2]++;
+    }
+  }
 
   var out=[];
   for(var s=0;s<salida.length;s++){
@@ -5513,7 +5558,13 @@ function play(card,onEnd){
     _lastAnimT=t;
     drawCard(card,t);
     if(t<1||isAudioCard||isLooping)raf=requestAnimationFrame(loop);
-    else{raf=null;if(onEnd)onEnd();}
+    else{
+      raf=null;
+      // La tapa termina cuando termina la animación: la música se corta ahí,
+      // si no seguía sonando sobre la tapa ya revelada.
+      if(card.tipo==='tapa'&&m&&m.el){ try{ m.el.pause(); }catch(e){} }
+      if(onEnd)onEnd();
+    }
   };
   raf=requestAnimationFrame(loop);
 }
@@ -11053,6 +11104,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v161','Tapa animada — la banda roja entera','La línea blanca que cruzaba el cabezal. El corte de la página descuenta los filetes —las rayas finas que separan columnas y bloques— para poder partir por ahí, y los detectaba como «filas casi llenas de tinta». Una banda de color maciza, como el rojo del cabezal de Clarín, también es una fila llena de tinta: el corte la trataba como filete, la partía al medio y entre las dos mitades quedaba el papel a la vista, una raya blanca atravesando el logo. Ahora solo se descuentan las tiras finas —un filete tiene dos o tres píxeles, una banda tiene veinte— y, terminado el corte, cada pieza se estira para recuperar los filetes que la tocan, así entre dos piezas nunca queda papel al descubierto. De paso la tapa se corta en bloques más enteros y menos fragmentos sueltos.'],
     ['v160','Tapa animada — acepta cualquier archivo','El buscador de archivos grisaba archivos perfectamente válidos: el filtro por tipo que traía el campo dejaba afuera imágenes que el sistema no sabía clasificar. Se quitó el filtro de los dos campos —la tapa y la música—, así que ahora se puede elegir cualquier archivo y el editor decide qué hacer con él mirando su contenido, no lo que diga el sistema: si los primeros bytes dicen %PDF se rasteriza como PDF, si abre como imagen se usa como imagen, y si es sonido o video se toma como la música. Cuando un archivo no se puede abrir, lo dice con el nombre del archivo en vez de fallar en silencio.'],
     ['v159','Tapa animada — se suelta y listo','Corrección de uso sobre la v158. Soltar o pegar un archivo encima del preview convertía la card en una card de foto, así que el PDF de la tapa no llegaba nunca al analizador y no pasaba nada. Ahora, cuando la card es una tapa, lo que se suelta sobre el preview ES la tapa: si el archivo es un PDF o una imagen, se analiza; si es sonido, se toma como la música y se le busca el golpe final. Soltar y pegar hacen lo mismo. Además el bloque «Tapa animada» pasó al primer lugar del panel derecho, arriba de todo, en vez de quedar enterrado entre los controles de las otras cards.'],
     ['v158','Tapa animada','Tipo de card nuevo: la tapa del diario armándose sola sobre un zoom out, para publicar todos los días en X y en WhatsApp. Se suelta el PDF del día —o una imagen de la tapa— y el editor hace tres cosas sin preguntar: busca la foto principal midiendo el promedio local de gris y de color, corta la página en piezas con un corte XY sobre las calles blancas y los corondeles, y ordena esas piezas por peso tipográfico, que es la altura de línea de cada bloque. Con eso arma el video. La cámara es un zoom puro que arranca cerrado sobre la foto y se abre hasta la tapa entera, con velocidad de apertura pareja de punta a punta. La primera mitad del recorrido no tiene un solo texto ni un solo gráfico en cuadro: solo la foto abriéndose. Pasada esa marca entran las piezas, y entran de afuera: el título principal primero, el secundario después y el resto repartido hasta el final, cada una acercándose y corrida hacia el borde por el que aparece hasta aterrizar en su lugar. El punto de arranque lo marca el editor con un clic sobre la tapa —el rostro de la foto, un detalle, lo que sea— y el encuadre final queda siempre con el diario centrado sobre un gris celeste. Se le carga una pista de música y el editor le busca el golpe final; la pista se recorta por delante, nunca por detrás, para que ese golpe caiga exactamente sobre el flash que revela la tapa. Tres controles: duración del zoom, qué tan cerca arranca y en qué punto empieza el armado. El MP4 sale con los botones de siempre, con la música adentro.'],
