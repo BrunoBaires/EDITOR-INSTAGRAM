@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v175 «typewriter y panel quieto»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v176 «cámara en la animación»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v175 «typewriter y panel quieto»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v176 «cámara en la animación»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1942,6 +1942,15 @@ function drawMedia(m,x,y,w,h,t_anim){
   const srcH=m.type==='video'?el.videoHeight:el.naturalHeight;
   if(!srcW||!srcH)return;
   let zoom=m.zoom||1;
+  // Cámara de la animación de entrada: la foto arranca metida y se abre
+  // mientras los elementos van entrando. Multiplica el encuadre elegido a
+  // mano, no lo reemplaza.
+  {
+    const _ac=(typeof cards!=='undefined')
+      ? (cards.find(c=>c&&c.id===_drawingCardId) || cards[sel]) : null;
+    if(_ac && _ac.animOn && (_ac.animZoom||0)>0 && t_anim!==undefined)
+      zoom = zoom * (1 + _ac.animZoom*(1-eo3(Math.max(0,Math.min(1,t_anim)))));
+  }
   let cx=m.cx!==undefined?m.cx:.5,cy=m.cy!==undefined?m.cy:.5;
 
   // ── CINEMÁTICO ──
@@ -7836,8 +7845,9 @@ function renderEditor(c){
         <div class="range-row"><label>Entrada</label><input type="range" id="sl-ai" min="0" max="0.6" step="0.01" value="${c.animInicio!==undefined?c.animInicio:.05}"/><span class="range-val">${Math.round((c.animInicio!==undefined?c.animInicio:.05)*100)}%</span></div>
         <div class="range-row"><label>Paso</label><input type="range" id="sl-ap" min="0.05" max="1.2" step="0.01" value="${c.animPaso!==undefined?c.animPaso:.30}"/><span class="range-val">${(c.animPaso!==undefined?c.animPaso:.30).toFixed(2)}s</span></div>
         <div class="range-row"><label>Duración</label><input type="range" id="sl-al" min="0.15" max="1.5" step="0.05" value="${c.animLargo!==undefined?c.animLargo:.55}"/><span class="range-val">${(c.animLargo!==undefined?c.animLargo:.55).toFixed(2)}s</span></div>
+        <div class="range-row"><label>Cámara</label><input type="range" id="sl-az" min="0" max="0.6" step="0.01" value="${c.animZoom||0}"/><span class="range-val">${Math.round((c.animZoom||0)*100)}%</span></div>
       </div>
-      <div style="font-size:11px;color:var(--text3);line-height:1.45">El número de cada fila es lo que ESE elemento espera desde el anterior: subilo para que un nombre respire antes de que llegue el dato. A la derecha, el segundo en que entra. «Entrada» es cuánto espera el primero; «paso», el valor por defecto de los que no tocaste; «duración», lo que tarda cada uno en aparecer. El largo total se fija más abajo, en DURACIÓN DE LA CARD.</div>`:''}
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">«Cámara» abre la foto mientras entran los elementos: arranca metida adentro y se va abriendo hasta el encuadre que elegiste. En 0 queda quieta. El número de cada fila es lo que ESE elemento espera desde el anterior: subilo para que un nombre respire antes de que llegue el dato. A la derecha, el segundo en que entra. «Entrada» es cuánto espera el primero; «paso», el valor por defecto de los que no tocaste; «duración», lo que tarda cada uno en aparecer. El largo total se fija más abajo, en DURACIÓN DE LA CARD.</div>`:''}
     </div>
     <div class="field" id="capas-field">
       <label>Capas <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">gráficos y textos libres, encima de la card</span></label>
@@ -9222,6 +9232,7 @@ REGLAS IMPORTANTES:
     slA('#sl-ai','animInicio',v=>Math.round(v*100)+'%');
     slA('#sl-ap','animPaso',v=>v.toFixed(2)+'s');
     slA('#sl-al','animLargo',v=>v.toFixed(2)+'s');
+    slA('#sl-az','animZoom',v=>Math.round(v*100)+'%');
     const moverA=(clave,d)=>{
       const o=animOrden(cards[sel]), i=o.indexOf(clave), j=i+d;
       if(i<0||j<0||j>=o.length) return;
@@ -10406,7 +10417,7 @@ document.getElementById('png-btn').onclick=()=>{
 // ════════════════════════════════
 const TPL_LS='incertis_templates';
 // Estilo que comparten todos los tipos de card
-const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','cardBg','cardTextColor','frameW','frameColor','numbered',
+const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animZoom','cardBg','cardTextColor','frameW','frameColor','numbered',
   'titleSz','bodySz','titleFont','titleItalic','bodyItalic','volantaColor',
   'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur',
   // Posición exacta del título y de la bajada. Es lo que permite dejar la placa
@@ -11472,6 +11483,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v176','La cámara vuelve a la animación','Al sacar la card «placa» se fue con ella el zoom de apertura, y la animación quedaba con los elementos entrando sobre una foto quieta. Volvió, ahora como un control más del bloque «Animación de entrada» y para cualquier card con foto: «Cámara», de 0 a 60%. La imagen arranca metida adentro y se va abriendo hasta el encuadre que elegiste a mano, mientras el título, la bajada y las capas van entrando en su orden. Multiplica el encuadre propio de la foto en vez de reemplazarlo, así que el zoom y el punto de interés que hayas ajustado se respetan. En 0 la foto queda quieta y todo sigue como antes. Viaja en el template con el resto de la animación.'],
     ['v175','El panel se queda quieto, y typewriter en los textos que sumás','Dos cosas. La primera es de uso y era una molestia seria: el panel derecho se reconstruye entero en cada cambio, así que cada clic en una flecha lo devolvía al principio y había que volver a bajar hasta el control. Ahora guarda dónde estaba la barra y la restituye; y los campos de espera de la animación ni siquiera reconstruyen el panel: recalculan los segundos en el lugar, así que se puede quedar apretando la flechita sin que nada se mueva. La segunda: una capa de texto puede escribirse a máquina. Botón «⌨ Typewriter» en la ficha de la capa, con el tiempo que tarda en escribirse y un cursor parpadeante opcional. Arranca cuando a esa capa le toca entrar según el orden, así que se puede encadenar: primero el nombre, después el dato, y al final la cita escribiéndose. El corte se hace sobre las líneas ya compuestas, no sobre el texto crudo, para que el bloque no se reacomode mientras escribe.'],
     ['v174','Veladura de la foto','«Sombra del texto» oscurece el pie de la card, que es donde vive el título. Cuando la foto no llega hasta abajo —una imagen arriba y un bloque de color abajo— esa sombra cae sobre el color y no sirve para nada; y si lo que hay que hacer legible es una cita puesta encima de la imagen, no la toca. Control nuevo, «Veladura de la foto», que se queda DENTRO del rectángulo de la foto: intensidad de 0 a 100, dirección —desde abajo, desde arriba o pareja sobre toda la imagen— y color, con negro y blanco a un clic para velar sobre fotos claras. Es independiente de la sombra del texto: se pueden usar las dos, o ninguna. Viaja en el template junto con el resto de los ajustes de la foto.'],
     ['v173','El tiempo de cada elemento, uno por uno','Un solo «paso» parejo para todos hacía que entrara todo casi junto y se perdiera el valor indicativo de la secuencia: el nombre, lo que hizo, y recién después la cita, necesitan aire distinto entre sí. Ahora cada fila de la lista de orden tiene su propio número: cuánto espera ESE elemento desde que entró el anterior, de 0 a 5 segundos. El primero se rige por «Entrada»; los que no se tocaron usan el paso general, así que quien no quiera afinar nada sigue teniendo el comportamiento de antes. Al lado de cada número se ve el segundo exacto en que entra ese elemento, recalculado en vivo. Las esperas viajan en el template junto con el resto de la animación.'],
