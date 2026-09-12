@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v158 «tapa animada»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v160 «tapa animada»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v158 «tapa animada»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v160 «tapa animada»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -4937,12 +4937,29 @@ return {analizar:analizar, plan:plan, dibujar:dibujar, CFG:CFG,
 if(window.pdfjsLib&&pdfjsLib.GlobalWorkerOptions)
   pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+// ¿Es un PDF? Se pregunta a los primeros bytes del archivo, no al sistema: hay
+// PDFs que llegan sin tipo declarado y capturas que llegan con el tipo cambiado.
+async function tapaEsPDF(file){
+  if(file.type==='application/pdf'||/\.pdf$/i.test(file.name||'')) return true;
+  try{
+    var cab=new Uint8Array(await file.slice(0,5).arrayBuffer());
+    return cab[0]===0x25&&cab[1]===0x50&&cab[2]===0x44&&cab[3]===0x46;   // %PDF
+  }catch(e){ return false; }
+}
 async function tapaRasterizar(file){
-  if(file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){
-    return await new Promise(function(res,rej){
+  if(!(await tapaEsPDF(file))){
+    var url=await new Promise(function(res,rej){
       var fr=new FileReader(); fr.onload=function(){res(fr.result);}; fr.onerror=rej;
       fr.readAsDataURL(file);
     });
+    // que falle acá y no más adelante, con un mensaje que se entienda
+    await new Promise(function(res,rej){
+      var im=new Image();
+      im.onload=function(){res();};
+      im.onerror=function(){rej(new Error('No pude abrir «'+(file.name||'el archivo')+'». Probá con el PDF, o con un JPG o PNG de la tapa.'));};
+      im.src=url;
+    });
+    return url;
   }
   if(!window.pdfjsLib) throw new Error('pdf.js no cargó; probá con una imagen de la tapa');
   var buf=await file.arrayBuffer();
@@ -5032,9 +5049,10 @@ function drawTapa(card,t){
     ctx.save();
     ctx.fillStyle=PAL.meta; ctx.textAlign='center';
     ctx.font='300 38px "IBM Plex Sans"'; ctx.letterSpacing='0px';
-    ctx.fillText('Soltá el PDF de la tapa', W/2, H/2-14);
+    ctx.fillText('Soltá el PDF de la tapa acá', W/2, H/2-40);
     ctx.font='300 26px "IBM Plex Sans"';
-    ctx.fillText('el diario se arma solo sobre el zoom out', W/2, H/2+30);
+    ctx.fillText('o en «Tapa del día», en el panel de la derecha', W/2, H/2+4);
+    ctx.fillText('Después soltá la música: el flash busca su golpe.', W/2, H/2+44);
     ctx.restore();
     return;
   }
@@ -6351,6 +6369,14 @@ canvas.addEventListener('dragleave',e=>{
 });
 canvas.addEventListener('drop',async e=>{
   e.preventDefault();canvas.classList.remove('drop-target');
+  // ── Tapa animada: el archivo que se suelta encima ES la tapa ──
+  // Sin esto, soltar el PDF sobre el preview convertía la card en una card de
+  // foto y no pasaba nada: el archivo tiene que ir al analizador.
+  if(cards[sel] && cards[sel].tipo==='tapa'){
+    const f0=[...e.dataTransfer.files][0];
+    if(f0){ await tapaRecibir(f0); }
+    return;
+  }
   const files=[...e.dataTransfer.files].filter(f=>
     f.type.startsWith('image/')||f.type.startsWith('video/')||f.type.startsWith('audio/'));
   if(!files.length)return;
@@ -7400,7 +7426,7 @@ function renderEditor(c){
       <div style="font-size:11px;color:var(--text3);line-height:1.45">Soltá el PDF del día. El editor busca la foto principal, corta la página en piezas y arma el video: zoom out sobre la foto y, pasada la mitad, las piezas entran desde afuera hasta completar la tapa.</div>
     </div>
     <div class="field"><label>Tapa del día</label>
-      <div class="img-drop" style="position:relative"><input type="file" id="tapa-file" accept="application/pdf,image/*"/><div class="img-drop-txt">${_d&&_d.a?'✓ '+_d.a.piezas.length+' piezas · cambiar':'PDF o imagen de la tapa'}</div></div>
+      <div class="img-drop" style="position:relative"><input type="file" id="tapa-file"/><div class="img-drop-txt">${_d&&_d.a?'✓ '+_d.a.piezas.length+' piezas · cambiar':'PDF, JPG, PNG, WebP…'}</div></div>
       <div class="aiedit-status" id="tapa-status"></div>
     </div>
     ${_d&&_d.a?`
@@ -7409,7 +7435,7 @@ function renderEditor(c){
       <div style="font-size:11px;color:var(--text3);margin-top:4px">${c._marcando?'Hacé clic en el rostro o el detalle donde querés que empiece.':'Ahora empieza en '+Math.round(c.tapaPunto.x*100)+'% / '+Math.round(c.tapaPunto.y*100)+'%'}</div>
     </div>
     <div class="field"><label>Música <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">el flash cae sobre el golpe final</span></label>
-      <div class="img-drop" style="position:relative"><input type="file" id="tapa-audio" accept="audio/*,video/*"/><div class="img-drop-txt">${_mus&&_mus.type==='audio'?'♪ '+(_mus.filename||'pista')+' · golpe a los '+(c.tapaClick||0).toFixed(2)+'s':'Soltá la pista'}</div></div>
+      <div class="img-drop" style="position:relative"><input type="file" id="tapa-audio"/><div class="img-drop-txt">${_mus&&_mus.type==='audio'?'♪ '+(_mus.filename||'pista')+' · golpe a los '+(c.tapaClick||0).toFixed(2)+'s':'Soltá la pista'}</div></div>
     </div>
     <div class="field"><label>Duración del zoom — <b id="sl-tz-val">${(c.tapaZoom||8).toFixed(1)}s</b> <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">total <b id="sl-tz-tot">${tapaDur(c).toFixed(1)}</b>s</span></label>
       <input type="range" id="sl-tz" min="4" max="14" step="0.5" value="${c.tapaZoom||8}"/>
@@ -7486,6 +7512,7 @@ function renderEditor(c){
         <button class="tipo-btn${c.tipo==='tapa'?' active':''}" data-t="tapa" title="Tapa animada del diario">◨ Tapa</button>
       </div>
     </div>
+    ${tapaSection}
     ${libreSection}
     ${coverSection}
     ${mediaSection}
@@ -7494,7 +7521,6 @@ function renderEditor(c){
     ${graficoSection}
     ${tablaSection}
     ${vinetaSection}
-    ${tapaSection}
     ${infoSection}
     <div class="field" id="capas-field">
       <label>Capas <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">gráficos y textos libres, encima de la card</span></label>
@@ -9215,8 +9241,35 @@ function updateNavBtns(){
 document.getElementById('nav-prev').onclick=()=>navigate(-1);
 document.getElementById('nav-next').onclick=()=>navigate(1);
 // ── Pegar imágenes con Ctrl/Cmd+V ──
+// Un archivo suelto sobre una card de tapa: si es sonido, es la música; si no,
+// es la tapa del día. Se decide acá para que soltar y pegar hagan lo mismo.
+async function tapaRecibir(file){
+  const card=cards[sel];
+  const esAudio=(file.type||'').startsWith('audio/')||(file.type||'').startsWith('video/')
+              ||/\.(mp3|wav|m4a|aac|ogg|flac|aiff?|mp4|mov|m4v|webm)$/i.test(file.name||'');
+  try{
+    if(esAudio){
+      setStatus('Buscando el golpe final…','working');
+      const r=await tapaBuscarClick(file);
+      card.tapaClick=r.click;
+      await loadMediaFromFile(file,card.id);
+      const mm=mediaCache[card.id];
+      if(mm&&mm.el){ mm.el.loop=false; mm.el.pause(); }
+      tapaSincronizar(card);
+      setStatus('Música lista · golpe a los '+r.click.toFixed(2)+'s','');
+    }else{
+      setStatus('Analizando la tapa…','working');
+      await tapaCargar(file, card, m=>setStatus(m,'working'));
+      tapaSincronizar(card);
+      setStatus('Tapa lista','');
+    }
+    renderEditor(cards[sel]); renderList(); play(cards[sel]);
+  }catch(err){ setStatus('No se pudo leer el archivo: '+err.message,'error'); }
+}
+
 async function pasteImageFile(file){
   let card=cards[sel];
+  if(card && card.tipo==='tapa'){ await tapaRecibir(file); return; }
   // Si la card ya tiene su foto de fondo, la que pegás ahora va como capa
   // encima: así se pueden apilar varias.
   if(card && mediaCache[card.id] && card.tipo!=='vineta'){
@@ -11000,6 +11053,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v160','Tapa animada — acepta cualquier archivo','El buscador de archivos grisaba archivos perfectamente válidos: el filtro por tipo que traía el campo dejaba afuera imágenes que el sistema no sabía clasificar. Se quitó el filtro de los dos campos —la tapa y la música—, así que ahora se puede elegir cualquier archivo y el editor decide qué hacer con él mirando su contenido, no lo que diga el sistema: si los primeros bytes dicen %PDF se rasteriza como PDF, si abre como imagen se usa como imagen, y si es sonido o video se toma como la música. Cuando un archivo no se puede abrir, lo dice con el nombre del archivo en vez de fallar en silencio.'],
+    ['v159','Tapa animada — se suelta y listo','Corrección de uso sobre la v158. Soltar o pegar un archivo encima del preview convertía la card en una card de foto, así que el PDF de la tapa no llegaba nunca al analizador y no pasaba nada. Ahora, cuando la card es una tapa, lo que se suelta sobre el preview ES la tapa: si el archivo es un PDF o una imagen, se analiza; si es sonido, se toma como la música y se le busca el golpe final. Soltar y pegar hacen lo mismo. Además el bloque «Tapa animada» pasó al primer lugar del panel derecho, arriba de todo, en vez de quedar enterrado entre los controles de las otras cards.'],
     ['v158','Tapa animada','Tipo de card nuevo: la tapa del diario armándose sola sobre un zoom out, para publicar todos los días en X y en WhatsApp. Se suelta el PDF del día —o una imagen de la tapa— y el editor hace tres cosas sin preguntar: busca la foto principal midiendo el promedio local de gris y de color, corta la página en piezas con un corte XY sobre las calles blancas y los corondeles, y ordena esas piezas por peso tipográfico, que es la altura de línea de cada bloque. Con eso arma el video. La cámara es un zoom puro que arranca cerrado sobre la foto y se abre hasta la tapa entera, con velocidad de apertura pareja de punta a punta. La primera mitad del recorrido no tiene un solo texto ni un solo gráfico en cuadro: solo la foto abriéndose. Pasada esa marca entran las piezas, y entran de afuera: el título principal primero, el secundario después y el resto repartido hasta el final, cada una acercándose y corrida hacia el borde por el que aparece hasta aterrizar en su lugar. El punto de arranque lo marca el editor con un clic sobre la tapa —el rostro de la foto, un detalle, lo que sea— y el encuadre final queda siempre con el diario centrado sobre un gris celeste. Se le carga una pista de música y el editor le busca el golpe final; la pista se recorta por delante, nunca por detrás, para que ese golpe caiga exactamente sobre el flash que revela la tapa. Tres controles: duración del zoom, qué tan cerca arranca y en qué punto empieza el armado. El MP4 sale con los botones de siempre, con la música adentro.'],
     ['v157','Infografía forense','Bloque nuevo en el panel izquierdo: pegás el texto de un hecho y Claude lo parte en escenas dibujables. Devuelve, por cada una, el título, la explicación que va en la card y el prompt de imagen en inglés, todo editable antes de gastar una sola imagen. Recién ahí gpt-image dibuja, de a una y con progreso a la vista, sobre un prompt base de estilo forense —siluetas negras sobre blanco puro, sin rasgos, sin sombras y sin texto adentro del dibujo— que se puede editar y queda guardado. Se pueden cargar fotos, planos o croquis como referencia de postura y disposición, y encadenar las escenas para que cada una vea la anterior y el trazo no baile. El contenido puede entrar de tres maneras: pegando el texto, pegando un link —una nota, un posteo de X, cualquier página— o escribiendo una pregunta, y en ese caso Claude la responde con lo que sabe, sin buscar en la web, que sirve para explicativos y procedimientos pero no para datos de actualidad. Suma el tipo de card «infografía»: una sola superficie, con el texto arriba —se achica solo para entrar— y la ilustración en PNG con fondo transparente, así el color de fondo de la placa se ve detrás del dibujo y la card se puede pintar como cualquier otra. Cada escena se vuelve a dibujar sola, sin tocar el resto, y la card se puede reemplazar por una imagen propia. Las cards salen numeradas —1/5 en el ángulo superior izquierdo, porque son una secuencia— y el bloque tiene el botón para sacarles la numeración.'],
     ['v156','Recortar o no recortar','El fondo de la ilustración ahora se elige con dos botones, «Recortar fondo» y «No recortar fondo»: cada estilo trae su default y se puede cambiar en el momento. Suma un cuarto estilo de la casa, editorial de línea calcada tipo rotring con color plano desaturado, que conserva el fondo porque la escena es parte del recurso. Y se arregló el guardado de prompts propios: los avisos de «falta el nombre» aparecían al pie del panel, fuera de vista, y parecía que el botón no hacía nada. Ahora van dentro del formulario, el guardado local es lo que manda (el almacén del equipo es un extra que ya no puede hacerlo fracasar), hay un contador de prompts guardados y el borrador sobrevive si cambiás de card.'],
