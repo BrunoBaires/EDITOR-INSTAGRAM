@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v162 «tapa animada»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v163 «tapa animada»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v162 «tapa animada»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v163 «tapa animada»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -4729,20 +4729,19 @@ function cortarPiezas(img, foto){
   // «altura de línea» es todo su alto, el detector de titulares lo corona como
   // título principal—. Se sacan de la lista y su tinta se marca para que la
   // recupere la pieza que la toca.
+  // No se borran —el filete tiene que estar en la tapa—: se marcan, y más
+  // adelante entran de golpe, junto al bloque que tienen al lado.
   var MINW=Math.max(4,Math.round(w*0.018)), MINH=Math.max(4,Math.round(h*0.006));
-  var gordas=[];
   for(var t0=0;t0<salida.length;t0++){
     var tb=salida[t0];
-    if((tb[2]-tb[0])>=MINW && (tb[3]-tb[1])>=MINH){ gordas.push(tb); continue; }
-    for(var ty=tb[1];ty<tb[3];ty++) for(var tx=tb[0];tx<tb[2];tx++) tinta[ty*w+tx]=0;
+    tb[4] = ((tb[2]-tb[0])<MINW || (tb[3]-tb[1])<MINH) ? 1 : 0;
   }
-  salida=gordas;
 
   // Devolver los filetes: cada pieza se estira hacia los lados mientras lo que
   // hay pegado a ella sea tinta que se descontó. Así el filete vuelve a la pieza
   // que lo toca y entre dos piezas no queda papel al descubierto.
   function huboTinta(i,j){ return tintaOrig[j*w+i]&&!tinta[j*w+i]; }
-  var MAX_PEGA=Math.max(MINW,MINH)+2;
+  var MAX_PEGA=Math.max(2,Math.round(h*0.008));
   for(var s0=0;s0<salida.length;s0++){
     var bb=salida[s0], p2;
     for(p2=0;p2<MAX_PEGA&&bb[1]-1>=0;p2++){
@@ -4766,8 +4765,8 @@ function cortarPiezas(img, foto){
   var out=[];
   for(var s=0;s<salida.length;s++){
     var b=salida[s];
-    var cj=[Math.round(b[0]*k),Math.round(b[1]*k),Math.round(b[2]*k),Math.round(b[3]*k)];
-    if((cj[2]-cj[0])*(cj[3]-cj[1]) < W*H*0.0006) continue;
+    var cj=[Math.round(b[0]*k),Math.round(b[1]*k),Math.round(b[2]*k),Math.round(b[3]*k),b[4]||0];
+    if(!cj[4] && (cj[2]-cj[0])*(cj[3]-cj[1]) < W*H*0.0006) continue;
     out.push(cj);
   }
   out.sort(function(a,b2){
@@ -4800,7 +4799,7 @@ function indiceTitulo(an, lista, H, W, saltear){
   var mejor=null, cuerpo=0;
   for(var i=0;i<lista.length;i++){
     var c=lista[i];
-    if(saltear.indexOf(i)>=0 || (c[1]+c[3])/2 < H*0.12) continue;
+    if(c[4] || saltear.indexOf(i)>=0 || (c[1]+c[3])/2 < H*0.12) continue;
     if((c[2]-c[0])*(c[3]-c[1]) < W*H*0.004) continue;
     var al=alturaLinea(an,c);
     if(al>cuerpo){ cuerpo=al; mejor=i; }
@@ -4814,6 +4813,7 @@ function porPeso(img, an, lista, iFoto){
     var c=lista[i];
     var area=(c[2]-c[0])*(c[3]-c[1])/(W*H);
     if(i===iFoto){ pesos.push([1e6+area,i]); continue; }
+    if(c[4]) continue;
     if((c[1]+c[3])/2 < H*0.13 || area < 0.010) continue;
     if(satMedia(img,c) > 18) continue;         // tiene foto: no es titular
     pesos.push([alturaLinea(an,c)*Math.sqrt(area), i]);
@@ -4922,23 +4922,39 @@ function plan(a, opt){
   a.ranking.forEach(function(j){ if(j!==iDe&&orden.indexOf(j)<0) orden.push(j); });
   otros.forEach(function(j){ if(orden.indexOf(j)<0) orden.push(j); });
 
-  var grande={}; orden.slice(0,o.PROTAGONISTAS).forEach(function(j){grande[j]=1;});
-  function dur(j){ return grande[j] ? o.DUR_GRANDE : o.DUR_PIEZA; }
+  var fino={}; orden.forEach(function(j){ if(a.piezas[j][4]) fino[j]=1; });
+  var gordos=orden.filter(function(j){ return !fino[j]; });
+  var grande={}; gordos.slice(0,o.PROTAGONISTAS).forEach(function(j){grande[j]=1;});
+  function dur(j){ return fino[j] ? 0.001 : (grande[j] ? o.DUR_GRANDE : o.DUR_PIEZA); }
 
   var t0=o.INICIO_ARMADO*tZoom;
   var cabeza=[t0, t0+o.PASO_TITULOS];
   var arranqueResto=t0+o.PASO_TITULOS*2;
-  var resto=orden.slice(2);
+  var resto=gordos.slice(2);
   var fin=tZoom-o.DUR_PIEZA;
   var paso = resto.length>1 ? (fin-arranqueResto)/(resto.length-1) : 0;
   var agenda={};
-  orden.forEach(function(j,k3){
+  gordos.forEach(function(j,k3){
     var base = k3<2 ? cabeza[k3] : arranqueResto+paso*(k3-2);
     agenda[j]=Math.min(Math.max(base, tAsoma(a.piezas[j])), tZoom-dur(j));
   });
+  // Cada filete entra con el bloque que tiene más cerca: es parte de ese bloque,
+  // no un elemento propio. Sin viaje ni escala, aparece y ya está.
+  orden.forEach(function(j){
+    if(!fino[j]) return;
+    var c=a.piezas[j], mejor=null, dist=Infinity;
+    gordos.forEach(function(g){
+      var q=a.piezas[g];
+      var dx=Math.max(0, Math.max(q[0]-c[2], c[0]-q[2]));
+      var dy=Math.max(0, Math.max(q[1]-c[3], c[1]-q[3]));
+      var d=Math.hypot(dx,dy);
+      if(d<dist){ dist=d; mejor=g; }
+    });
+    agenda[j] = mejor!==null ? agenda[mejor] : t0;
+  });
 
   return {o:o, LW:LW, LH:LH, ox:ox, oy:oy, encuadre:encuadre, wIni:wIni,
-          iDe:iDe, orden:orden, grande:grande, agenda:agenda, dur:dur};
+          iDe:iDe, orden:orden, grande:grande, fino:fino, agenda:agenda, dur:dur};
 }
 
 // ── 3. dibujo de un cuadro ───────────────────────────────────────────
@@ -4977,6 +4993,7 @@ function dibujar(ctx, img, a, p, seg, W, H, tZoom){
   });
   visibles.forEach(function(j){
     var c=a.piezas[j];
+    if(p.fino[j]){ pegar(c,1,[0,0],1,0); return; }
     var e=suave(Math.min((seg-p.agenda[j])/p.dur(j),1));
     if(e>=0.995){ pegar(c,1,[0,0],1,0); return; }
     var w=c[2]-c[0], h=c[3]-c[1];
@@ -11130,6 +11147,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v163','Tapa animada — los filetes vuelven','La corrección anterior sacaba de la lista las tiras angostas para que no se animaran solas, pero las sacaba del todo: los filetes que no tocaban ningún bloque se quedaban sin dueño y desaparecían de la tapa. Ahora no se borran, se marcan. Un filete sigue sin animarse por su cuenta y sigue sin competir por ser el título, pero entra de golpe —sin viaje ni escala— en el mismo instante que el bloque que tiene más cerca, porque es parte de ese bloque y no un elemento aparte. El resultado final vuelve a ser idéntico a la tapa impresa, con todos sus corondeles y filetes en su lugar.'],
     ['v162','Tapa animada — sin tiritas sueltas','Durante el zoom out se veía cruzar la página una tira angosta con letras cortadas al medio. Eran dos cosas. Una: el corte descontaba como filete el borde izquierdo de las columnas justificadas, porque al arrancar todas las líneas en la misma posición esa columna de píxeles está casi llena de tinta igual que una raya; ahora un filete tiene que ser fino Y estar aislado, con blanco de los dos lados, que es lo que lo distingue del borde de un bloque de texto. Dos: un corondel entre columnas sobrevivía al corte como una pieza propia, larguísima y de veinte píxeles de ancho, y se animaba solo; peor todavía, como su altura de línea es todo su alto, el detector de titulares lo coronaba título principal y lo hacía entrar primero. Las tiras ya no son piezas: se sacan de la lista y su tinta la recupera la pieza que la toca, y una tira angosta tampoco compite por ser el título.'],
     ['v161','Tapa animada — la banda roja entera','La línea blanca que cruzaba el cabezal. El corte de la página descuenta los filetes —las rayas finas que separan columnas y bloques— para poder partir por ahí, y los detectaba como «filas casi llenas de tinta». Una banda de color maciza, como el rojo del cabezal de Clarín, también es una fila llena de tinta: el corte la trataba como filete, la partía al medio y entre las dos mitades quedaba el papel a la vista, una raya blanca atravesando el logo. Ahora solo se descuentan las tiras finas —un filete tiene dos o tres píxeles, una banda tiene veinte— y, terminado el corte, cada pieza se estira para recuperar los filetes que la tocan, así entre dos piezas nunca queda papel al descubierto. De paso la tapa se corta en bloques más enteros y menos fragmentos sueltos.'],
     ['v160','Tapa animada — acepta cualquier archivo','El buscador de archivos grisaba archivos perfectamente válidos: el filtro por tipo que traía el campo dejaba afuera imágenes que el sistema no sabía clasificar. Se quitó el filtro de los dos campos —la tapa y la música—, así que ahora se puede elegir cualquier archivo y el editor decide qué hacer con él mirando su contenido, no lo que diga el sistema: si los primeros bytes dicen %PDF se rasteriza como PDF, si abre como imagen se usa como imagen, y si es sonido o video se toma como la música. Cuando un archivo no se puede abrir, lo dice con el nombre del archivo en vez de fallar en silencio.'],
