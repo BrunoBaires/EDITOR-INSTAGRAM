@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v169 «portada: orden y template»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v170 «animación de entrada»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -814,7 +814,6 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
         <button class="add-btn" id="add-libre" title="Bloques de texto libres, cada uno con su estilo">✦ Libre</button>
         <button class="add-btn" id="add-infografia" title="Infografía: texto arriba, ilustración forense abajo">◈ Infografía</button>
         <button class="add-btn" id="add-tapa" title="Tapa animada: el diario se arma solo sobre un zoom out">◨ Tapa</button>
-        <button class="add-btn" id="add-portada" title="Portada animada: la foto a sangre y la marca, el índice y el título entrando encima">◻ Portada</button>
         <button class="add-btn" id="add-sintesis" title="Agrega una card de síntesis en bullets al final, sin tocar las cards que ya tenés" style="border-color:var(--text);font-weight:600">↯ Sumar síntesis</button>
         <button class="add-btn" id="templates-btn" title="Guardar y aplicar templates de estilo" style="border-color:var(--text);font-weight:600">◇ Templates</button>
         <button class="add-btn" id="limpiar-btn" style="color:#ef4444;border-color:#ef4444">✕</button>
@@ -929,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v169 «portada: orden y template»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v170 «animación de entrada»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1339,7 +1338,7 @@ function cardBgOf(card){ return (card&&card.cardBg)||CHALK; }
 function pintarFondo(card){
   ctx.fillStyle=cardBgOf(card);
   ctx.fillRect(0,0,W,H);
-  if(typeof drawCapas==='function') drawCapas(card,true);
+  if(typeof drawCapas==='function') drawCapas(card,true, (typeof animCapas==='function')?animCapas(card,_lastAnimT):null);
 }
 
 
@@ -2133,7 +2132,7 @@ function drawVineta(card,t){
     const tSz=card.titleSz||52;
     const tLH=Math.round(tSz*1.14);
     const _famV=titleFontFamily(card), _wtV=titleFontWeight(card);
-    ctx.save(); var _dTv=deltaTexto(card,'tit',M,ty); ctx.translate(_dTv.dx,_dTv.dy);
+    ctx.save(); var _dTv=deltaTexto(card,'tit',M,ty); ctx.translate(_dTv.dx,_dTv.dy); var _ae1=animEntrar(card,'titulo',t); ctx.globalAlpha*=_ae1.a; ctx.translate(0,_ae1.dy);
     ctx.font=`${_wtV} ${tSz}px ${_famV}`; ctx.letterSpacing='-0.5px';
     ctx.fillStyle=CC.text; ctx.textAlign='left';
     const tl=wrapTitle(card.titulo, W-M*2, tSz, _famV, _wtV);
@@ -2144,7 +2143,7 @@ function drawVineta(card,t){
     ty += tl.length*tLH + Math.round(tSz*0.55);
   }
   if(card.cuerpo){
-    ctx.save(); var _dBv=deltaTexto(card,'baj',M,ty); ctx.translate(_dBv.dx,_dBv.dy);
+    ctx.save(); var _dBv=deltaTexto(card,'baj',M,ty); ctx.translate(_dBv.dx,_dBv.dy); var _ae2=animEntrar(card,'bajada',t); ctx.globalAlpha*=_ae2.a; ctx.translate(0,_ae2.dy);
     const endY=drawRichText(card.cuerpo, M, ty, W-M*2, bSz, bLH, CC.body, CC.text, card.bodyItalic);
     ctx.restore();
     card._bodyBox={x:M, y:ty-bSz, w:W-M*2, h:(endY-ty)+bSz};
@@ -2569,7 +2568,7 @@ function drawChrome(a,cardId,dark){
   // Las capas van encima del texto de la card y debajo del pie y el logo.
   {var _cc=null;
    for(var _q=0;_q<cards.length;_q++){ if(cards[_q].id===cardId){ _cc=cards[_q]; break; } }
-   if(_cc) drawCapas(_cc);}
+   if(_cc) drawCapas(_cc, false, (typeof animCapas==='function')?animCapas(_cc,_lastAnimT):null);}
   if(!FX.chrome){
     // La numeración es independiente del pie: si el chrome está apagado,
     // igual se dibuja (es un dato de la placa dentro del carrusel).
@@ -3440,7 +3439,7 @@ function drawMapa(card,t){
     const _bdx=card.bodyDX||0,  _bdy=card.bodyDY||0;
 
     if(card.titulo){
-      ctx.save(); var _dTm=deltaTexto(card,'tit',M,ty); ctx.translate(_dTm.dx,_dTm.dy);
+      ctx.save(); var _dTm=deltaTexto(card,'tit',M,ty); ctx.translate(_dTm.dx,_dTm.dy); var _ae3=animEntrar(card,'titulo',t); ctx.globalAlpha*=_ae3.a; ctx.translate(0,_ae3.dy);
       ctx.font=`${titleFontWeight(card)} ${tSz}px ${titleFontFamily(card)}`;ctx.letterSpacing='-0.5px';
       ctx.fillStyle=_mapTxt;
       if(textOverMap){ ctx.shadowColor=_mapHalo+'0.45)'; ctx.shadowBlur=Math.round(tSz*0.16); }
@@ -3463,7 +3462,7 @@ function drawMapa(card,t){
       const _bTxt  = _bodyBlack ? '#0a0a0a' : '#ffffff';
       const _bBody = _bodyBlack ? PAL.body : 'rgba(255,255,255,0.90)';
       const _bHalo = _bodyBlack ? 'rgba(255,255,255,' : 'rgba(0,0,0,';
-      ctx.save(); var _dBm=deltaTexto(card,'baj',M,ty); ctx.translate(_dBm.dx,_dBm.dy);
+      ctx.save(); var _dBm=deltaTexto(card,'baj',M,ty); ctx.translate(_dBm.dx,_dBm.dy); var _ae4=animEntrar(card,'bajada',t); ctx.globalAlpha*=_ae4.a; ctx.translate(0,_ae4.dy);
       if(textOverMap){ ctx.shadowColor=_bHalo+'0.42)'; ctx.shadowBlur=Math.round(bSz*0.14); }
       // drawRichText: soporta **negrita** //itálica// ==resaltado== como el resto
       const endY=drawRichText(card.cuerpo, M, ty, W-M*2, bSz, bLH, _bBody, _bTxt, card.bodyItalic);
@@ -4123,7 +4122,7 @@ function drawTabla(card,t){
   if(card.titulo){
     ctx.font=`${titleFontWeight(card)} ${tSz}px ${titleFontFamily(card)}`;ctx.letterSpacing='-1px';ctx.fillStyle=CC.text;
     const tl=wrapTitle(card.titulo,W-M*2,tSz,titleFontFamily(card),titleFontWeight(card));
-    ctx.save();var _dTt=deltaTexto(card,'tit',M,y);ctx.translate(_dTt.dx,_dTt.dy);
+    ctx.save();var _dTt=deltaTexto(card,'tit',M,y);ctx.translate(_dTt.dx,_dTt.dy); var _ae5=animEntrar(card,'titulo',t); ctx.globalAlpha*=_ae5.a; ctx.translate(0,_ae5.dy);
     tl.forEach((l,i)=>ctx.fillText(l,M,y+i*tLH));
     ctx.restore();
     card._titleBox={x:M,y:y-tLH,w:W-M*2,h:tl.length*tLH+20};
@@ -4140,7 +4139,7 @@ function drawTabla(card,t){
     // Antes usaba CC.meta (#8a8680) y quedaba gris, desalineada del sistema.
     ctx.font=`400 ${stSz}px "IBM Plex Sans"`;ctx.letterSpacing='0px';ctx.fillStyle=CC.body;
     const sl=wrap(card.cuerpo,W-M*2);
-    ctx.save();var _dBt=deltaTexto(card,'baj',M,y+28);ctx.translate(_dBt.dx,_dBt.dy);
+    ctx.save();var _dBt=deltaTexto(card,'baj',M,y+28);ctx.translate(_dBt.dx,_dBt.dy); var _ae6=animEntrar(card,'bajada',t); ctx.globalAlpha*=_ae6.a; ctx.translate(0,_ae6.dy);
     sl.forEach((l,i)=>ctx.fillText(l,M,y+28+i*stLH));
     ctx.restore();
     card._bodyBox={x:M,y:y+28-stSz,w:W-M*2,h:sl.length*stLH+stSz*0.4};
@@ -4453,7 +4452,7 @@ function drawInfografia(card,t){
     const tSz=card.titleSz||52;
     const tLH=Math.round(tSz*1.14);
     const _fam=titleFontFamily(card), _wt=titleFontWeight(card);
-    ctx.save(); var _dT=deltaTexto(card,'tit',M,ty); ctx.translate(_dT.dx,_dT.dy);
+    ctx.save(); var _dT=deltaTexto(card,'tit',M,ty); ctx.translate(_dT.dx,_dT.dy); var _ae7=animEntrar(card,'titulo',t); ctx.globalAlpha*=_ae7.a; ctx.translate(0,_ae7.dy);
     ctx.font=`${_wt} ${tSz}px ${_fam}`; ctx.letterSpacing='-0.5px';
     ctx.fillStyle=CC.text; ctx.textAlign='left';
     const tl=wrapTitle(card.titulo, W-M*2, tSz, _fam, _wt);
@@ -4464,14 +4463,14 @@ function drawInfografia(card,t){
   }
   if(card.cuerpo){
     if(card.titulo) ty+=Math.round(bSz*0.2);
-    ctx.save(); var _dB=deltaTexto(card,'baj',M,ty); ctx.translate(_dB.dx,_dB.dy);
+    ctx.save(); var _dB=deltaTexto(card,'baj',M,ty); ctx.translate(_dB.dx,_dB.dy); var _ae8=animEntrar(card,'bajada',t); ctx.globalAlpha*=_ae8.a; ctx.translate(0,_ae8.dy);
     const endY=drawRichText(card.cuerpo, M, ty, W-M*2, bSz, Math.round(bSz*1.34), CC.text, CC.text, card.bodyItalic);
     ctx.restore();
     card._bodyBox={x:M, y:ty-bSz, w:W-M*2, h:(endY-ty)+bSz};
   }
   ctx.restore();
 
-  drawCapas(card, false);
+  drawCapas(card, false, animCapas(card,t));
   drawChrome(chromeA,card.id,CC.dark);
   drawGrid();
 }
@@ -5210,306 +5209,68 @@ function drawTapa(card,t){
 }
 
 // ════════════════════════════════════════════════════════════════════
-// CARD PORTADA  ·  la tapa de revista que se arma sobre la foto
+// ANIMACIÓN DE ENTRADA  ·  los elementos de una card entran de a uno
 // ════════════════════════════════════════════════════════════════════
-// La card es una portada entera: una banda arriba con la caja de marca y
-// el índice, la foto a sangre abajo, y el título sobre la foto. La cámara
-// arranca metida dentro de la foto —así la banda todavía no se ve— y se
-// abre hasta la portada completa; cuando la banda aparece, sus elementos
-// ya están entrando.
-//
-// NADA de esto está fijo. El color de la banda, el de la caja, si la caja
-// existe, el color del logo, si hay índice o fecha, y dónde y cómo va el
-// título son todos controles. Los valores de abajo son un punto de
-// partida, no una regla.
+// No es un tipo de card: es algo que se le prende a cualquiera. La card
+// se diseña como siempre —su foto, su título, su bajada, sus capas, con
+// los controles de siempre— y acá solo se decide el tiempo: en qué orden
+// entra cada cosa y cuánto espera una a la otra.
 
-function portadaIndice(card){
-  var i=cards.indexOf(card), out=[];
-  for(var k=i+1;k<cards.length && out.length<5;k++){
-    var t=(cards[k].titulo||'').replace(/\*\*|==/g,'').replace(/\s+/g,' ').trim();
-    if(t) out.push(t);
-  }
-  return out;
-}
-
-function portadaLineas(card){
-  if(card.portIndice!==undefined && card.portIndice!==null){
-    return String(card.portIndice).split('\n').map(function(s){return s.trim();}).filter(Boolean).slice(0,6);
-  }
-  return portadaIndice(card);
-}
-
-// La caja de un texto, llevada de coordenadas de portada a coordenadas de
-// pantalla. Hace falta porque el título se dibuja dentro del zoom de cámara y
-// el mouse, no: sin esto, tocar las letras no las agarraría.
-function portadaCaja(b, k, anclaY){
-  return { x: W/2+(b.x-W/2)*k, y: anclaY+(b.y-anclaY)*k, w: b.w*k, h: b.h*k };
-}
-
-// ── El orden de entrada ─────────────────────────────────────────────
-// Todo lo que aparece en la portada —el logo, el índice, el título, el
-// epígrafe y cada campo de texto o imagen que sumes— es un elemento de una
-// misma lista, y el editor la reordena. El tiempo de cada uno sale de su
-// posición: no hay tiempos escritos en el código.
-function portadaClaves(card){
-  var k=['logo','indice','titulo','bajada'];
+function animClaves(card){
+  var k=[];
+  if(card.titulo) k.push('titulo');
+  if(card.cuerpo) k.push('bajada');
   (typeof capasDe==='function'?capasDe(card):[]).forEach(function(c){ k.push('capa:'+c.id); });
   return k;
 }
-function portadaOrden(card){
-  var validas=portadaClaves(card);
-  var prev=Array.isArray(card.portOrden)?card.portOrden:[];
+function animOrden(card){
+  var validas=animClaves(card);
+  var prev=Array.isArray(card.animOrden)?card.animOrden:[];
   var out=prev.filter(function(x){ return validas.indexOf(x)>=0; });
   validas.forEach(function(x){ if(out.indexOf(x)<0) out.push(x); });
   return out;
 }
-function portadaNombre(card, clave){
-  if(clave==='logo')   return 'Logo';
-  if(clave==='indice') return 'Índice y fecha';
+function animNombre(card, clave){
   if(clave==='titulo') return 'Título';
-  if(clave==='bajada') return 'Epígrafe';
+  if(clave==='bajada') return 'Bajada';
   var id=clave.slice(5);
   var c=(typeof capasDe==='function'?capasDe(card):[]).filter(function(x){return String(x.id)===id;})[0];
   if(!c) return 'Capa';
   if(c.k==='txt') return '«'+String(c.text||'texto').replace(/\s+/g,' ').slice(0,24)+'»';
-  return c.k==='video' ? 'Video suelto' : 'Imagen suelta';
+  return c.k==='video' ? 'Video' : 'Imagen';
 }
-function portadaTiempo(card, clave, dur){
-  var o=portadaOrden(card), i=o.indexOf(clave);
+function animSegundo(card, clave){
+  var o=animOrden(card), i=o.indexOf(clave);
   if(i<0) i=o.length;
-  var t0=(card.portInicio!==undefined?card.portInicio:0.18)*dur;
-  return t0 + i*(card.portPaso!==undefined?card.portPaso:0.30);
+  var dur=(typeof getCardDur==='function')?getCardDur(card):4;
+  return (card.animInicio!==undefined?card.animInicio:0.05)*dur
+       + i*(card.animPaso!==undefined?card.animPaso:0.30);
 }
-
-// entrada de un elemento: 0 antes de tiempo, 1 cuando terminó de asentarse
-function portadaEntra(seg, t0, d){
-  return eo3(Math.max(0, Math.min(1, (seg-t0)/Math.max(0.01,d))));
+// Devuelve {a, dy} para un elemento: cuánta tinta tiene y cuánto le falta
+// bajar. Con la animación apagada, todo vale 1 y la card dibuja como siempre.
+function animEntrar(card, clave, t){
+  if(!card || !card.animOn) return {a:1, dy:0};
+  var dur=(typeof getCardDur==='function')?getCardDur(card):4;
+  var seg=Math.min(1,Math.max(0,t||0))*dur;
+  var d=(card.animLargo!==undefined?card.animLargo:0.55);
+  var e=eo3(Math.max(0, Math.min(1, (seg-animSegundo(card,clave))/Math.max(0.01,d))));
+  return {a:e, dy:(1-e)*20};
 }
-
-function drawPortada(card,t){
-  var dur=card.fixedDur||6;
-  var tt=Math.min(1,Math.max(0,t));
-  var seg=tt*dur;
-  var mg=Math.round(W*0.055);
-
-  var hayBanda=card.portBandaOn!==false;
-  var bandaCol=card.portBandaColor||'#ffffff';
-  var bandaH=hayBanda?Math.round(H*(card.portBanda||0.20)):0;
-  var m=mediaCache[card.id];
-
-  pintarFondo(card);
-
-  var k=1+(card.portZoom!==undefined?card.portZoom:0.28)*(1-eo3(tt));
-  var anclaY=bandaH+(H-bandaH)*0.42;
-  ctx.save();
-  ctx.translate(W/2,anclaY); ctx.scale(k,k); ctx.translate(-W/2,-anclaY);
-
-  if(hayBanda){ ctx.fillStyle=bandaCol; ctx.fillRect(-W,-H,W*3,bandaH+H); }
-
-  // ── la foto ──
-  var fy=bandaH, fh=H-bandaH;
-  if(m&&m.el){
-    var el=m.el;
-    var sw=m.type==='video'?el.videoWidth:el.naturalWidth;
-    var sh=m.type==='video'?el.videoHeight:el.naturalHeight;
-    if(sw&&sh){
-      var esc=Math.max(W/sw,fh/sh)*(m.zoom||1);
-      var dw=sw*esc, dh=sh*esc;
-      var cx=(m.cx!==undefined?m.cx:.5), cy=(m.cy!==undefined?m.cy:.5);
-      var dx=Math.min(0,Math.max(W-dw, W*0.5-dw*cx))+(m.offX||0);
-      var dy=Math.min(fy,Math.max(fy+fh-dh, fy+fh*0.5-dh*cy))+(m.offY||0);
-      ctx.save(); ctx.beginPath(); ctx.rect(0,fy,W,fh); ctx.clip();
-      try{ ctx.drawImage(el,dx,dy,dw,dh); }catch(e){}
-      ctx.restore();
-    }
-  }else{
-    ctx.save();
-    ctx.fillStyle=PAL.rule; ctx.fillRect(0,fy,W,fh);
-    ctx.fillStyle=PAL.meta; ctx.textAlign='center';
-    ctx.font='300 36px "IBM Plex Sans"'; ctx.letterSpacing='0px';
-    ctx.fillText('Soltá la foto de portada', W/2, fy+fh/2);
-    ctx.restore();
-  }
-
-  // velo abajo: el título va sobre la foto y tiene que leerse siempre
-  if(card.portVelo!==false && (card.titulo||card.cuerpo)){
-    ctx.save();
-    var gv=ctx.createLinearGradient(0,H-fh*0.42,0,H);
-    gv.addColorStop(0,'rgba(0,0,0,0)'); gv.addColorStop(1,'rgba(0,0,0,0.60)');
-    ctx.fillStyle=gv; ctx.fillRect(0,H-fh*0.42,W,fh*0.42);
-    ctx.restore();
-  }
-  // sin banda, el cabezal va sobre la foto: un velo arriba para que se lea
-  if(!hayBanda && (card.portCajaOn!==false || card.portIndiceOn!==false)){
-    ctx.save();
-    var gt=ctx.createLinearGradient(0,0,0,H*0.26);
-    gt.addColorStop(0,'rgba(0,0,0,0.45)'); gt.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.fillStyle=gt; ctx.fillRect(0,0,W,H*0.26);
-    ctx.restore();
-  }
-
-  // la tinta del cabezal sigue al fondo sobre el que cae
-  var oscuro = hayBanda ? isColorDark(bandaCol) : true;
-  var tinta  = oscuro ? '#ffffff' : '#111111';
-  var tinta2 = oscuro ? 'rgba(255,255,255,.62)' : 'rgba(0,0,0,.55)';
-  var filete = oscuro ? 'rgba(255,255,255,.30)' : 'rgba(0,0,0,.26)';
-
-  var cabH=hayBanda?bandaH:Math.round(H*0.20);
-  // El logo va solo, sin caja de color: el color lo decide el editor —Logo
-  // blanco / negro / rojo de arriba, o el de la card— según el fondo que
-  // elegiste. Acá no se inventa ninguno.
-  var bh=Math.round((cabH-mg*1.15)*(card.portLogoSz||1));
-  var bw=Math.round(bh*2.15);
-  var by0=Math.round((cabH-bh)/2);
-  var eM=portadaEntra(seg,portadaTiempo(card,'logo',dur),0.55);
-  var logoVar=card.logoVariant||window.__logoVariant||(oscuro?'white':'black');
-  if(eM>0 && card.portLogoOn!==false){
-    ctx.save();
-    ctx.globalAlpha=eM;
-    var f=1+0.06*(1-eM);
-    // El logo se arrastra con el mouse y queda donde lo dejes: mismo mecanismo
-    // que en el resto del editor, con logoDX/logoDY guardados en la card.
-    var bx=mg-(bw*f-bw)/2+(card.logoDX||0), by=by0-(bh*f-bh)/2+(1-eM)*10+(card.logoDY||0);
-    var img=null;
-    try{ img=pickLogoImg(oscuro, logoVar); }catch(e){}
-    if(img&&(img.naturalWidth||img.width)){
-      try{
-        var iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
-        var kk=Math.min((bw*f)/iw,(bh*f)/ih);
-        var lw=iw*kk, lh=ih*kk;
-        var pintar=img;
-        var quiere = logoVar==='white'?'#ffffff':logoVar==='black'?'#0a0a0a':logoVar==='red'?'#D82027':(oscuro?'#ffffff':'#0a0a0a');
-        var exacto = (logoVar==='white'&&window.__logoWhite)||(logoVar==='black'&&window.__logoBlack)||(logoVar==='red'&&window.__logoRed);
-        if(!exacto){ try{ pintar=tintedLogo(img,quiere); }catch(e){} }
-        ctx.drawImage(pintar, bx, by, lw, lh);
-        // zona de agarre del logo, en coordenadas de pantalla
-        var _c=portadaCaja({x:bx,y:by,w:lw,h:lh},k,anclaY);
-        card._logoXY={x:_c.x+_c.w/2, y:_c.y+_c.h/2, r:Math.max(_c.w,_c.h)/2};
-      }catch(e){}
-    }
-    ctx.restore();
-  }
-
-  // ── índice ──
-  if(card.portIndiceOn!==false){
-    var lineas=portadaLineas(card);
-    var ix=mg+(card.portLogoOn!==false?bw+Math.round(W*0.042):0), iw2=W-ix-mg;
-    var isz=Math.round(W*0.0235*(card.portIndiceSz||1));
-    var ilh=Math.round(isz*1.72);
-    var alto=lineas.length*ilh+(lineas.length?Math.round(isz*1.2):0);
-    var iy=Math.round((cabH-alto)/2+isz);
-    ctx.save();
-    ctx.textAlign='left';
-    for(var i=0;i<lineas.length;i++){
-      var eI=portadaEntra(seg,portadaTiempo(card,'indice',dur)+i*0.07,0.45);
-      if(eI<=0) continue;
-      ctx.globalAlpha=eI;
-      var dyi=(1-eI)*9;
-      ctx.font='400 '+isz+'px "IBM Plex Serif","IBM Plex Sans",serif';
-      ctx.letterSpacing='0px';
-      ctx.fillStyle=tinta;
-      var txt=lineas[i];
-      if(ctx.measureText(txt).width>iw2){
-        while(ctx.measureText(txt+'…').width>iw2 && txt.length>4) txt=txt.slice(0,-1);
-        txt=txt.replace(/[\s,;:.]+$/,'')+'…';
-      }
-      ctx.fillText(txt, ix, iy+i*ilh+dyi);
-      ctx.strokeStyle=filete; ctx.lineWidth=1;
-      ctx.beginPath();
-      var ry=Math.round(iy+i*ilh+isz*0.52+dyi)+0.5;
-      ctx.moveTo(ix,ry); ctx.lineTo(ix+iw2,ry); ctx.stroke();
-    }
-    if(card.portFechaOn!==false){
-      var eF=portadaEntra(seg,portadaTiempo(card,'indice',dur)+lineas.length*0.07,0.45);
-      if(eF>0){
-        ctx.globalAlpha=eF;
-        ctx.font='500 '+Math.round(isz*0.66)+'px "IBM Plex Sans"';
-        ctx.letterSpacing='1.6px';
-        ctx.fillStyle=tinta2;
-        ctx.fillText((card.fecha||formatCardDate(new Date())).toUpperCase(),
-                     ix, iy+lineas.length*ilh+Math.round(isz*0.5)+(1-eF)*9);
-      }
-    }
-    ctx.restore();
-  }
-
-  // ── título y bajada ──
-  // Se dibujan con el mismo mecanismo que en el resto del editor: quedan
-  // registrados en _titleBox/_bodyBox y pasan por deltaTexto, así se arrastran
-  // con el mouse y se guardan donde los dejes. Y encima de todo van las capas,
-  // que es donde entran los campos de texto extra y los gráficos sueltos.
-  card._titleBox=null; card._bodyBox=null;
-  if(card.titulo||card.cuerpo){
-    var eT=portadaEntra(seg,portadaTiempo(card,'titulo',dur),0.62);
-    if(eT>0){
-      ctx.save();
-      var al=card.portTitleAlign||'center';
-      var ax = al==='left' ? mg : al==='right' ? W-mg : W/2;
-      ctx.textAlign = al==='left' ? 'left' : al==='right' ? 'right' : 'center';
-      // Los mismos sliders que el resto del editor: «Tamaño del título» y
-      // «Tamaño del cuerpo». No hay un control paralelo para la portada.
-      var tsz=card.titleSz||Math.round(W*0.086);
-      var fam=titleFontFamily(card), wt=titleFontWeight(card);
-      ctx.font=wt+' '+tsz+'px '+fam; ctx.letterSpacing='-0.5px';
-      var ls=card.titulo?wrapTitle(card.titulo, W-mg*2, tsz, fam, wt):[];
-      var lh=Math.round(tsz*1.10);
-      var ssz=card.bodySz||Math.round(tsz*0.30);
-      var pie=card.portTitleY!==undefined?card.portTitleY:0.075;
-      var baseY=H-Math.round(H*pie)-(card.cuerpo?Math.round(ssz*2.0):0);
-      var yT=baseY-(ls.length-1)*lh;
-      var colT=card.portTitleColor||'#ffffff';
-      ctx.globalAlpha=eT;
-      ctx.fillStyle=colT;
-      ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=card.portVelo===false?0:20;
-      if(ls.length){
-        ctx.save();
-        var dT=deltaTexto(card,'tit',ax,yT);
-        ctx.translate(dT.dx,dT.dy);
-        for(var j=0;j<ls.length;j++) ctx.fillText(ls[j], ax, yT+j*lh+(1-eT)*22);
-        ctx.restore();
-        var anchoT=0;
-        for(var j2=0;j2<ls.length;j2++) anchoT=Math.max(anchoT, ctx.measureText(ls[j2]).width);
-        card._titleBox=portadaCaja({ x: (al==='left'?ax : al==='right'?ax-anchoT : ax-anchoT/2)-12,
-                         y: yT-tsz+dT.dy, w: anchoT+24, h: ls.length*lh+tsz*0.3 }, k, anclaY);
-      }
-      ctx.shadowBlur=0;
-      if(card.cuerpo){
-        var eB=portadaEntra(seg,portadaTiempo(card,'bajada',dur),0.58);
-        ctx.globalAlpha=eB;
-        ctx.font='700 '+ssz+'px "IBM Plex Sans"'; ctx.letterSpacing='0.4px';
-        ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=card.portVelo===false?0:14;
-        var txtB=card.cuerpo.replace(/\n/g,' ');
-        var yB=baseY+Math.round(ssz*1.95);
-        ctx.save();
-        var dB=deltaTexto(card,'baj',ax,yB);
-        ctx.translate(dB.dx,dB.dy);
-        ctx.fillText(txtB, ax, yB+(1-eB)*16);
-        ctx.restore();
-        var anchoB=ctx.measureText(txtB).width;
-        card._bodyBox=portadaCaja({ x: (al==='left'?ax : al==='right'?ax-anchoB : ax-anchoB/2)-10,
-                        y: yB-ssz+dB.dy, w: anchoB+20, h: ssz*1.6 }, k, anclaY);
-      }
-      ctx.shadowBlur=0;
-      ctx.restore();
-    }
-  }
-
-  ctx.restore();   // cierra la cámara
-
-  // Las capas van encima de todo: «+ Texto» suma los campos que quieras, con su
-  // tipografía y su tamaño, y se arrastran a donde vayan. Cada una entra en el
-  // turno que le toque en la lista de orden, igual que el resto.
-  drawCapas(card, false, function(capa){
-    var e=portadaEntra(seg, portadaTiempo(card,'capa:'+capa.id,dur), 0.58);
-    return {a:e, dy:(1-e)*18};
-  });
+// para pasarle a drawCapas: cada capa entra en su turno
+function animCapas(card, t){
+  if(!card || !card.animOn) return null;
+  return function(capa){ return animEntrar(card,'capa:'+capa.id,t); };
 }
 
 function drawCard(card,t){
   _drawingCardId = card?card.id:null;
+  // El cuadro en curso, para que las capas sepan en qué momento están aunque
+  // las dibuje otra función más abajo.
+  _lastAnimT = t;
   if(card){ card._capaBoxes=[]; card._capaHandle=null; }
   if(card.tipo==='tapa'){drawTapa(card,t);return;}
-  if(card.tipo==='portada'){drawPortada(card,t);return;}
+  // La vieja card «placa» era una card de foto con otro nombre: se migra.
+  if(card.tipo==='portada'){ card.tipo='media'; }
   if(card.tipo==='cover'){drawCover(card,t);return;}
   if(card.tipo==='mapa'){drawMapa(card,t);return;}
   if(card.tipo==='nano'){drawNano(card,t);return;}
@@ -5621,7 +5382,7 @@ function drawCard(card,t){
       // La sombra acompaña: negra detrás del texto blanco, blanca detrás del negro.
       const _fbShadow= _fbBlack ? 'rgba(255,255,255,' : 'rgba(0,0,0,';
       if(tl.length){
-        ctx.save();ctx.translate(_dTfb.dx,_dTfb.dy);
+        ctx.save();ctx.translate(_dTfb.dx,_dTfb.dy); var _aeT=animEntrar(card,'titulo',t); ctx.globalAlpha*=_aeT.a; ctx.translate(0,_aeT.dy);
         // Halo sutil SIEMPRE (no depende de la sombra): despega el texto del
         // fondo aunque el degradé esté en 0, sin ensuciar la foto.
         ctx.shadowColor=_fbShadow+(0.30+0.35*_scrim).toFixed(3)+')';
@@ -5635,7 +5396,7 @@ function drawCard(card,t){
       // primera vez que se congela queda pegada a él y no en otro lado.
       let byTop=tyReal+tl.length*tLH+22;
       if(card.cuerpo){
-        ctx.save();var _dBfb=deltaTexto(card,'baj',M,byTop);ctx.translate(_dBfb.dx,_dBfb.dy);
+        ctx.save();var _dBfb=deltaTexto(card,'baj',M,byTop);ctx.translate(_dBfb.dx,_dBfb.dy); var _ae9=animEntrar(card,'bajada',t); ctx.globalAlpha*=_ae9.a; ctx.translate(0,_ae9.dy);
         ctx.shadowColor=_fbShadow+(0.28+0.32*_scrim).toFixed(3)+')';
         ctx.shadowBlur=Math.round(bSz*0.12)+6*_scrim;
         ctx.strokeStyle=_fbRule;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(M,byTop);ctx.lineTo(M+50,byTop);ctx.stroke();
@@ -5654,7 +5415,7 @@ function drawCard(card,t){
         var _famC=titleFontFamily(card), _wtC=titleFontWeight(card);
         ctx.font=`${_wtC} ${tSz}px ${_famC}`;ctx.letterSpacing='-0.5px';
         const tl=wrapTitle(card.titulo,textMaxW,tSz,_famC,_wtC);
-        ctx.save();var _dTs=deltaTexto(card,'tit',textX,ty);ctx.translate(_dTs.dx,_dTs.dy);
+        ctx.save();var _dTs=deltaTexto(card,'tit',textX,ty);ctx.translate(_dTs.dx,_dTs.dy); var _ae10=animEntrar(card,'titulo',t); ctx.globalAlpha*=_ae10.a; ctx.translate(0,_ae10.dy);
         ctx.fillStyle=CC2.text;
         tl.forEach((l,i)=>{ ctx.fillText(l,textX,ty+i*tLH); });
         ctx.restore();
@@ -5663,7 +5424,7 @@ function drawCard(card,t){
       }
       if(card.cuerpo){
         const bl=wrap(card.cuerpo,textMaxW);
-        ctx.save();var _dBs=deltaTexto(card,'baj',textX,ty);ctx.translate(_dBs.dx,_dBs.dy);
+        ctx.save();var _dBs=deltaTexto(card,'baj',textX,ty);ctx.translate(_dBs.dx,_dBs.dy); var _ae11=animEntrar(card,'bajada',t); ctx.globalAlpha*=_ae11.a; ctx.translate(0,_ae11.dy);
         drawRichText(card.cuerpo,textX,ty,textMaxW,bSz,bLH,CC2.body,CC2.text);
         ctx.restore();
         card._bodyBox={x:textX,y:ty-bSz,w:textMaxW,h:bl.length*bLH+bSz};
@@ -5677,7 +5438,7 @@ function drawCard(card,t){
         var _famA=titleFontFamily(card), _wtA=titleFontWeight(card);
         ctx.font=`${_wtA} ${tSz}px ${_famA}`;ctx.letterSpacing='-0.5px';
         const tl=wrapTitle(card.titulo,W-M*2,tSz,_famA,_wtA);
-        ctx.save();var _dTa=deltaTexto(card,'tit',M,ty);ctx.translate(_dTa.dx,_dTa.dy);
+        ctx.save();var _dTa=deltaTexto(card,'tit',M,ty);ctx.translate(_dTa.dx,_dTa.dy); var _ae12=animEntrar(card,'titulo',t); ctx.globalAlpha*=_ae12.a; ctx.translate(0,_ae12.dy);
         ctx.fillStyle=CC3.text;
         tl.forEach((l,i)=>{ ctx.fillText(l,M,ty+i*tLH); });
         ctx.restore();
@@ -5686,7 +5447,7 @@ function drawCard(card,t){
       }
       if(card.cuerpo){
         const bl=wrap(card.cuerpo,W-M*2);
-        ctx.save();var _dBa=deltaTexto(card,'baj',M,ty);ctx.translate(_dBa.dx,_dBa.dy);
+        ctx.save();var _dBa=deltaTexto(card,'baj',M,ty);ctx.translate(_dBa.dx,_dBa.dy); var _ae13=animEntrar(card,'bajada',t); ctx.globalAlpha*=_ae13.a; ctx.translate(0,_ae13.dy);
         drawRichText(card.cuerpo,M,ty,W-M*2,bSz,bLH,CC3.body,CC3.text);
         ctx.restore();
         card._bodyBox={x:M,y:ty-bSz,w:W-M*2,h:bl.length*bLH+bSz};
@@ -5725,7 +5486,7 @@ function drawCard(card,t){
       var _famTx=titleFontFamily(card), _wtTx=titleFontWeight(card);
       ctx.font=`${_wtTx} ${tSz}px ${_famTx}`;ctx.letterSpacing='-0.5px';ctx.fillStyle=CC.text;
       const tl=wrapTitle(card.titulo,W-M*2,tSz,_famTx,_wtTx);
-      ctx.save();var _dTx=deltaTexto(card,'tit',M,y);ctx.translate(_dTx.dx,_dTx.dy);
+      ctx.save();var _dTx=deltaTexto(card,'tit',M,y);ctx.translate(_dTx.dx,_dTx.dy); var _ae14=animEntrar(card,'titulo',t); ctx.globalAlpha*=_ae14.a; ctx.translate(0,_ae14.dy);
       tl.forEach((l,i)=>{ ctx.fillText(l,M,y+i*tLH); });
       ctx.restore();
       card._titleBox={x:M,y:y-tLH,w:W-M*2,h:tl.length*tLH+30};
@@ -5734,7 +5495,7 @@ function drawCard(card,t){
     y+=28;                       // sin filete: solo aire entre título y cuerpo
     const _bodyTop=y;
     if(card.cuerpo){
-      ctx.save(); var _dBx=deltaTexto(card,'baj',M,y); ctx.translate(_dBx.dx,_dBx.dy);
+      ctx.save(); var _dBx=deltaTexto(card,'baj',M,y); ctx.translate(_dBx.dx,_dBx.dy); var _ae15=animEntrar(card,'bajada',t); ctx.globalAlpha*=_ae15.a; ctx.translate(0,_ae15.dy);
       if(t<1&&FX.type){
         // Typewriter: cualquier card texto
         const tp=Math.max(0,Math.min(1,(t-.32)/(1-.32)));
@@ -6812,13 +6573,6 @@ canvas.addEventListener('drop',async e=>{
     if(f0){ await tapaRecibir(f0); }
     return;
   }
-  if(cards[sel] && cards[sel].tipo==='portada'){
-    const f1=[...e.dataTransfer.files][0];
-    if(f1){ setStatus('Cargando la foto…','working');
-            await loadMediaFromFile(f1,cards[sel].id);
-            setStatus('Listo',''); renderEditor(cards[sel]); renderList(); play(cards[sel]); }
-    return;
-  }
   const files=[...e.dataTransfer.files].filter(f=>
     f.type.startsWith('image/')||f.type.startsWith('video/')||f.type.startsWith('audio/'));
   if(!files.length)return;
@@ -7858,97 +7612,6 @@ function renderEditor(c){
   }
 
   // ── INFOGRAFÍA editor section ──
-  // ── PORTADA editor section ──
-  let portadaSection='';
-  if(c.tipo==='portada'){
-    const _mp=mediaCache[c.id];
-    const _lin=portadaLineas(c);
-    portadaSection=`
-    <div class="field"><label style="color:#c1121c">◻ Portada animada</label>
-      <div style="font-size:11px;color:var(--text3);line-height:1.45">La foto va a sangre y la cámara arranca metida adentro. Cuando se abre y aparece la banda, sus elementos ya están entrando. Todo lo de abajo es editable: nada está fijo.</div>
-    </div>
-    <div class="field"><label>Foto</label>
-      ${_mp&&_mp.type==='img'
-        ? `<img class="img-thumb-ed" src="${_mp.thumbUrl||_mp.dataUrl}" style="width:100%;border-radius:4px"/>`
-        : ''}
-      <div class="img-drop" style="position:relative"><input type="file" id="port-file"/><div class="img-drop-txt">${_mp?'Cambiar la foto':'Soltá la foto de portada'}</div></div>
-    </div>
-
-    <div class="field"><label>Banda superior</label>
-      <div style="display:flex;gap:5px;margin-bottom:6px">
-        <button class="tipo-btn${c.portBandaOn!==false?' active':''}" id="port-banda-si" style="flex:1">Con banda</button>
-        <button class="tipo-btn${c.portBandaOn===false?' active':''}" id="port-banda-no" style="flex:1">Sin banda · a sangre</button>
-      </div>
-      ${c.portBandaOn!==false?`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-        <input type="color" id="port-banda-color" value="${c.portBandaColor||'#ffffff'}" style="width:40px;height:28px;border:1px solid var(--border);background:none;cursor:pointer"/>
-        <input type="text" id="port-banda-hex" value="${c.portBandaColor||'#ffffff'}" style="flex:1;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px;outline:none"/>
-      </div>
-      <div class="range-row"><label>Alto</label><input type="range" id="sl-pb" min="0.12" max="0.34" step="0.01" value="${c.portBanda||0.20}"/><span class="range-val">${Math.round((c.portBanda||0.20)*100)}%</span></div>`:''}
-    </div>
-
-    <div class="field"><label>Logo <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">el color lo elegís arriba, o más abajo por card</span></label>
-      <div style="display:flex;gap:5px;margin-bottom:6px">
-        <button class="tipo-btn${c.portLogoOn!==false?' active':''}" id="port-logo-si" style="flex:1">Con logo</button>
-        <button class="tipo-btn${c.portLogoOn===false?' active':''}" id="port-logo-no" style="flex:1">Sin logo</button>
-      </div>
-      ${c.portLogoOn!==false?`<div class="range-row"><label>Tamaño</label><input type="range" id="sl-plz" min="0.4" max="1.6" step="0.02" value="${c.portLogoSz||1}"/><span class="range-val">${(c.portLogoSz||1).toFixed(2)}×</span></div>`:''}
-    </div>
-
-    <div class="field"><label>Índice <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">una línea por renglón</span></label>
-      <div style="display:flex;gap:5px;margin-bottom:6px">
-        <button class="tipo-btn${c.portIndiceOn!==false?' active':''}" id="port-ind-si" style="flex:1">Con índice</button>
-        <button class="tipo-btn${c.portIndiceOn===false?' active':''}" id="port-ind-no" style="flex:1">Sin índice</button>
-      </div>
-      ${c.portIndiceOn!==false?`<textarea id="port-indice" style="min-height:80px;font-size:12px" placeholder="Se llena solo con los títulos de las cards que siguen">${escapeHtml(c.portIndice!==undefined&&c.portIndice!==null?c.portIndice:_lin.join('\n'))}</textarea>
-      <button class="btn-g" id="port-traer" style="width:100%;margin-top:4px">↻ Traer de las cards que siguen</button>
-      <div class="range-row" style="margin-top:6px"><label>Cuerpo</label><input type="range" id="sl-pis" min="0.7" max="1.5" step="0.02" value="${c.portIndiceSz||1}"/><span class="range-val">${(c.portIndiceSz||1).toFixed(2)}×</span></div>
-      <div style="display:flex;gap:5px;margin-top:6px">
-        <button class="tipo-btn${c.portFechaOn!==false?' active':''}" id="port-fecha-si" style="flex:1">Con fecha</button>
-        <button class="tipo-btn${c.portFechaOn===false?' active':''}" id="port-fecha-no" style="flex:1">Sin fecha</button>
-      </div>`:''}
-    </div>
-
-    <div class="field"><label>Título sobre la foto</label>
-      <div style="display:flex;gap:4px;margin-bottom:6px">
-        ${['left','center','right'].map(v=>`<button class="tipo-btn${(c.portTitleAlign||'center')===v?' active':''}" data-palign="${v}" style="flex:1">${v==='left'?'Izq':v==='center'?'Centro':'Der'}</button>`).join('')}
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-        <input type="color" id="port-tcolor" value="${c.portTitleColor||'#ffffff'}" style="width:40px;height:28px;border:1px solid var(--border);background:none;cursor:pointer"/>
-        <input type="text" id="port-tcolor-hex" value="${c.portTitleColor||'#ffffff'}" style="flex:1;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px;outline:none"/>
-      </div>
-      <div class="range-block">
-        <div class="range-row"><label>Altura</label><input type="range" id="sl-pty" min="0.02" max="0.40" step="0.005" value="${c.portTitleY!==undefined?c.portTitleY:0.075}"/><span class="range-val">${Math.round((c.portTitleY!==undefined?c.portTitleY:0.075)*100)}%</span></div>
-      </div>
-      <div style="font-size:11px;color:var(--text3);line-height:1.45;margin-top:4px">El cuerpo del título y el del epígrafe se mueven con «Tamaño del título» y «Tamaño del cuerpo», más abajo, como en cualquier card. También se arrastran con el mouse.</div>
-      <div style="display:flex;gap:5px;margin-top:6px">
-        <button class="tipo-btn${c.portVelo!==false?' active':''}" id="port-velo-si" style="flex:1">Con velo</button>
-        <button class="tipo-btn${c.portVelo===false?' active':''}" id="port-velo-no" style="flex:1">Sin velo</button>
-      </div>
-    </div>
-
-    <div class="field"><label>Orden de entrada <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">cada campo que sumás entra en su turno</span></label>
-      <div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">
-        ${portadaOrden(c).map((kk,ii)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 7px;${ii?'border-top:1px solid var(--border);':''}">
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:16px">${ii+1}</span>
-          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(portadaNombre(c,kk))}</span>
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3)">${(((c.portInicio!==undefined?c.portInicio:.18)*(c.fixedDur||6))+ii*(c.portPaso!==undefined?c.portPaso:.30)).toFixed(2)}s</span>
-          <button class="tipo-btn" data-pup="${kk}" style="padding:2px 7px"${ii===0?' disabled':''}>↑</button>
-          <button class="tipo-btn" data-pdn="${kk}" style="padding:2px 7px"${ii===portadaOrden(c).length-1?' disabled':''}>↓</button>
-        </div>`).join('')}
-      </div>
-    </div>
-    <div class="field"><label>Animación</label>
-      <div class="range-block">
-        <div class="range-row"><label>Duración</label><input type="range" id="sl-pd" min="3" max="12" step="0.5" value="${c.fixedDur||6}"/><span class="range-val">${(c.fixedDur||6).toFixed(1)}s</span></div>
-        <div class="range-row"><label>Entrada</label><input type="range" id="sl-pi" min="0.05" max="0.6" step="0.01" value="${c.portInicio!==undefined?c.portInicio:.18}"/><span class="range-val">${Math.round((c.portInicio!==undefined?c.portInicio:.18)*100)}%</span></div>
-        <div class="range-row"><label>Paso</label><input type="range" id="sl-pp" min="0.05" max="0.9" step="0.01" value="${c.portPaso!==undefined?c.portPaso:.30}"/><span class="range-val">${(c.portPaso!==undefined?c.portPaso:.30).toFixed(2)}s</span></div>
-        <div class="range-row"><label>Cámara</label><input type="range" id="sl-pz" min="0" max="0.7" step="0.01" value="${c.portZoom!==undefined?c.portZoom:.28}"/><span class="range-val">${Math.round((c.portZoom!==undefined?c.portZoom:.28)*100)}%</span></div>
-      </div>
-      <div style="font-size:11px;color:var(--text3);line-height:1.45">«Entrada» es hasta dónde se ve solo la foto; «paso», cuánto espera un elemento al anterior. «Cámara» es cuánto arranca metida adentro: en 0 la portada se ve entera desde el principio. La foto se arrastra con el mouse, y el logo también.</div>
-    </div>
-    <div class="sep"></div>`;
-  }
-
   // ── TAPA ANIMADA editor section ──
   let tapaSection='';
   if(c.tipo==='tapa'){
@@ -8044,10 +7707,8 @@ function renderEditor(c){
         <button class="tipo-btn${c.tipo==='libre'?' active':''}" data-t="libre" title="Bloques de texto libres, cada uno con su estilo">✦ Libre</button>
         <button class="tipo-btn${c.tipo==='infografia'?' active':''}" data-t="infografia" title="Infografía: texto arriba, ilustración abajo">◈ Info</button>
         <button class="tipo-btn${c.tipo==='tapa'?' active':''}" data-t="tapa" title="Tapa animada del diario">◨ Tapa</button>
-        <button class="tipo-btn${c.tipo==='portada'?' active':''}" data-t="portada" title="Portada animada">◻ Portada</button>
       </div>
     </div>
-    ${portadaSection}
     ${tapaSection}
     ${libreSection}
     ${coverSection}
@@ -8058,6 +7719,29 @@ function renderEditor(c){
     ${tablaSection}
     ${vinetaSection}
     ${infoSection}
+    <div class="field">
+      <label>Animación de entrada <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">los elementos entran de a uno</span></label>
+      <div style="display:flex;gap:5px;margin-bottom:6px">
+        <button class="tipo-btn${c.animOn?' active':''}" id="anim-si" style="flex:1">Animada</button>
+        <button class="tipo-btn${!c.animOn?' active':''}" id="anim-no" style="flex:1">Todo junto</button>
+      </div>
+      ${c.animOn?`
+      ${animOrden(c).length?`<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-bottom:6px">
+        ${animOrden(c).map((kk,ii)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 7px;${ii?'border-top:1px solid var(--border);':''}">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:16px">${ii+1}</span>
+          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(animNombre(c,kk))}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3)">${animSegundo(c,kk).toFixed(2)}s</span>
+          <button class="tipo-btn" data-aup="${kk}" style="padding:2px 7px"${ii===0?' disabled':''}>↑</button>
+          <button class="tipo-btn" data-adn="${kk}" style="padding:2px 7px"${ii===animOrden(c).length-1?' disabled':''}>↓</button>
+        </div>`).join('')}
+      </div>`:`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Todavía no hay nada que entre. Escribí un título o sumá una capa.</div>`}
+      <div class="range-block">
+        <div class="range-row"><label>Entrada</label><input type="range" id="sl-ai" min="0" max="0.6" step="0.01" value="${c.animInicio!==undefined?c.animInicio:.05}"/><span class="range-val">${Math.round((c.animInicio!==undefined?c.animInicio:.05)*100)}%</span></div>
+        <div class="range-row"><label>Paso</label><input type="range" id="sl-ap" min="0.05" max="1.2" step="0.01" value="${c.animPaso!==undefined?c.animPaso:.30}"/><span class="range-val">${(c.animPaso!==undefined?c.animPaso:.30).toFixed(2)}s</span></div>
+        <div class="range-row"><label>Duración</label><input type="range" id="sl-al" min="0.15" max="1.5" step="0.05" value="${c.animLargo!==undefined?c.animLargo:.55}"/><span class="range-val">${(c.animLargo!==undefined?c.animLargo:.55).toFixed(2)}s</span></div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">«Entrada» es cuánto espera el primero; «paso», cuánto espera cada uno al anterior; «duración», lo que tarda cada uno en aparecer. El largo total de la card se fija más abajo, en DURACIÓN DE LA CARD.</div>`:''}
+    </div>
     <div class="field" id="capas-field">
       <label>Capas <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">gráficos y textos libres, encima de la card</span></label>
       <div style="display:flex;gap:4px;margin-bottom:6px">
@@ -9299,57 +8983,6 @@ REGLAS IMPORTANTES:
     });
   }
 
-  // ── PORTADA controls ──
-  if(c.tipo==='portada'){
-    const re=()=>{ renderEditor(cards[sel]); redraw(); };
-    const fP=el.querySelector('#port-file');
-    if(fP) fP.onchange=async()=>{
-      const f=fP.files&&fP.files[0]; if(!f) return;
-      setStatus('Cargando la foto…','working');
-      await loadMediaFromFile(f, cards[sel].id);
-      setStatus('Listo','');
-      renderEditor(cards[sel]); renderList(); play(cards[sel]);
-    };
-    const par=(id,prop,val)=>{ const b=el.querySelector(id); if(b) b.onclick=()=>{ cards[sel][prop]=val; re(); }; };
-    par('#port-banda-si','portBandaOn',true);  par('#port-banda-no','portBandaOn',false);
-    par('#port-logo-si','portLogoOn',true);    par('#port-logo-no','portLogoOn',false);
-    par('#port-ind-si','portIndiceOn',true);   par('#port-ind-no','portIndiceOn',false);
-    par('#port-fecha-si','portFechaOn',true);  par('#port-fecha-no','portFechaOn',false);
-    par('#port-velo-si','portVelo',true);      par('#port-velo-no','portVelo',false);
-    el.querySelectorAll('[data-palign]').forEach(b=>b.onclick=()=>{ cards[sel].portTitleAlign=b.dataset.palign; re(); });
-    const color=(idC,idH,prop)=>{
-      const p=el.querySelector(idC), h=el.querySelector(idH);
-      const poner=v=>{ cards[sel][prop]=v; if(p)p.value=v; if(h)h.value=v; redraw(); };
-      if(p) p.oninput=e=>poner(e.target.value);
-      if(h) h.onchange=e=>{ const v=e.target.value.trim(); if(/^#[0-9a-fA-F]{6}$/.test(v)) poner(v); };
-    };
-    color('#port-banda-color','#port-banda-hex','portBandaColor');
-    color('#port-tcolor','#port-tcolor-hex','portTitleColor');
-    const ti=el.querySelector('#port-indice');
-    if(ti) ti.oninput=e=>{ cards[sel].portIndice=e.target.value; redraw(); };
-    const bt=el.querySelector('#port-traer');
-    if(bt) bt.onclick=()=>{ cards[sel].portIndice=portadaIndice(cards[sel]).join('\n'); re(); };
-    const sl=(id,prop,fmt)=>{ const r=el.querySelector(id); if(!r) return;
-      r.oninput=e=>{ const v=parseFloat(e.target.value); cards[sel][prop]=v;
-        const n=r.parentElement.querySelector('.range-val'); if(n) n.textContent=fmt(v); redraw(); }; };
-    sl('#sl-pb','portBanda',v=>Math.round(v*100)+'%');
-    sl('#sl-plz','portLogoSz',v=>v.toFixed(2)+'×');
-    sl('#sl-pis','portIndiceSz',v=>v.toFixed(2)+'×');
-    sl('#sl-pty','portTitleY',v=>Math.round(v*100)+'%');
-    sl('#sl-pd','fixedDur',v=>v.toFixed(1)+'s');
-    sl('#sl-pi','portInicio',v=>Math.round(v*100)+'%');
-    sl('#sl-pp','portPaso',v=>v.toFixed(2)+'s');
-    const mover=(clave,d)=>{
-      const o=portadaOrden(cards[sel]), i=o.indexOf(clave), j=i+d;
-      if(i<0||j<0||j>=o.length) return;
-      o.splice(j,0,o.splice(i,1)[0]);
-      cards[sel].portOrden=o; re();
-    };
-    el.querySelectorAll('[data-pup]').forEach(b=>b.onclick=()=>mover(b.dataset.pup,-1));
-    el.querySelectorAll('[data-pdn]').forEach(b=>b.onclick=()=>mover(b.dataset.pdn,+1));
-    sl('#sl-pz','portZoom',v=>Math.round(v*100)+'%');
-  }
-
   // ── TAPA controls ──
   if(c.tipo==='tapa'){
     const st=el.querySelector('#tapa-status');
@@ -9441,6 +9074,29 @@ REGLAS IMPORTANTES:
     const fC=el.querySelector('#info-fit-contain'), fV=el.querySelector('#info-fit-cover');
     if(fC&&mm) fC.onclick=()=>{ mm.fitMode='contain'; renderEditor(cards[sel]); redraw(); };
     if(fV&&mm) fV.onclick=()=>{ mm.fitMode='cover'; renderEditor(cards[sel]); redraw(); };
+  }
+
+  // ── Animación de entrada ──
+  {
+    const reA=()=>{ renderEditor(cards[sel]); redraw(); };
+    const bSi=el.querySelector('#anim-si'), bNo=el.querySelector('#anim-no');
+    if(bSi) bSi.onclick=()=>{ cards[sel].animOn=true;  reA(); };
+    if(bNo) bNo.onclick=()=>{ cards[sel].animOn=false; reA(); };
+    const slA=(id,prop,fmt)=>{ const r=el.querySelector(id); if(!r) return;
+      r.oninput=e=>{ const v=parseFloat(e.target.value); cards[sel][prop]=v;
+        const n=r.parentElement.querySelector('.range-val'); if(n) n.textContent=fmt(v);
+        redraw(); }; };
+    slA('#sl-ai','animInicio',v=>Math.round(v*100)+'%');
+    slA('#sl-ap','animPaso',v=>v.toFixed(2)+'s');
+    slA('#sl-al','animLargo',v=>v.toFixed(2)+'s');
+    const moverA=(clave,d)=>{
+      const o=animOrden(cards[sel]), i=o.indexOf(clave), j=i+d;
+      if(i<0||j<0||j>=o.length) return;
+      o.splice(j,0,o.splice(i,1)[0]);
+      cards[sel].animOrden=o; reA();
+    };
+    el.querySelectorAll('[data-aup]').forEach(b=>b.onclick=()=>moverA(b.dataset.aup,-1));
+    el.querySelectorAll('[data-adn]').forEach(b=>b.onclick=()=>moverA(b.dataset.adn,+1));
   }
 
   // ── Capas: gráficos y textos libres ──
@@ -9701,13 +9357,6 @@ function addCard(tipo){
   if(tipo==='tabla'){defaults.titulo='';defaults.cuerpo='';defaults.tableRows=[];defaults.titleSz=76;}
   if(tipo==='vineta'){defaults.vinCount=1;defaults.vinCaptions=['',''];defaults.bodySz=46;vinCache[defaults.id]=[];}
   if(tipo==='infografia'){defaults.infoTextH=34;defaults.bodySz=58;defaults.titleSz=52;defaults.infoPrompt='';defaults.mediaH=100;defaults.mediaW=100;defaults.anchor='bc';defaults.infoTransp=true;}
-  if(tipo==='portada'){
-    defaults.fixedDur=6; defaults.portColor='#D82027';
-    defaults.portInicio=0.18; defaults.portZoom=0.28; defaults.portBanda=0.20;
-    defaults.portBandaColor='#ffffff'; defaults.portLogoSz=1;
-    defaults.titleSz=Math.round(W*0.086); defaults.bodySz=Math.round(W*0.026);
-    defaults.titulo=''; defaults.cuerpo='';
-  }
   if(tipo==='tapa'){
     // La tapa dura lo que dura: zoom + flash + congelado. Con fixedDur, la
     // máquina de exportación que ya existe la graba entera sin tocar nada.
@@ -9875,12 +9524,6 @@ async function tapaRecibir(file){
 async function pasteImageFile(file){
   let card=cards[sel];
   if(card && card.tipo==='tapa'){ await tapaRecibir(file); return; }
-  if(card && card.tipo==='portada'){
-    setStatus('Cargando la foto…','working');
-    await loadMediaFromFile(file,card.id);
-    setStatus('Listo','');
-    renderEditor(cards[sel]); renderList(); play(cards[sel]); return;
-  }
   // Si la card ya tiene su foto de fondo, la que pegás ahora va como capa
   // encima: así se pueden apilar varias.
   if(card && mediaCache[card.id] && card.tipo!=='vineta'){
@@ -10083,7 +9726,6 @@ document.getElementById('add-tabla').onclick=()=>addCard('tabla');
 
 {const _ai=document.getElementById('add-infografia'); if(_ai) _ai.onclick=()=>addCard('infografia');}
 {const _at=document.getElementById('add-tapa'); if(_at) _at.onclick=()=>addCard('tapa');}
-{const _ap=document.getElementById('add-portada'); if(_ap) _ap.onclick=()=>addCard('portada');}
 
 // ══════════════════════════════════════════════════════════
 // INFOGRAFÍA FORENSE (v1)
@@ -10603,7 +10245,7 @@ document.getElementById('png-btn').onclick=()=>{
 // ════════════════════════════════
 const TPL_LS='incertis_templates';
 // Estilo que comparten todos los tipos de card
-const TPL_COMUN=['cardBg','cardTextColor','frameW','frameColor','numbered',
+const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','cardBg','cardTextColor','frameW','frameColor','numbered',
   'titleSz','bodySz','titleFont','titleItalic','bodyItalic','volantaColor',
   'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur',
   // Posición exacta del título y de la bajada. Es lo que permite dejar la placa
@@ -10624,10 +10266,6 @@ const TPL_TIPO={
   libre:['libreVAlign'],
   // La portada y la tapa viajan enteras en el template: colores, tamaños,
   // orden de entrada, posición del logo y tiempos de animación.
-  portada:['portBandaOn','portBandaColor','portBanda','portLogoOn','portLogoSz',
-           'portIndiceOn','portIndiceSz','portFechaOn','portTitleAlign','portTitleColor',
-           'portTitleY','portVelo','portInicio','portPaso','portZoom','portOrden',
-           'fixedDur','logoDX','logoDY','titXY','bajXY','textoAuto'],
   tapa:['tapaZoom','tapaArranque','tapaInicio','tapaFlash','tapaHold','fixedDur']
 };
 let TPL_EQUIPO=[];   // los que vienen del almacén del equipo (o del repo)
@@ -11672,6 +11310,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v170','Animación de entrada en cualquier card','Marcha atrás con la card «placa»: era una maqueta con decisiones propias que se pisaban con los controles del editor —tamaños, veladura, colores— y que además no dejaba ubicar las cosas a mano. Se fue. Las cards de ese tipo que hayas hecho se convierten solas en cards de foto normales, sin perder nada. En su lugar, la animación pasó a ser algo que se le prende a CUALQUIER card, con el bloque «Animación de entrada» arriba de CAPAS. La card se diseña como siempre, con los controles de siempre, y ahí solo se decide el tiempo: una lista muestra todo lo que entra —el título, la bajada y cada capa que sumaste— y se reordena con las flechas, con el segundo exacto en que entra cada uno al lado. Tres controles: cuánto espera el primero, cuánto espera cada uno al anterior, y lo que tarda cada uno en aparecer. El largo total sigue siendo la duración de la card. Con la animación apagada, la card dibuja exactamente como antes. Y los textos e imágenes que sumás con ＋ Texto y ＋ Imagen ahora sí se animan: entran en el turno que les toque, en vez de estar puestos desde el primer cuadro.'],
     ['v169','Portada — orden de entrada, logo y foto que se mueven, y todo en el template','Cuatro cosas. La primera: cada campo que sumás con «+ Texto» o «+ Imagen» ahora también se anima, en vez de aparecer puesto desde el principio. La segunda: hay una lista con el orden de entrada —logo, índice, título, epígrafe y cada campo que agregaste— y se reordena con las flechas; el tiempo de cada elemento sale de su posición en esa lista, así que no hay ni un tiempo escrito en el código, y al lado de cada uno se ve en qué segundo entra. Un control de «paso» regula cuánto espera cada elemento al anterior. La tercera: el logo se arrastra con el mouse y queda fijo donde lo dejes, y la foto también se mueve dentro de su recuadro, como en cualquier card de foto. La cuarta: la portada y la tapa entraron al sistema de templates. Guardás uno con ◇ Templates y se lleva todo —colores, tamaños, orden de entrada, posición del logo y del título, tiempos de animación— para aplicarlo a las portadas que hagas después.'],
     ['v168','Portada — el logo sin caja, los cuerpos de siempre y los textos que se arrastran','Tres correcciones sobre la portada. Se fue la caja de color detrás del logo: el logo va solo, con el color que elegís arriba —blanco, negro o rojo— o el que le pongas a la card, porque esa decisión depende del fondo y no la tiene que tomar el código. Queda un control de tamaño y otro para sacarlo. Segundo: el cuerpo del título y el del epígrafe estaban en controles propios de la portada, paralelos a los del editor, así que mover «Tamaño del título» no hacía nada; ahora la portada usa los mismos campos que el resto de las cards y esos sliders funcionan. Tercero: el título y el epígrafe se arrastran con el mouse y quedan donde los dejes. Como la portada dibuja con un zoom de cámara y el mouse no, las cajas de texto se convierten a coordenadas de pantalla antes de responder al clic: sin eso, tocar las letras no las agarraba. Y las capas se dibujan sobre la portada, así que «+ Texto» suma todos los cuerpos de texto que quieras, cada uno con su tipografía, su tamaño y su lugar.'],
     ['v167','Portada — todo editable','La primera versión traía demasiadas decisiones metidas en el código: la banda blanca, la caja roja, el título centrado abajo. Ahora nada de eso está fijo. La banda se prende y se apaga —sin banda, la foto va a sangre de arriba abajo y el cabezal queda sobre ella con un velo que lo hace legible— y tiene su color y su alto. La caja de marca también se prende y se apaga, con su color propio, su tamaño, y el logo en blanco, negro, rojo o automático. El índice y la fecha se pueden sacar, y el índice tiene su cuerpo tipográfico. El título tiene alineación —izquierda, centro o derecha—, color, cuerpo y altura sobre la foto, y el velo de abajo se puede apagar. Además el título y la bajada se arrastran con el mouse y quedan donde los dejes, igual que en el resto de las cards, y las capas se dibujan sobre la portada: con «+ Texto» sumás todos los campos que quieras, cada uno con su tipografía, su tamaño y su lugar. Los valores que trae son un punto de partida, no una regla.'],
