@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v167 «portada editable»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v169 «portada: orden y template»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -929,7 +929,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v167 «portada editable»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v169 «portada: orden y template»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -2476,7 +2476,10 @@ function capaLineas(capa,anchoMax){
 }
 // Dibuja todas las capas de la card. Se llama desde drawChrome, así que
 // cubre los diez tipos de card de una sola vez.
-function drawCapas(card, soloAtras){
+// `entrada` es opcional: una función (capa,i) que devuelve {a,dy} para que la
+// card decida cuándo y cómo entra cada capa. Las cards que no la pasan dibujan
+// como siempre, con todas las capas puestas.
+function drawCapas(card, soloAtras, entrada){
   const L=capasDe(card);
   if(!card._capaBoxes) card._capaBoxes=[];
   if(!L.length) return;
@@ -2486,8 +2489,11 @@ function drawCapas(card, soloAtras){
     if(!!capa.atras !== !!soloAtras) return;
     const box=capaBox(card,capa);
     card._capaBoxes[i]=box;
+    const _e = entrada ? entrada(capa,i) : null;
+    if(_e && _e.a<=0.001) return;
     ctx.save();
-    ctx.globalAlpha=(capa.op===undefined?1:capa.op);
+    if(_e && _e.dy) ctx.translate(0,_e.dy);
+    ctx.globalAlpha=(capa.op===undefined?1:capa.op)*(_e?_e.a:1);
     if(capa.k==='txt'){
       ctx.font=capaFont(capa);
       ctx.fillStyle=capa.color||CC.text||'#111';
@@ -5233,6 +5239,48 @@ function portadaLineas(card){
   return portadaIndice(card);
 }
 
+// La caja de un texto, llevada de coordenadas de portada a coordenadas de
+// pantalla. Hace falta porque el título se dibuja dentro del zoom de cámara y
+// el mouse, no: sin esto, tocar las letras no las agarraría.
+function portadaCaja(b, k, anclaY){
+  return { x: W/2+(b.x-W/2)*k, y: anclaY+(b.y-anclaY)*k, w: b.w*k, h: b.h*k };
+}
+
+// ── El orden de entrada ─────────────────────────────────────────────
+// Todo lo que aparece en la portada —el logo, el índice, el título, el
+// epígrafe y cada campo de texto o imagen que sumes— es un elemento de una
+// misma lista, y el editor la reordena. El tiempo de cada uno sale de su
+// posición: no hay tiempos escritos en el código.
+function portadaClaves(card){
+  var k=['logo','indice','titulo','bajada'];
+  (typeof capasDe==='function'?capasDe(card):[]).forEach(function(c){ k.push('capa:'+c.id); });
+  return k;
+}
+function portadaOrden(card){
+  var validas=portadaClaves(card);
+  var prev=Array.isArray(card.portOrden)?card.portOrden:[];
+  var out=prev.filter(function(x){ return validas.indexOf(x)>=0; });
+  validas.forEach(function(x){ if(out.indexOf(x)<0) out.push(x); });
+  return out;
+}
+function portadaNombre(card, clave){
+  if(clave==='logo')   return 'Logo';
+  if(clave==='indice') return 'Índice y fecha';
+  if(clave==='titulo') return 'Título';
+  if(clave==='bajada') return 'Epígrafe';
+  var id=clave.slice(5);
+  var c=(typeof capasDe==='function'?capasDe(card):[]).filter(function(x){return String(x.id)===id;})[0];
+  if(!c) return 'Capa';
+  if(c.k==='txt') return '«'+String(c.text||'texto').replace(/\s+/g,' ').slice(0,24)+'»';
+  return c.k==='video' ? 'Video suelto' : 'Imagen suelta';
+}
+function portadaTiempo(card, clave, dur){
+  var o=portadaOrden(card), i=o.indexOf(clave);
+  if(i<0) i=o.length;
+  var t0=(card.portInicio!==undefined?card.portInicio:0.18)*dur;
+  return t0 + i*(card.portPaso!==undefined?card.portPaso:0.30);
+}
+
 // entrada de un elemento: 0 antes de tiempo, 1 cuando terminó de asentarse
 function portadaEntra(seg, t0, d){
   return eo3(Math.max(0, Math.min(1, (seg-t0)/Math.max(0.01,d))));
@@ -5268,8 +5316,8 @@ function drawPortada(card,t){
       var esc=Math.max(W/sw,fh/sh)*(m.zoom||1);
       var dw=sw*esc, dh=sh*esc;
       var cx=(m.cx!==undefined?m.cx:.5), cy=(m.cy!==undefined?m.cy:.5);
-      var dx=Math.min(0,Math.max(W-dw, W*0.5-dw*cx));
-      var dy=Math.min(fy,Math.max(fy+fh-dh, fy+fh*0.5-dh*cy));
+      var dx=Math.min(0,Math.max(W-dw, W*0.5-dw*cx))+(m.offX||0);
+      var dy=Math.min(fy,Math.max(fy+fh-dh, fy+fh*0.5-dh*cy))+(m.offY||0);
       ctx.save(); ctx.beginPath(); ctx.rect(0,fy,W,fh); ctx.clip();
       try{ ctx.drawImage(el,dx,dy,dw,dh); }catch(e){}
       ctx.restore();
@@ -5300,7 +5348,6 @@ function drawPortada(card,t){
     ctx.restore();
   }
 
-  var t0=(card.portInicio!==undefined?card.portInicio:0.18)*dur;
   // la tinta del cabezal sigue al fondo sobre el que cae
   var oscuro = hayBanda ? isColorDark(bandaCol) : true;
   var tinta  = oscuro ? '#ffffff' : '#111111';
@@ -5308,35 +5355,36 @@ function drawPortada(card,t){
   var filete = oscuro ? 'rgba(255,255,255,.30)' : 'rgba(0,0,0,.26)';
 
   var cabH=hayBanda?bandaH:Math.round(H*0.20);
-  var hayCaja=card.portCajaOn!==false;
-  var escCaja=card.portCajaSz||1;
-  var bh=Math.round((cabH-mg*1.15)*escCaja), bw=Math.round(bh*2.15);
+  // El logo va solo, sin caja de color: el color lo decide el editor —Logo
+  // blanco / negro / rojo de arriba, o el de la card— según el fondo que
+  // elegiste. Acá no se inventa ninguno.
+  var bh=Math.round((cabH-mg*1.15)*(card.portLogoSz||1));
+  var bw=Math.round(bh*2.15);
   var by0=Math.round((cabH-bh)/2);
-
-  // ── caja de marca ──
-  var eM=portadaEntra(seg,t0,0.50);
-  var logoVar=card.portLogoVar||(hayCaja?'white':'auto');
-  if(eM>0 && (hayCaja||card.portLogoOn!==false)){
+  var eM=portadaEntra(seg,portadaTiempo(card,'logo',dur),0.55);
+  var logoVar=card.logoVariant||window.__logoVariant||(oscuro?'white':'black');
+  if(eM>0 && card.portLogoOn!==false){
     ctx.save();
     ctx.globalAlpha=eM;
     var f=1+0.06*(1-eM);
-    var bx=mg-(bw*f-bw)/2, by=by0-(bh*f-bh)/2+(1-eM)*10;
-    if(hayCaja){
-      ctx.fillStyle=card.portColor||'#D82027';
-      ctx.fillRect(bx,by,bw*f,bh*f);
-    }
+    // El logo se arrastra con el mouse y queda donde lo dejes: mismo mecanismo
+    // que en el resto del editor, con logoDX/logoDY guardados en la card.
+    var bx=mg-(bw*f-bw)/2+(card.logoDX||0), by=by0-(bh*f-bh)/2+(1-eM)*10+(card.logoDY||0);
     var img=null;
-    try{ img=pickLogoImg(logoVar==='auto'?!oscuro:false, logoVar); }catch(e){}
+    try{ img=pickLogoImg(oscuro, logoVar); }catch(e){}
     if(img&&(img.naturalWidth||img.width)){
       try{
-        var pad=bh*(hayCaja?0.24:0.10), iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
-        var kk=Math.min((bw*f-pad*2)/iw,(bh*f-pad*2)/ih);
+        var iw=img.naturalWidth||img.width, ih=img.naturalHeight||img.height;
+        var kk=Math.min((bw*f)/iw,(bh*f)/ih);
         var lw=iw*kk, lh=ih*kk;
         var pintar=img;
         var quiere = logoVar==='white'?'#ffffff':logoVar==='black'?'#0a0a0a':logoVar==='red'?'#D82027':(oscuro?'#ffffff':'#0a0a0a');
         var exacto = (logoVar==='white'&&window.__logoWhite)||(logoVar==='black'&&window.__logoBlack)||(logoVar==='red'&&window.__logoRed);
         if(!exacto){ try{ pintar=tintedLogo(img,quiere); }catch(e){} }
-        ctx.drawImage(pintar, bx+(bw*f-lw)/2, by+(bh*f-lh)/2, lw, lh);
+        ctx.drawImage(pintar, bx, by, lw, lh);
+        // zona de agarre del logo, en coordenadas de pantalla
+        var _c=portadaCaja({x:bx,y:by,w:lw,h:lh},k,anclaY);
+        card._logoXY={x:_c.x+_c.w/2, y:_c.y+_c.h/2, r:Math.max(_c.w,_c.h)/2};
       }catch(e){}
     }
     ctx.restore();
@@ -5345,7 +5393,7 @@ function drawPortada(card,t){
   // ── índice ──
   if(card.portIndiceOn!==false){
     var lineas=portadaLineas(card);
-    var ix=mg+(hayCaja||card.portLogoOn!==false?bw+Math.round(W*0.042):0), iw2=W-ix-mg;
+    var ix=mg+(card.portLogoOn!==false?bw+Math.round(W*0.042):0), iw2=W-ix-mg;
     var isz=Math.round(W*0.0235*(card.portIndiceSz||1));
     var ilh=Math.round(isz*1.72);
     var alto=lineas.length*ilh+(lineas.length?Math.round(isz*1.2):0);
@@ -5353,7 +5401,7 @@ function drawPortada(card,t){
     ctx.save();
     ctx.textAlign='left';
     for(var i=0;i<lineas.length;i++){
-      var eI=portadaEntra(seg,t0+0.22+i*0.07,0.42);
+      var eI=portadaEntra(seg,portadaTiempo(card,'indice',dur)+i*0.07,0.45);
       if(eI<=0) continue;
       ctx.globalAlpha=eI;
       var dyi=(1-eI)*9;
@@ -5372,7 +5420,7 @@ function drawPortada(card,t){
       ctx.moveTo(ix,ry); ctx.lineTo(ix+iw2,ry); ctx.stroke();
     }
     if(card.portFechaOn!==false){
-      var eF=portadaEntra(seg,t0+0.22+lineas.length*0.07,0.42);
+      var eF=portadaEntra(seg,portadaTiempo(card,'indice',dur)+lineas.length*0.07,0.45);
       if(eF>0){
         ctx.globalAlpha=eF;
         ctx.font='500 '+Math.round(isz*0.66)+'px "IBM Plex Sans"';
@@ -5392,18 +5440,20 @@ function drawPortada(card,t){
   // que es donde entran los campos de texto extra y los gráficos sueltos.
   card._titleBox=null; card._bodyBox=null;
   if(card.titulo||card.cuerpo){
-    var eT=portadaEntra(seg,t0+0.48,0.62);
+    var eT=portadaEntra(seg,portadaTiempo(card,'titulo',dur),0.62);
     if(eT>0){
       ctx.save();
       var al=card.portTitleAlign||'center';
       var ax = al==='left' ? mg : al==='right' ? W-mg : W/2;
       ctx.textAlign = al==='left' ? 'left' : al==='right' ? 'right' : 'center';
-      var tsz=card.portTitleSz||Math.round(W*0.086);
+      // Los mismos sliders que el resto del editor: «Tamaño del título» y
+      // «Tamaño del cuerpo». No hay un control paralelo para la portada.
+      var tsz=card.titleSz||Math.round(W*0.086);
       var fam=titleFontFamily(card), wt=titleFontWeight(card);
       ctx.font=wt+' '+tsz+'px '+fam; ctx.letterSpacing='-0.5px';
       var ls=card.titulo?wrapTitle(card.titulo, W-mg*2, tsz, fam, wt):[];
       var lh=Math.round(tsz*1.10);
-      var ssz=Math.round(tsz*0.30);
+      var ssz=card.bodySz||Math.round(tsz*0.30);
       var pie=card.portTitleY!==undefined?card.portTitleY:0.075;
       var baseY=H-Math.round(H*pie)-(card.cuerpo?Math.round(ssz*2.0):0);
       var yT=baseY-(ls.length-1)*lh;
@@ -5419,12 +5469,12 @@ function drawPortada(card,t){
         ctx.restore();
         var anchoT=0;
         for(var j2=0;j2<ls.length;j2++) anchoT=Math.max(anchoT, ctx.measureText(ls[j2]).width);
-        card._titleBox={ x: (al==='left'?ax : al==='right'?ax-anchoT : ax-anchoT/2)-12,
-                         y: yT-tsz+dT.dy, w: anchoT+24, h: ls.length*lh+tsz*0.3 };
+        card._titleBox=portadaCaja({ x: (al==='left'?ax : al==='right'?ax-anchoT : ax-anchoT/2)-12,
+                         y: yT-tsz+dT.dy, w: anchoT+24, h: ls.length*lh+tsz*0.3 }, k, anclaY);
       }
       ctx.shadowBlur=0;
       if(card.cuerpo){
-        var eB=portadaEntra(seg,t0+0.62,0.55);
+        var eB=portadaEntra(seg,portadaTiempo(card,'bajada',dur),0.58);
         ctx.globalAlpha=eB;
         ctx.font='700 '+ssz+'px "IBM Plex Sans"'; ctx.letterSpacing='0.4px';
         ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=card.portVelo===false?0:14;
@@ -5436,8 +5486,8 @@ function drawPortada(card,t){
         ctx.fillText(txtB, ax, yB+(1-eB)*16);
         ctx.restore();
         var anchoB=ctx.measureText(txtB).width;
-        card._bodyBox={ x: (al==='left'?ax : al==='right'?ax-anchoB : ax-anchoB/2)-10,
-                        y: yB-ssz+dB.dy, w: anchoB+20, h: ssz*1.6 };
+        card._bodyBox=portadaCaja({ x: (al==='left'?ax : al==='right'?ax-anchoB : ax-anchoB/2)-10,
+                        y: yB-ssz+dB.dy, w: anchoB+20, h: ssz*1.6 }, k, anclaY);
       }
       ctx.shadowBlur=0;
       ctx.restore();
@@ -5447,8 +5497,12 @@ function drawPortada(card,t){
   ctx.restore();   // cierra la cámara
 
   // Las capas van encima de todo: «+ Texto» suma los campos que quieras, con su
-  // tipografía y su tamaño, y se arrastran a donde vayan.
-  drawCapas(card, false);
+  // tipografía y su tamaño, y se arrastran a donde vayan. Cada una entra en el
+  // turno que le toque en la lista de orden, igual que el resto.
+  drawCapas(card, false, function(capa){
+    var e=portadaEntra(seg, portadaTiempo(card,'capa:'+capa.id,dur), 0.58);
+    return {a:e, dy:(1-e)*18};
+  });
 }
 
 function drawCard(card,t){
@@ -7832,19 +7886,12 @@ function renderEditor(c){
       <div class="range-row"><label>Alto</label><input type="range" id="sl-pb" min="0.12" max="0.34" step="0.01" value="${c.portBanda||0.20}"/><span class="range-val">${Math.round((c.portBanda||0.20)*100)}%</span></div>`:''}
     </div>
 
-    <div class="field"><label>Marca</label>
+    <div class="field"><label>Logo <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">el color lo elegís arriba, o más abajo por card</span></label>
       <div style="display:flex;gap:5px;margin-bottom:6px">
-        <button class="tipo-btn${c.portCajaOn!==false?' active':''}" id="port-caja-si" style="flex:1">Logo en caja</button>
-        <button class="tipo-btn${c.portCajaOn===false?' active':''}" id="port-caja-no" style="flex:1">Logo solo</button>
+        <button class="tipo-btn${c.portLogoOn!==false?' active':''}" id="port-logo-si" style="flex:1">Con logo</button>
+        <button class="tipo-btn${c.portLogoOn===false?' active':''}" id="port-logo-no" style="flex:1">Sin logo</button>
       </div>
-      ${c.portCajaOn!==false?`<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-        <input type="color" id="port-color" value="${c.portColor||'#D82027'}" style="width:40px;height:28px;border:1px solid var(--border);background:none;cursor:pointer"/>
-        <input type="text" id="port-color-hex" value="${c.portColor||'#D82027'}" style="flex:1;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px;outline:none"/>
-      </div>`:''}
-      <div style="display:flex;gap:4px;margin-bottom:6px">
-        ${['auto','white','black','red'].map(v=>`<button class="tipo-btn${(c.portLogoVar||(c.portCajaOn!==false?'white':'auto'))===v?' active':''}" data-plogo="${v}" style="flex:1">${v==='auto'?'Auto':v==='white'?'Blanco':v==='black'?'Negro':'Rojo'}</button>`).join('')}
-      </div>
-      <div class="range-row"><label>Tamaño</label><input type="range" id="sl-pcz" min="0.5" max="1.4" step="0.02" value="${c.portCajaSz||1}"/><span class="range-val">${(c.portCajaSz||1).toFixed(2)}×</span></div>
+      ${c.portLogoOn!==false?`<div class="range-row"><label>Tamaño</label><input type="range" id="sl-plz" min="0.4" max="1.6" step="0.02" value="${c.portLogoSz||1}"/><span class="range-val">${(c.portLogoSz||1).toFixed(2)}×</span></div>`:''}
     </div>
 
     <div class="field"><label>Índice <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">una línea por renglón</span></label>
@@ -7870,22 +7917,34 @@ function renderEditor(c){
         <input type="text" id="port-tcolor-hex" value="${c.portTitleColor||'#ffffff'}" style="flex:1;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px;outline:none"/>
       </div>
       <div class="range-block">
-        <div class="range-row"><label>Cuerpo</label><input type="range" id="sl-pts" min="40" max="180" step="2" value="${c.portTitleSz||Math.round(W*0.086)}"/><span class="range-val">${c.portTitleSz||Math.round(W*0.086)}px</span></div>
         <div class="range-row"><label>Altura</label><input type="range" id="sl-pty" min="0.02" max="0.40" step="0.005" value="${c.portTitleY!==undefined?c.portTitleY:0.075}"/><span class="range-val">${Math.round((c.portTitleY!==undefined?c.portTitleY:0.075)*100)}%</span></div>
       </div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45;margin-top:4px">El cuerpo del título y el del epígrafe se mueven con «Tamaño del título» y «Tamaño del cuerpo», más abajo, como en cualquier card. También se arrastran con el mouse.</div>
       <div style="display:flex;gap:5px;margin-top:6px">
         <button class="tipo-btn${c.portVelo!==false?' active':''}" id="port-velo-si" style="flex:1">Con velo</button>
         <button class="tipo-btn${c.portVelo===false?' active':''}" id="port-velo-no" style="flex:1">Sin velo</button>
       </div>
     </div>
 
+    <div class="field"><label>Orden de entrada <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">cada campo que sumás entra en su turno</span></label>
+      <div style="border:1px solid var(--border);border-radius:3px;overflow:hidden">
+        ${portadaOrden(c).map((kk,ii)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 7px;${ii?'border-top:1px solid var(--border);':''}">
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:16px">${ii+1}</span>
+          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(portadaNombre(c,kk))}</span>
+          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3)">${(((c.portInicio!==undefined?c.portInicio:.18)*(c.fixedDur||6))+ii*(c.portPaso!==undefined?c.portPaso:.30)).toFixed(2)}s</span>
+          <button class="tipo-btn" data-pup="${kk}" style="padding:2px 7px"${ii===0?' disabled':''}>↑</button>
+          <button class="tipo-btn" data-pdn="${kk}" style="padding:2px 7px"${ii===portadaOrden(c).length-1?' disabled':''}>↓</button>
+        </div>`).join('')}
+      </div>
+    </div>
     <div class="field"><label>Animación</label>
       <div class="range-block">
         <div class="range-row"><label>Duración</label><input type="range" id="sl-pd" min="3" max="12" step="0.5" value="${c.fixedDur||6}"/><span class="range-val">${(c.fixedDur||6).toFixed(1)}s</span></div>
         <div class="range-row"><label>Entrada</label><input type="range" id="sl-pi" min="0.05" max="0.6" step="0.01" value="${c.portInicio!==undefined?c.portInicio:.18}"/><span class="range-val">${Math.round((c.portInicio!==undefined?c.portInicio:.18)*100)}%</span></div>
+        <div class="range-row"><label>Paso</label><input type="range" id="sl-pp" min="0.05" max="0.9" step="0.01" value="${c.portPaso!==undefined?c.portPaso:.30}"/><span class="range-val">${(c.portPaso!==undefined?c.portPaso:.30).toFixed(2)}s</span></div>
         <div class="range-row"><label>Cámara</label><input type="range" id="sl-pz" min="0" max="0.7" step="0.01" value="${c.portZoom!==undefined?c.portZoom:.28}"/><span class="range-val">${Math.round((c.portZoom!==undefined?c.portZoom:.28)*100)}%</span></div>
       </div>
-      <div style="font-size:11px;color:var(--text3);line-height:1.45">«Entrada» es hasta dónde se ve solo la foto. «Cámara», cuánto arranca metida adentro: en 0 la portada se ve entera desde el principio.</div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">«Entrada» es hasta dónde se ve solo la foto; «paso», cuánto espera un elemento al anterior. «Cámara» es cuánto arranca metida adentro: en 0 la portada se ve entera desde el principio. La foto se arrastra con el mouse, y el logo también.</div>
     </div>
     <div class="sep"></div>`;
   }
@@ -9253,11 +9312,10 @@ REGLAS IMPORTANTES:
     };
     const par=(id,prop,val)=>{ const b=el.querySelector(id); if(b) b.onclick=()=>{ cards[sel][prop]=val; re(); }; };
     par('#port-banda-si','portBandaOn',true);  par('#port-banda-no','portBandaOn',false);
-    par('#port-caja-si','portCajaOn',true);    par('#port-caja-no','portCajaOn',false);
+    par('#port-logo-si','portLogoOn',true);    par('#port-logo-no','portLogoOn',false);
     par('#port-ind-si','portIndiceOn',true);   par('#port-ind-no','portIndiceOn',false);
     par('#port-fecha-si','portFechaOn',true);  par('#port-fecha-no','portFechaOn',false);
     par('#port-velo-si','portVelo',true);      par('#port-velo-no','portVelo',false);
-    el.querySelectorAll('[data-plogo]').forEach(b=>b.onclick=()=>{ cards[sel].portLogoVar=b.dataset.plogo; re(); });
     el.querySelectorAll('[data-palign]').forEach(b=>b.onclick=()=>{ cards[sel].portTitleAlign=b.dataset.palign; re(); });
     const color=(idC,idH,prop)=>{
       const p=el.querySelector(idC), h=el.querySelector(idH);
@@ -9265,7 +9323,6 @@ REGLAS IMPORTANTES:
       if(p) p.oninput=e=>poner(e.target.value);
       if(h) h.onchange=e=>{ const v=e.target.value.trim(); if(/^#[0-9a-fA-F]{6}$/.test(v)) poner(v); };
     };
-    color('#port-color','#port-color-hex','portColor');
     color('#port-banda-color','#port-banda-hex','portBandaColor');
     color('#port-tcolor','#port-tcolor-hex','portTitleColor');
     const ti=el.querySelector('#port-indice');
@@ -9276,12 +9333,20 @@ REGLAS IMPORTANTES:
       r.oninput=e=>{ const v=parseFloat(e.target.value); cards[sel][prop]=v;
         const n=r.parentElement.querySelector('.range-val'); if(n) n.textContent=fmt(v); redraw(); }; };
     sl('#sl-pb','portBanda',v=>Math.round(v*100)+'%');
-    sl('#sl-pcz','portCajaSz',v=>v.toFixed(2)+'×');
+    sl('#sl-plz','portLogoSz',v=>v.toFixed(2)+'×');
     sl('#sl-pis','portIndiceSz',v=>v.toFixed(2)+'×');
-    sl('#sl-pts','portTitleSz',v=>Math.round(v)+'px');
     sl('#sl-pty','portTitleY',v=>Math.round(v*100)+'%');
     sl('#sl-pd','fixedDur',v=>v.toFixed(1)+'s');
     sl('#sl-pi','portInicio',v=>Math.round(v*100)+'%');
+    sl('#sl-pp','portPaso',v=>v.toFixed(2)+'s');
+    const mover=(clave,d)=>{
+      const o=portadaOrden(cards[sel]), i=o.indexOf(clave), j=i+d;
+      if(i<0||j<0||j>=o.length) return;
+      o.splice(j,0,o.splice(i,1)[0]);
+      cards[sel].portOrden=o; re();
+    };
+    el.querySelectorAll('[data-pup]').forEach(b=>b.onclick=()=>mover(b.dataset.pup,-1));
+    el.querySelectorAll('[data-pdn]').forEach(b=>b.onclick=()=>mover(b.dataset.pdn,+1));
     sl('#sl-pz','portZoom',v=>Math.round(v*100)+'%');
   }
 
@@ -9639,7 +9704,8 @@ function addCard(tipo){
   if(tipo==='portada'){
     defaults.fixedDur=6; defaults.portColor='#D82027';
     defaults.portInicio=0.18; defaults.portZoom=0.28; defaults.portBanda=0.20;
-    defaults.portBandaColor='#ffffff'; defaults.portCajaSz=1;
+    defaults.portBandaColor='#ffffff'; defaults.portLogoSz=1;
+    defaults.titleSz=Math.round(W*0.086); defaults.bodySz=Math.round(W*0.026);
     defaults.titulo=''; defaults.cuerpo='';
   }
   if(tipo==='tapa'){
@@ -10555,7 +10621,14 @@ const TPL_TIPO={
   grafico:['chartType','chartColor','chartLblSz','chartValSz','chartRowH','chartRowGap','chartTrack'],
   tabla:['tableMode','tableZebra','tableHlColor','tableHlFull','tableSubSz','tableNameSz','tableSecSz','tableRowH','tableComSz'],
   vineta:['vinCount'],
-  libre:['libreVAlign']
+  libre:['libreVAlign'],
+  // La portada y la tapa viajan enteras en el template: colores, tamaños,
+  // orden de entrada, posición del logo y tiempos de animación.
+  portada:['portBandaOn','portBandaColor','portBanda','portLogoOn','portLogoSz',
+           'portIndiceOn','portIndiceSz','portFechaOn','portTitleAlign','portTitleColor',
+           'portTitleY','portVelo','portInicio','portPaso','portZoom','portOrden',
+           'fixedDur','logoDX','logoDY','titXY','bajXY','textoAuto'],
+  tapa:['tapaZoom','tapaArranque','tapaInicio','tapaFlash','tapaHold','fixedDur']
 };
 let TPL_EQUIPO=[];   // los que vienen del almacén del equipo (o del repo)
 let TPL_STORE_OK=null;   // null = todavía no sabemos si hay almacén
@@ -11599,6 +11672,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v169','Portada — orden de entrada, logo y foto que se mueven, y todo en el template','Cuatro cosas. La primera: cada campo que sumás con «+ Texto» o «+ Imagen» ahora también se anima, en vez de aparecer puesto desde el principio. La segunda: hay una lista con el orden de entrada —logo, índice, título, epígrafe y cada campo que agregaste— y se reordena con las flechas; el tiempo de cada elemento sale de su posición en esa lista, así que no hay ni un tiempo escrito en el código, y al lado de cada uno se ve en qué segundo entra. Un control de «paso» regula cuánto espera cada elemento al anterior. La tercera: el logo se arrastra con el mouse y queda fijo donde lo dejes, y la foto también se mueve dentro de su recuadro, como en cualquier card de foto. La cuarta: la portada y la tapa entraron al sistema de templates. Guardás uno con ◇ Templates y se lleva todo —colores, tamaños, orden de entrada, posición del logo y del título, tiempos de animación— para aplicarlo a las portadas que hagas después.'],
+    ['v168','Portada — el logo sin caja, los cuerpos de siempre y los textos que se arrastran','Tres correcciones sobre la portada. Se fue la caja de color detrás del logo: el logo va solo, con el color que elegís arriba —blanco, negro o rojo— o el que le pongas a la card, porque esa decisión depende del fondo y no la tiene que tomar el código. Queda un control de tamaño y otro para sacarlo. Segundo: el cuerpo del título y el del epígrafe estaban en controles propios de la portada, paralelos a los del editor, así que mover «Tamaño del título» no hacía nada; ahora la portada usa los mismos campos que el resto de las cards y esos sliders funcionan. Tercero: el título y el epígrafe se arrastran con el mouse y quedan donde los dejes. Como la portada dibuja con un zoom de cámara y el mouse no, las cajas de texto se convierten a coordenadas de pantalla antes de responder al clic: sin eso, tocar las letras no las agarraba. Y las capas se dibujan sobre la portada, así que «+ Texto» suma todos los cuerpos de texto que quieras, cada uno con su tipografía, su tamaño y su lugar.'],
     ['v167','Portada — todo editable','La primera versión traía demasiadas decisiones metidas en el código: la banda blanca, la caja roja, el título centrado abajo. Ahora nada de eso está fijo. La banda se prende y se apaga —sin banda, la foto va a sangre de arriba abajo y el cabezal queda sobre ella con un velo que lo hace legible— y tiene su color y su alto. La caja de marca también se prende y se apaga, con su color propio, su tamaño, y el logo en blanco, negro, rojo o automático. El índice y la fecha se pueden sacar, y el índice tiene su cuerpo tipográfico. El título tiene alineación —izquierda, centro o derecha—, color, cuerpo y altura sobre la foto, y el velo de abajo se puede apagar. Además el título y la bajada se arrastran con el mouse y quedan donde los dejes, igual que en el resto de las cards, y las capas se dibujan sobre la portada: con «+ Texto» sumás todos los campos que quieras, cada uno con su tipografía, su tamaño y su lugar. Los valores que trae son un punto de partida, no una regla.'],
     ['v166','Card portada animada','Tipo de card nuevo, hermano de la tapa pero sin depender de una imagen ya hecha: la portada se compone acá. Una banda blanca arriba con la caja de marca —el logo del editor sobre un color que se elige— y, al lado, el índice de lo que viene; la foto a sangre ocupando el resto; y el título con su bajada sobre la foto, abajo. La cámara arranca metida dentro de la foto, así que en el primer tramo la banda todavía no se ve, y se abre hasta la portada entera; cuando la banda aparece, sus elementos ya están entrando: primero la caja de marca, después las líneas del índice escalonadas, y al final el título y la bajada. El índice se llena solo con los títulos de las cards que siguen en el carrusel —la portada es el índice real de lo que viene, no una lista que hay que mantener a mano— y se puede editar o volver a traer con un botón. Se le suelta la foto encima del preview, como a cualquier card. Cinco controles: color de la caja, duración, en qué punto entran los elementos, cuánto arranca metida la cámara y el alto de la banda.'],
     ['v165','Tapa animada — la música, de atrás para adelante','Dos cosas en el campo de música. Ahora acepta cualquier archivo con sonido, incluido un MP4 o un MOV: del video se usa solo la pista de audio, nunca la imagen, así que se puede tirar directamente lo que salió del celular sin pasar por un conversor. Si el archivo no trae sonido, lo detecta al intentar decodificarlo y lo dice, en vez de dejar un video mudo sin explicación. Y el montaje pasó a ser siempre de atrás para adelante: primero se decide en qué segundo del video tiene que caer el ancla de la pista —el golpe final si se encontró, y si no el final de la música— y recién entonces se ve qué hacer con lo que sobra por delante. Si sobra pista se recorta la cabeza, como hasta ahora. Si la pista es más corta que el video, en vez de adelantar el final la música entra más tarde, con silencio al principio, para que su remate siga cayendo exactamente donde tiene que caer. El final de la pista no se toca nunca.'],
