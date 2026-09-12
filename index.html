@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v178 «estilos de tapa, video y música»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v180 «forma, filete y sonido en las capas»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v178 «estilos de tapa, video y música»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v180 «forma, filete y sonido en las capas»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -2160,6 +2160,18 @@ function drawVineta(card,t){
 }
 
 // Construye el string de filtro CSS para el canvas a partir de los ajustes de la card.
+// Velocidad de reproducción de un video. Vale igual para el video de fondo de
+// la card (mediaCache) y para una capa de video (gfxCache): los dos guardan el
+// numero en .speed, y los dos se dibujan con el elemento <video> corriendo, asi
+// que alcanza con tocarle el playbackRate. 1 = normal.
+function velocidadDe(x){
+  var v = x && x.speed;
+  return (typeof v==='number' && isFinite(v) && v>0) ? Math.min(4, Math.max(0.1, v)) : 1;
+}
+function velocidadAplicar(el, v){
+  if(!el || el.playbackRate===undefined) return;
+  try{ el.playbackRate = v; }catch(e){}
+}
 function mediaFilterString(m){
   if(!m) return '';
   var b=(m.adjBright!==undefined?m.adjBright:100);       // 50–150 (%)
@@ -2416,8 +2428,8 @@ function capaEl(capa){
   if(c){ if(c._src===capa.src) return c.el; if(c.el&&c.el.pause) try{c.el.pause();}catch(e){} }
   if(capa.k==='video'){
     const v=document.createElement('video');
-    v.src=capa.src; v.loop=true; v.muted=true; v.playsInline=true;
-    v.oncanplay=()=>{ v.play().catch(()=>{}); repintar(); };
+    v.src=capa.src; v.loop=true; v.muted=!capa.audio; v.playsInline=true;
+    v.oncanplay=()=>{ velocidadAplicar(v, velocidadDe(capa)); v.play().catch(()=>{}); repintar(); };
     gfxCache[capa.id]={el:v,_src:capa.src};
     return v;
   }
@@ -2452,7 +2464,11 @@ function capaBox(card,capa){
   const nw=el?(capa.k==='video'?el.videoWidth:el.naturalWidth):0;
   const nh=el?(capa.k==='video'?el.videoHeight:el.naturalHeight):0;
   const ancho=Math.round(W*((capa.w||40)/100));
-  const alto=(nw&&nh)?Math.round(ancho*nh/nw):Math.round(ancho*0.75);
+  // Con forma cuadrada o redonda la caja deja de seguir la proporción del
+  // archivo: es un cuadrado, y la imagen se recorta al centro para llenarlo.
+  const alto=(capa.forma==='cuad'||capa.forma==='circ')
+    ? ancho
+    : ((nw&&nh)?Math.round(ancho*nh/nw):Math.round(ancho*0.75));
   const x=marg+(W-2*marg-ancho)*an.x+(capa.dx||0);
   const y=marg+(H-2*marg-alto)*an.y+(capa.dy||0);
   return {x,y,w:ancho,h:alto};
@@ -2557,10 +2573,44 @@ function drawCapas(card, soloAtras, entrada){
       const listo=el&&(capa.k==='video'?el.videoWidth:el.naturalWidth);
       if(listo){
         if(capa.rot){ ctx.translate(box.x+box.w/2,box.y+box.h/2); ctx.rotate(capa.rot*Math.PI/180); ctx.translate(-(box.x+box.w/2),-(box.y+box.h/2)); }
+        const _forma=capa.forma||'';
+        const _nw=capa.k==='video'?el.videoWidth:el.naturalWidth;
+        const _nh=capa.k==='video'?el.videoHeight:el.naturalHeight;
+        // El camino de la forma se calcula una vez: sirve para recortar la
+        // imagen y después para el filete, así los dos coinciden exacto.
+        const _camino=()=>{
+          ctx.beginPath();
+          if(_forma==='circ') ctx.arc(box.x+box.w/2, box.y+box.h/2, Math.min(box.w,box.h)/2, 0, Math.PI*2);
+          else ctx.rect(box.x,box.y,box.w,box.h);
+        };
+        ctx.save();
+        if(_forma){ _camino(); ctx.clip(); }
         const flt=mediaFilterString(capa);
         if(flt) ctx.filter=flt;
-        ctx.drawImage(el,box.x,box.y,box.w,box.h);
+        if(_forma && _nw && _nh){
+          // Encuadre que llena: la foto se agranda hasta tapar el cuadrado y
+          // lo que sobra queda afuera, centrado. Sin esto una foto apaisada
+          // metida en un círculo sale aplastada.
+          const _e=Math.max(box.w/_nw, box.h/_nh);
+          const _dw=_nw*_e, _dh=_nh*_e;
+          ctx.drawImage(el, box.x+(box.w-_dw)/2, box.y+(box.h-_dh)/2, _dw, _dh);
+        } else {
+          ctx.drawImage(el,box.x,box.y,box.w,box.h);
+        }
         ctx.filter='none';
+        ctx.restore();
+        // Filete: va por dentro del borde, para que no lo coma el recorte.
+        const _fw=capa.filete||0;
+        if(_fw>0){
+          ctx.save();
+          ctx.strokeStyle=capa.fileteColor||'#ffffff';
+          ctx.lineWidth=_fw;
+          ctx.beginPath();
+          if(_forma==='circ') ctx.arc(box.x+box.w/2, box.y+box.h/2, Math.max(1,Math.min(box.w,box.h)/2-_fw/2), 0, Math.PI*2);
+          else ctx.rect(box.x+_fw/2, box.y+_fw/2, Math.max(1,box.w-_fw), Math.max(1,box.h-_fw));
+          ctx.stroke();
+          ctx.restore();
+        }
       }
     }
     ctx.restore();
@@ -5896,7 +5946,7 @@ function getCardDur(card){
     let dur=m.duration;
     if(!isFinite(dur)||dur<=0) dur=BASE_DUR;         // WebM sin duración en el header
     const trimOut=(m.trimOut!==undefined&&isFinite(m.trimOut))?m.trimOut:dur;
-    let seg=Math.max(0.5,trimOut-trimIn);
+    let seg=Math.max(0.5,(trimOut-trimIn)/velocidadDe(m));
     if(!isFinite(seg)||seg<=0) seg=BASE_DUR;
     return seg;
   }
@@ -5918,6 +5968,7 @@ function play(card,onEnd){
   let _musicaPendiente = false;
   if(m&&(m.type==='video'||m.type==='audio')&&m.el){
     const trimIn=m.trimIn||0;
+    if(m.type==='video') velocidadAplicar(m.el, velocidadDe(m));
     if(Math.abs(m.el.currentTime-trimIn)>0.2) m.el.currentTime=trimIn;
     if(_tapaEspera>0.02){
       // La pista es más corta que el video: entra más tarde para que su final
@@ -6033,6 +6084,26 @@ async function recordCard(card){
       vs.el.muted=false;   // el audio va por el grafo, no por el elemento
     }catch(e){console.warn('Audio viñeta error:',e);}
   }
+
+  // Audio de las CAPAS de video (v180): cada capa marcada «con sonido» suma su
+  // pista. createMediaElementSource se puede llamar una sola vez por elemento,
+  // así que el grafo queda guardado al lado del elemento en gfxCache.
+  try{
+    (typeof capasDe==='function'?capasDe(card):[]).forEach(function(q){
+      if(!q || q.k!=='video' || !q.audio) return;
+      var slot=gfxCache[q.id]; if(!slot||!slot.el) return;
+      if(!slot._audioCtx){
+        slot._audioCtx=new AudioContext();
+        slot._audioSrc=slot._audioCtx.createMediaElementSource(slot.el);
+        slot._audioDest=slot._audioCtx.createMediaStreamDestination();
+        slot._audioSrc.connect(slot._audioDest);
+        slot._audioSrc.connect(slot._audioCtx.destination);
+      }
+      if(slot._audioCtx.state==='suspended') slot._audioCtx.resume();
+      slot._audioDest.stream.getAudioTracks().forEach(function(t){ t.enabled=true; stream.addTrack(t); });
+      slot.el.muted=false;
+    });
+  }catch(e){ console.warn('Audio de capa:',e); }
 
   // Bitrate acorde a 2×: el texto fino necesita más bits para no pixelarse en
   // los bordes. ~12 Mbps a 2160px mantiene los contornos limpios.
@@ -7148,6 +7219,108 @@ function renderList(){
   setupListDrag();
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// LO QUE NO PUEDE FALTAR  ·  quitar la foto, ajustarla, y su velocidad
+// ══════════════════════════════════════════════════════════════════════
+// Cada tipo de card arma su propio panel, y varios se olvidaron de lo básico:
+// fuera de «media» y «cover» no había forma de sacar la foto, y fuera de
+// «media» tampoco de tocarle el brillo. En vez de copiar el bloque en cada
+// plantilla —que es como se llegó hasta acá— se agrega al final lo que falte:
+// si el panel del tipo ya trae el control, este no se dibuja y no hay dos.
+function bloqueFaltante(el, c){
+  if(!el || !c) return;
+  var m = mediaCache[c.id];
+  if(!m || m.type==='map' || m.type==='map-img') return;
+  var esFoto = (m.type==='img'), esVideo = (m.type==='video');
+  if(!esFoto && !esVideo) return;
+
+  var faltaQuitar  = !el.querySelector('#img-clear-btn');
+  var faltaAjustes = !el.querySelector('#sl-bright');
+  var faltaVeloc   = esVideo && !el.querySelector('#sl-speed');
+  if(!faltaQuitar && !faltaAjustes && !faltaVeloc) return;
+
+  var v = velocidadDe(m);
+  var partes = [];
+  partes.push('<label>'+(esVideo?'Video':'Foto')+' de esta card</label>');
+
+  if(faltaVeloc){
+    var real = (m.trimOut!==undefined?m.trimOut:(m.duration||0)) - (m.trimIn||0);
+    var enPantalla = (real>0) ? (real/v) : 0;
+    partes.push('<div class="range-block">'+
+      '<div class="range-row"><label>Velocidad</label>'+
+      '<input type="range" id="bf-speed" min="0.25" max="3" step="0.05" value="'+v+'"/>'+
+      '<span class="range-val" id="bf-speed-val">'+v.toFixed(2)+'×</span></div></div>'+
+      '<div style="font-size:10.5px;color:var(--text3);line-height:1.45" id="bf-speed-nota">'+
+      (real>0 ? ('Lento a la izquierda, rápido a la derecha. '+real.toFixed(1)+'s de video ocupan '+enPantalla.toFixed(1)+'s de card.')
+              : 'Lento a la izquierda, rápido a la derecha.')+'</div>');
+  }
+
+  if(faltaAjustes){
+    partes.push('<div class="range-block" style="margin-top:6px">'+
+      '<div class="range-row"><label>Brillo</label><input type="range" id="bf-bright" min="50" max="150" step="1" value="'+(m.adjBright!==undefined?m.adjBright:100)+'"/><span class="range-val" id="bf-bright-val">'+(m.adjBright!==undefined?m.adjBright:100)+'%</span></div>'+
+      '<div class="range-row"><label>Contraste</label><input type="range" id="bf-contrast" min="50" max="150" step="1" value="'+(m.adjContrast!==undefined?m.adjContrast:100)+'"/><span class="range-val" id="bf-contrast-val">'+(m.adjContrast!==undefined?m.adjContrast:100)+'%</span></div>'+
+      '<div class="range-row"><label>Saturación</label><input type="range" id="bf-sat" min="0" max="200" step="1" value="'+(m.adjSat!==undefined?m.adjSat:100)+'"/><span class="range-val" id="bf-sat-val">'+(m.adjSat!==undefined?m.adjSat:100)+'%</span></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:5px;margin-top:6px">'+
+      '<button class="tipo-btn'+(m.fxBW?' active':'')+'" id="bf-bw" style="flex:1">Blanco y negro</button>'+
+      '<button class="tipo-btn" id="bf-adj-reset" style="flex:1">Reiniciar ajustes</button></div>');
+  }
+
+  if(faltaQuitar){
+    partes.push('<button class="img-clear" id="bf-clear" style="margin-top:8px">✕ Quitar '+(esVideo?'el video':'la foto')+'</button>');
+  }
+
+  var d=document.createElement('div');
+  d.className='field';
+  d.innerHTML=partes.join('');
+  el.appendChild(d);
+
+  function vivoM(id, prop, valId, suf, conv){
+    var sl=d.querySelector('#'+id); if(!sl) return;
+    sl.oninput=function(e){
+      var m2=mediaCache[c.id]; if(!m2) return;
+      var val=conv?conv(e.target.value):parseInt(e.target.value);
+      m2[prop]=val;
+      var vv=d.querySelector('#'+valId);
+      if(vv) vv.textContent=(conv?val.toFixed(2):val)+(suf||'');
+      repintar();
+    };
+  }
+  vivoM('bf-bright','adjBright','bf-bright-val','%');
+  vivoM('bf-contrast','adjContrast','bf-contrast-val','%');
+  vivoM('bf-sat','adjSat','bf-sat-val','%');
+
+  var sp=d.querySelector('#bf-speed');
+  if(sp) sp.oninput=function(e){
+    var m2=mediaCache[c.id]; if(!m2) return;
+    m2.speed=parseFloat(e.target.value);
+    var vv=d.querySelector('#bf-speed-val'); if(vv) vv.textContent=velocidadDe(m2).toFixed(2)+'×';
+    velocidadAplicar(m2.el, velocidadDe(m2));
+    var real=(m2.trimOut!==undefined?m2.trimOut:(m2.duration||0))-(m2.trimIn||0);
+    var nota=d.querySelector('#bf-speed-nota');
+    if(nota && real>0) nota.textContent='Lento a la izquierda, rápido a la derecha. '+real.toFixed(1)+'s de video ocupan '+(real/velocidadDe(m2)).toFixed(1)+'s de card.';
+    repintar();
+  };
+
+  var bw=d.querySelector('#bf-bw');
+  if(bw) bw.onclick=function(){ var m2=mediaCache[c.id]; if(!m2) return; m2.fxBW=!m2.fxBW; renderEditor(cards[sel]); repintar(); };
+
+  var rs=d.querySelector('#bf-adj-reset');
+  if(rs) rs.onclick=function(){ var m2=mediaCache[c.id]; if(!m2) return;
+    m2.adjBright=100; m2.adjContrast=100; m2.adjSat=100; m2.adjExposure=0; m2.fxBW=false;
+    renderEditor(cards[sel]); repintar(); };
+
+  var cl=d.querySelector('#bf-clear');
+  if(cl) cl.onclick=function(){
+    var m2=mediaCache[c.id]; if(!m2) return;
+    if(m2.type==='video'){ try{ m2.el.pause(); }catch(e){} try{ URL.revokeObjectURL(m2.dataUrl); }catch(e){} }
+    delete mediaCache[c.id];
+    capaSel=null;
+    renderList(); renderEditor(cards[sel]); repintar();
+    setStatus('Listo, sin foto','');
+  };
+}
+
 function renderEditor(c){
   const el=document.getElementById('editor-area');
   // El panel se reconstruye entero en cada cambio. Sin esto, cada clic en una
@@ -8106,11 +8279,30 @@ function renderEditor(c){
             <input type="range" id="capa-con" min="50" max="150" step="1" value="${g.adjContrast===undefined?100:g.adjContrast}">
             <label>Saturación <b id="capa-sat-v">${g.adjSat===undefined?100:g.adjSat}%</b></label>
             <input type="range" id="capa-sat" min="0" max="200" step="1" value="${g.adjSat===undefined?100:g.adjSat}">
+            ${g.k==='video'?`<label>Velocidad <b id="capa-spd-v">${velocidadDe(g).toFixed(2)}×</b></label>
+            <input type="range" id="capa-spd" min="0.25" max="3" step="0.05" value="${velocidadDe(g)}">`:''}
           </div>
           <div style="display:flex;gap:4px;margin-top:5px">
             <button class="tipo-btn${g.fxBW?' active':''}" id="capa-bw" style="flex:1">Blanco y negro</button>
             <button class="tipo-btn" id="capa-adj-reset" style="flex:1">Reiniciar ajustes</button>
           </div>
+          <div style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin:8px 0 4px">Forma</div>
+          <div style="display:flex;gap:4px">
+            <button class="tipo-btn${!g.forma?' active':''}" data-capaforma="" style="flex:1" title="Como viene el archivo">Original</button>
+            <button class="tipo-btn${g.forma==='cuad'?' active':''}" data-capaforma="cuad" style="flex:1" title="Recorta al centro en cuadrado">Cuadrada</button>
+            <button class="tipo-btn${g.forma==='circ'?' active':''}" data-capaforma="circ" style="flex:1" title="Recorta al centro en círculo">Redonda</button>
+          </div>
+          <div class="capa-grid" style="margin-top:6px">
+            <label>Filete <b id="capa-fil-v">${(g.filete||0)?(g.filete+' px'):'sin'}</b></label>
+            <input type="range" id="capa-fil" min="0" max="16" step="1" value="${g.filete||0}">
+          </div>
+          ${(g.filete||0)?`<div style="display:flex;gap:5px;align-items:center;margin-top:4px">
+            <span style="font-size:10px;color:var(--text3)">Color del filete</span>
+            <input type="color" id="capa-fil-color" value="${g.fileteColor||'#ffffff'}" style="width:34px;height:24px;padding:0;border:1px solid var(--border);background:none">
+            <button class="tipo-btn${(g.fileteColor||'#ffffff')==='#ffffff'?' active':''}" id="capa-fil-blanco" style="flex:1">Blanco</button>
+            <button class="tipo-btn${g.fileteColor==='#111111'?' active':''}" id="capa-fil-negro" style="flex:1">Negro</button>
+          </div>`:''}
+          ${g.k==='video'?`<button class="tipo-btn${g.audio?' active':''}" id="capa-audio" style="width:100%;margin-top:6px" title="Que se escuche el audio de este video, en el preview y en el MP4">${g.audio?'♪ Con sonido':'♪ Sin sonido'}</button>`:''}
         `}
         <button class="tipo-btn${g.atras?' active':''}" id="capa-atras" style="width:100%;margin-top:6px" title="La manda detrás de la foto de fondo de la card">⤓ Detrás de la foto de la card</button>
         <div class="capa-grid" style="margin-top:5px">
@@ -9504,6 +9696,9 @@ REGLAS IMPORTANTES:
     vivo('capa-bri',(q,v)=>{ q.adjBright=parseInt(v); const b=el.querySelector('#capa-bri-v'); if(b)b.textContent=v+'%'; });
     vivo('capa-con',(q,v)=>{ q.adjContrast=parseInt(v); const b=el.querySelector('#capa-con-v'); if(b)b.textContent=v+'%'; });
     vivo('capa-sat',(q,v)=>{ q.adjSat=parseInt(v); const b=el.querySelector('#capa-sat-v'); if(b)b.textContent=v+'%'; });
+    vivo('capa-spd',(q,v)=>{ q.speed=parseFloat(v);
+      const b=el.querySelector('#capa-spd-v'); if(b)b.textContent=velocidadDe(q).toFixed(2)+'×';
+      velocidadAplicar(gfxCache[q.id]&&gfxCache[q.id].el, velocidadDe(q)); });
     {const sf=el.querySelector('#capa-font'); if(sf) sf.onchange=e=>{ const q=g(); if(!q)return; q.font=e.target.value;
       ensureFont(q.font,()=>repintar()); repintar(); };}
     toca('capa-bold',q=>{ q.weight=(q.weight==='400')?'700':'400'; });
@@ -9520,6 +9715,21 @@ REGLAS IMPORTANTES:
     toca('capa-color-negro',q=>{ q.color='#111111'; });
     toca('capa-reset',q=>{ q.dx=0; q.dy=0; });
     toca('capa-bw',q=>{ q.fxBW=!q.fxBW; });
+    vivo('capa-fil',(q,v)=>{ q.filete=parseInt(v);
+      const b=el.querySelector('#capa-fil-v'); if(b)b.textContent=q.filete?(q.filete+' px'):'sin';
+      if(q.filete&&!q.fileteColor) q.fileteColor='#ffffff'; });
+    {const fc=el.querySelector('#capa-fil'); if(fc) fc.onchange=()=>renderEditor(cards[sel]);}
+    vivo('capa-fil-color',(q,v)=>{ q.fileteColor=v; });
+    toca('capa-fil-blanco',q=>{ q.fileteColor='#ffffff'; });
+    toca('capa-fil-negro',q=>{ q.fileteColor='#111111'; });
+    el.querySelectorAll('[data-capaforma]').forEach(b=>{ b.onclick=()=>{ const q=g(); if(!q)return;
+      q.forma=b.dataset.capaforma||''; renderEditor(cards[sel]); repintar(); }; });
+    toca('capa-audio',q=>{
+      q.audio=!q.audio;
+      const e2=gfxCache[q.id]&&gfxCache[q.id].el;
+      if(e2){ try{ e2.muted=!q.audio; if(q.audio) e2.play().catch(()=>{}); }catch(_){} }
+      setStatus(q.audio?'La capa de video suena — también en el MP4':'Capa de video en silencio','');
+    });
     toca('capa-full',q=>{
       // Escala la capa hasta tapar la placa entera, respetando su proporción.
       const el=capaEl(q);
@@ -9532,7 +9742,8 @@ REGLAS IMPORTANTES:
       } else q.w=100;
       q.anchor='mc'; q.dx=0; q.dy=0;
     });
-    toca('capa-adj-reset',q=>{ q.adjBright=100; q.adjContrast=100; q.adjSat=100; q.fxBW=false; });
+    toca('capa-adj-reset',q=>{ q.adjBright=100; q.adjContrast=100; q.adjSat=100; q.fxBW=false; q.speed=1;
+      velocidadAplicar(gfxCache[q.id]&&gfxCache[q.id].el, 1); });
     toca('capa-atras',q=>{ q.atras=!q.atras;
       setStatus(q.atras?'La capa va detrás de la foto de la card':'La capa vuelve al frente',''); });
     el.querySelectorAll('[data-capaalign]').forEach(b=>{ b.onclick=()=>{ const q=g(); if(!q)return;
@@ -9703,6 +9914,7 @@ REGLAS IMPORTANTES:
 
   document.getElementById('free-btn').onclick=()=>{const v=document.getElementById('free-prompt').value.trim();if(v)runSinglePrompt(v);};
   document.getElementById('free-prompt').onkeydown=e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v)runSinglePrompt(v);}};
+  bloqueFaltante(el, c);
   _restaurar();
 }
 
@@ -10947,7 +11159,7 @@ async function tplTomarCard(nombre, rutaVideo){
   const m=mediaCache[c.id];
   if(m){
     const enc={type:m.type, zoom:m.zoom, cx:m.cx, cy:m.cy, offX:m.offX, offY:m.offY, fitMode:m.fitMode,
-               adjBright:m.adjBright, adjContrast:m.adjContrast, adjExposure:m.adjExposure,
+               adjBright:m.adjBright, adjContrast:m.adjContrast, adjExposure:m.adjExposure, speed:m.speed,
                adjSat:m.adjSat, adjRotate:m.adjRotate, fxBW:m.fxBW, fxGrain:m.fxGrain,
                cinematic:m.cinematic, cinematicPreset:m.cinematicPreset,
                kenBurns:m.kenBurns, kbIntensity:m.kbIntensity, kbDirection:m.kbDirection};
@@ -11691,6 +11903,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v180','Forma, filete y sonido en las capas','Tres cosas para las fotos y los videos que se suman como capa. FORMA: original, cuadrada o redonda. Con cuadrada o redonda la caja deja de seguir la proporción del archivo y la imagen se recorta al centro para llenarla, en vez de aplastarse. FILETE: un borde de 0 a 16 px, opcional, blanco o del color que elijas, que sigue la forma —recto o circular— y va por dentro del borde para que el recorte no se lo coma. Sirve para separar una foto de un fondo del mismo tono, y también para tapar un borde sucio del archivo. SONIDO: hasta ahora una capa de video iba siempre muda. Ahora se puede encender por capa, y el audio entra tanto en el preview como en el MP4 exportado.'],
+    ['v179','Quitar la foto, y la velocidad del video','Dos agujeros y un control nuevo. El primero: el botón para sacar la foto existía solo en las cards «media» y «cover». En cualquier otro tipo la foto quedaba pegada y no había forma de sacarla salvo borrar la card entera. El segundo: los controles de brillo, contraste y saturación también vivían solo en «media», así que una tapa con foto no se podía corregir. Ninguno de los dos se arregló copiando el bloque en cada plantilla —así se llegó hasta acá—: ahora el panel, después de armarse, se fija qué controles le faltan y agrega solo esos. Si el tipo ya los trae, no se duplica nada. Y el control nuevo: VELOCIDAD. Un slider de 0,25× a 3× para el video de fondo de la card y otro para cada capa de video, independientes. Como un clip de 10s a 2× dura 5s, la duración de la card acompaña: al acelerar se acorta sola, así no queda la segunda mitad congelada en el último cuadro.'],
     ['v178','Estilos de tapa, video de fondo y música en cualquier card','Tres cosas, todas en el bloque «Animación de entrada». La primera: ESTILOS DE TAPA. Hasta ahora la foto estaba quieta desde el primer cuadro y solo entraban los textos. Ahora la foto tiene su propia entrada, y recién cuando terminó arrancan el título, la bajada y las capas. Cinco estilos: Caída (la foto cae desde arriba y se planta con un rebote corto), Golpe (aparece de golpe con un flash blanco), Fundido lento (sube de negro, con aire), Zoom out lento (arranca cerrada y se abre hasta el encuadre) y Revelado (una cortina la descubre sobre el fondo). Cada estilo deja los tiempos como punto de partida —el control «Foto» es lo que tarda la foto en entrar— y después se afina todo a mano, como siempre. Funciona en cards de foto, cover e infografía, y viaja en el template. La segunda: VIDEO DE FONDO. Un video en una cover o en una card de foto ahora manda la duración de la card, igual que en la card de video; y Ken Burns y los presets cinemáticos, que estaban apagados sobre video, ahora también lo mueven. El video de fondo no loopea: la card termina cuando termina el video. La tercera: MÚSICA en cualquier card, aparte del fondo. Soltás un MP3, WAV, M4A o un MP4 —del video se usa solo el sonido— y se monta de atrás para adelante: el final de la pista cae en el final de la card, para que el cierre pegue. Si sobra pista se recorta la cabeza; si falta, entra más tarde. Nunca loopea, porque WhatsApp e Instagram no loopean y en X el loop lo pone la red. Sale en el MP4 con su pista de audio. Y una cuarta, en «Color de texto»: cada texto puede llevar su color propio —título, bajada, y kicker en la cover— con un selector al lado de Auto/Blanco/Negro. Pisa el automático solo en ese texto; el × vuelve al automático. Viaja en el template.'],
     ['v177','La cámara mueve la card entera','La versión anterior aplicaba el zoom de apertura adentro del dibujo de la foto, así que solo funcionaba en las cards de foto comunes: si la imagen iba con fondo desenfocado, o era una viñeta, o una cover, no se movía nada. Y además el bloque de color y el título quedaban quietos mientras la foto se abría, que no es lo que hacía la placa. Ahora la cámara envuelve TODO el dibujo de la card —la foto, el fondo, el título, la bajada y las capas— y se abre como una cámara que retrocede, con cualquier tipo de card. En 0 no hay transformación y el dibujo es idéntico al de siempre.'],
     ['v176','La cámara vuelve a la animación','Al sacar la card «placa» se fue con ella el zoom de apertura, y la animación quedaba con los elementos entrando sobre una foto quieta. Volvió, ahora como un control más del bloque «Animación de entrada» y para cualquier card con foto: «Cámara», de 0 a 60%. La imagen arranca metida adentro y se va abriendo hasta el encuadre que elegiste a mano, mientras el título, la bajada y las capas van entrando en su orden. Multiplica el encuadre propio de la foto en vez de reemplazarlo, así que el zoom y el punto de interés que hayas ajustado se respetan. En 0 la foto queda quieta y todo sigue como antes. Viaja en el template con el resto de la animación.'],
