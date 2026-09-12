@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v173 «animación de entrada»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v175 «typewriter y panel quieto»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v173 «animación de entrada»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v175 «typewriter y panel quieto»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1286,6 +1286,7 @@ function hlColor(card){
 // medir; si no, se reusa el valor cacheado para que preview y export coincidan.
 function autoSig(card,m){
   return [card.id, card.mediaW, card.mediaH, card.anchor, card.scrimInt,
+          card.fotoVelo, card.fotoVeloDir, card.fotoVeloColor,
           card.titleSz, card.bodySz, (card.titulo||'').length, (card.cuerpo||'').length,
           card.titleDY, card.bodyDY,
           card.titXY?(card.titXY.x+','+card.titXY.y):'', card.bajXY?(card.bajXY.x+','+card.bajXY.y):'',
@@ -2488,8 +2489,11 @@ function drawCapas(card, soloAtras, entrada){
     if(!!capa.atras !== !!soloAtras) return;
     const box=capaBox(card,capa);
     card._capaBoxes[i]=box;
-    const _e = entrada ? entrada(capa,i) : null;
+    let _e = entrada ? entrada(capa,i) : null;
     if(_e && _e.a<=0.001) return;
+    // Si la capa se escribe a máquina, no se funde: entra con toda su tinta y
+    // lo que va apareciendo son las letras.
+    if(_e && capa.k==='txt' && capa.tw) _e={a:1, dy:0, t:_e.t};
     ctx.save();
     if(_e && _e.dy) ctx.translate(0,_e.dy);
     ctx.globalAlpha=(capa.op===undefined?1:capa.op)*(_e?_e.a:1);
@@ -2515,7 +2519,34 @@ function drawCapas(card, soloAtras, entrada){
       ctx.textAlign=al;
       const px=al==='center'?box.x+box.w/2:al==='right'?box.x+box.w:box.x;
       if(capa.sombra){ ctx.shadowColor='rgba(0,0,0,0.5)'; ctx.shadowBlur=10; }
-      box.lineas.forEach((l,li)=>{ ctx.fillText(l,px,box.y+li*box.lh); });
+      // Typewriter: el texto se escribe letra por letra desde el momento en que
+      // le tocó entrar. El corte se hace SOBRE las líneas ya compuestas, no
+      // sobre el texto crudo, para que no se reacomode mientras se escribe.
+      var _lns=box.lineas, _cur=-1, _curX=0;
+      if(capa.tw && _e && _e.t!==undefined){
+        var _tot=0; for(var _q=0;_q<box.lineas.length;_q++) _tot+=box.lineas[_q].length;
+        var _n=Math.floor(_tot*Math.min(1,Math.max(0,_e.t)/Math.max(0.05,capa.twDur||1.2)));
+        var _acc=0; _lns=[];
+        for(var _li=0;_li<box.lineas.length;_li++){
+          var _L=box.lineas[_li];
+          if(_acc>=_n) _lns.push('');
+          else if(_acc+_L.length<=_n) _lns.push(_L);
+          else { _lns.push(_L.slice(0,_n-_acc)); _cur=_li; }
+          if(_cur<0 && _acc<_n && _acc+_L.length<=_n) _cur=_li;
+          _acc+=_L.length;
+        }
+        if(_n<_tot && capa.twCursor!==false){
+          var _ln=_lns[_cur<0?0:_cur]||'';
+          _curX = al==='center' ? px+ctx.measureText(_ln).width/2
+                : al==='right'  ? px
+                : px+ctx.measureText(_ln).width;
+        } else _cur=-1;
+      }
+      _lns.forEach((l,li)=>{ ctx.fillText(l,px,box.y+li*box.lh); });
+      if(_cur>=0 && Math.floor((_e.t||0)*6)%2===0){
+        var _sz=capa.size||48;
+        ctx.fillRect(_curX+_sz*0.06, box.y+_cur*box.lh+_sz*0.10, Math.max(2,_sz*0.07), _sz*0.82);
+      }
       ctx.shadowBlur=0;
     } else {
       const el=capaEl(capa);
@@ -5274,12 +5305,13 @@ function animSegundo(card, clave){
 // Devuelve {a, dy} para un elemento: cuánta tinta tiene y cuánto le falta
 // bajar. Con la animación apagada, todo vale 1 y la card dibuja como siempre.
 function animEntrar(card, clave, t){
-  if(!card || !card.animOn) return {a:1, dy:0};
   var dur=(typeof getCardDur==='function')?getCardDur(card):4;
   var seg=Math.min(1,Math.max(0,t||0))*dur;
+  if(!card || !card.animOn) return {a:1, dy:0, t:seg};
   var d=(card.animLargo!==undefined?card.animLargo:0.55);
-  var e=eo3(Math.max(0, Math.min(1, (seg-animSegundo(card,clave))/Math.max(0.01,d))));
-  return {a:e, dy:(1-e)*20};
+  var desde=seg-animSegundo(card,clave);      // cuánto hace que le tocó entrar
+  var e=eo3(Math.max(0, Math.min(1, desde/Math.max(0.01,d))));
+  return {a:e, dy:(1-e)*20, t:desde};
 }
 // para pasarle a drawCapas: cada capa entra en su turno
 function animCapas(card, t){
@@ -5321,6 +5353,32 @@ function drawCard(card,t){
     ctx.save();ctx.globalAlpha=cA;
     if(m){if(card.blurBg)drawMediaBlurBg(m,zx,zy,zoneW,zoneH,t);else drawMedia(m,zx,zy,zoneW,zoneH,t);}
     else{ctx.fillStyle=PAL.rule;ctx.fillRect(zx,zy,zoneW,zoneH);ctx.font='300 34px "IBM Plex Sans"';ctx.letterSpacing='0px';ctx.fillStyle=PAL.meta;ctx.textAlign='center';ctx.fillText('Sin media',zx+zoneW/2,zy+zoneH/2);}
+    // ── Veladura de la foto ──
+    // Distinta de «Sombra del texto»: aquella oscurece el pie de la CARD, que
+    // cuando la foto no llega hasta abajo cae sobre el fondo —el bloque de
+    // color— y no sirve de nada. Ésta se queda DENTRO del rectángulo de la
+    // foto, que es donde uno pone una cita o un texto suelto encima.
+    if(m && (card.fotoVelo||0)>0){
+      var _fv=(card.fotoVelo||0)/100;
+      var _fd=card.fotoVeloDir||'abajo';
+      var _fc=card.fotoVeloColor||'#000000';
+      var _fr=parseInt(_fc.slice(1,3),16), _fg2=parseInt(_fc.slice(3,5),16), _fb2=parseInt(_fc.slice(5,7),16);
+      var _rgb=_fr+','+_fg2+','+_fb2;
+      ctx.save(); ctx.beginPath(); ctx.rect(zx,zy,zoneW,zoneH); ctx.clip();
+      if(_fd==='todo'){
+        ctx.fillStyle='rgba('+_rgb+','+(0.85*_fv).toFixed(3)+')';
+        ctx.fillRect(zx,zy,zoneW,zoneH);
+      }else{
+        var _arriba=(_fd==='arriba');
+        var _gf=ctx.createLinearGradient(0, _arriba?zy+zoneH:zy, 0, _arriba?zy:zy+zoneH);
+        _gf.addColorStop(0,   'rgba('+_rgb+',0)');
+        _gf.addColorStop(0.45,'rgba('+_rgb+','+(0.40*_fv).toFixed(3)+')');
+        _gf.addColorStop(0.78,'rgba('+_rgb+','+(0.76*_fv).toFixed(3)+')');
+        _gf.addColorStop(1,   'rgba('+_rgb+','+(0.92*_fv).toFixed(3)+')');
+        ctx.fillStyle=_gf; ctx.fillRect(zx,zy,zoneW,zoneH);
+      }
+      ctx.restore();
+    }
     // Corte pleno vs fundido: cuando la foto no ocupa toda la pantalla, los bordes
     // pueden disolverse hacia el fondo (efecto editorial). Por lado.
     if(m && !isFullBleed && card.edgeFade>0){
@@ -6918,6 +6976,12 @@ function renderList(){
 
 function renderEditor(c){
   const el=document.getElementById('editor-area');
+  // El panel se reconstruye entero en cada cambio. Sin esto, cada clic en una
+  // flecha lo devolvía al principio y había que volver a buscar el control:
+  // se guarda dónde estaba la barra y se restituye después de pintar.
+  const _scroll = el ? el.scrollTop : 0;
+  const _restaurar = ()=>{ if(el && _scroll) { el.scrollTop=_scroll;
+    requestAnimationFrame(()=>{ if(el.scrollTop!==_scroll) el.scrollTop=_scroll; }); } };
   if(!c){el.innerHTML='<div class="empty-msg">Seleccioná una card</div>';return;}
   const m=mediaCache[c.id];
   const mH=c.mediaH||100,mW=c.mediaW||100,anch=c.anchor||'mc';
@@ -7763,7 +7827,7 @@ function renderEditor(c){
           <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(animNombre(c,kk))}</span>
           ${ii?`<input type="number" data-again="${kk}" value="${animEspera(c,kk).toFixed(2)}" min="0" max="5" step="0.05" title="Cuánto espera desde el elemento anterior" style="width:52px;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:3px 4px;outline:none"/>`
               :`<span style="width:52px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);text-align:center">1º</span>`}
-          <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:38px;text-align:right">${animSegundo(c,kk).toFixed(2)}s</span>
+          <span data-aat="${kk}" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:38px;text-align:right">${animSegundo(c,kk).toFixed(2)}s</span>
           <button class="tipo-btn" data-aup="${kk}" style="padding:2px 7px"${ii===0?' disabled':''}>↑</button>
           <button class="tipo-btn" data-adn="${kk}" style="padding:2px 7px"${ii===animOrden(c).length-1?' disabled':''}>↓</button>
         </div>`).join('')}
@@ -7819,6 +7883,11 @@ function renderEditor(c){
           <div style="display:flex;gap:4px;margin-top:4px">
             ${[['left','⇤'],['center','⇔'],['right','⇥']].map(([a,l])=>`<button class="tipo-btn${(g.align||'left')===a?' active':''}" data-capaalign="${a}" style="flex:1">${l}</button>`).join('')}
             <button class="tipo-btn${g.sombra?' active':''}" id="capa-sombra" style="flex:1" title="Sombra para que se lea sobre una foto">◐</button>
+          </div>
+          <div style="display:flex;gap:5px;align-items:center;margin-top:5px">
+            <button class="tipo-btn${g.tw?' active':''}" id="capa-tw" style="flex:1" title="El texto se escribe letra por letra cuando le toca entrar">⌨ Typewriter</button>
+            ${g.tw?`<input type="number" id="capa-twdur" value="${(g.twDur||1.2).toFixed(1)}" min="0.2" max="8" step="0.1" title="Cuánto tarda en escribirse" style="width:56px;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:11px;padding:4px;outline:none"/>
+            <button class="tipo-btn${g.twCursor!==false?' active':''}" id="capa-twcur" style="flex:1" title="Cursor parpadeante mientras escribe">Cursor</button>`:''}
           </div>
           <div style="display:flex;gap:5px;align-items:center;margin-top:5px">
             <span style="font-size:10px;color:var(--text3)">Color</span>
@@ -7937,6 +8006,20 @@ function renderEditor(c){
     ${c.tipo==='media'?`
     <div class="field"><label>Sombra del texto — <b id="sl-scrim-val">${c.scrimInt!==undefined?c.scrimInt:55}%</b></label>
       <input type="range" id="sl-scrim" min="0" max="100" step="5" value="${c.scrimInt!==undefined?c.scrimInt:55}" style="width:100%;margin-top:4px"/>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45">Oscurece el pie de la card, detrás del título.</div>
+    </div>
+    <div class="field"><label>Veladura de la foto — <b id="sl-fvelo-val">${c.fotoVelo||0}%</b></label>
+      <input type="range" id="sl-fvelo" min="0" max="100" step="5" value="${c.fotoVelo||0}" style="width:100%;margin-top:4px"/>
+      <div style="display:flex;gap:4px;margin-top:6px">
+        ${[['abajo','Abajo'],['arriba','Arriba'],['todo','Pareja']].map(([v,l])=>`<button class="tipo-btn${(c.fotoVeloDir||'abajo')===v?' active':''}" data-fvdir="${v}" style="flex:1">${l}</button>`).join('')}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+        <span style="font-size:10px;color:var(--text3)">Color</span>
+        <input type="color" id="fvelo-color" value="${c.fotoVeloColor||'#000000'}" style="width:34px;height:24px;padding:0;border:1px solid var(--border);background:none"/>
+        <button class="tipo-btn${(c.fotoVeloColor||'#000000')==='#000000'?' active':''}" id="fvelo-negro" style="flex:1">Negro</button>
+        <button class="tipo-btn${c.fotoVeloColor==='#ffffff'?' active':''}" id="fvelo-blanco" style="flex:1">Blanco</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);line-height:1.45;margin-top:4px">Se queda dentro de la foto, no baja al fondo de color. Es la que sirve cuando ponés una cita encima de la imagen.</div>
     </div>`:''}
     <div class="field"><label>Título — <b id="sl-tsz-val">${c.titleSz||52}px</b></label>
       <input type="range" id="sl-tsz" min="24" max="260" step="2" value="${c.titleSz||52}" style="width:100%;margin-top:4px"/>
@@ -8488,6 +8571,19 @@ function renderEditor(c){
     };
     const slScrim=document.getElementById('sl-scrim');
     if(slScrim){slScrim.oninput=e=>{cards[sel].scrimInt=parseInt(e.target.value);document.getElementById('sl-scrim-val').textContent=e.target.value+'%';redraw();};}
+    {
+      const slFv=document.getElementById('sl-fvelo');
+      if(slFv) slFv.oninput=e=>{ cards[sel].fotoVelo=parseInt(e.target.value);
+        const n=document.getElementById('sl-fvelo-val'); if(n) n.textContent=e.target.value+'%'; redraw(); };
+      el.querySelectorAll('[data-fvdir]').forEach(b=>b.onclick=()=>{
+        cards[sel].fotoVeloDir=b.dataset.fvdir; renderEditor(cards[sel]); redraw(); });
+      const pc=el.querySelector('#fvelo-color');
+      const ponerFv=v=>{ cards[sel].fotoVeloColor=v; renderEditor(cards[sel]); redraw(); };
+      if(pc) pc.oninput=e=>{ cards[sel].fotoVeloColor=e.target.value; redraw(); };
+      const bn=el.querySelector('#fvelo-negro'), bb=el.querySelector('#fvelo-blanco');
+      if(bn) bn.onclick=()=>ponerFv('#000000');
+      if(bb) bb.onclick=()=>ponerFv('#ffffff');
+    }
   }
 
   // ── MAPA bindings ──
@@ -9132,14 +9228,24 @@ REGLAS IMPORTANTES:
       o.splice(j,0,o.splice(i,1)[0]);
       cards[sel].animOrden=o; reA();
     };
+    // Al tocar una espera NO se reconstruye el panel: se recalculan los segundos
+    // en el lugar. Si no, cada clic en la flechita del campo devolvía el panel
+    // al principio y había que volver a bajar hasta el control.
+    const refrescarTiempos=()=>{
+      el.querySelectorAll('[data-aat]').forEach(sp=>{
+        sp.textContent=animSegundo(cards[sel],sp.dataset.aat).toFixed(2)+'s';
+      });
+    };
     el.querySelectorAll('[data-again]').forEach(inp=>{
-      inp.onchange=()=>{
+      const aplicar=()=>{
         const v=parseFloat(inp.value);
-        if(!isFinite(v)||v<0) { inp.value=animEspera(cards[sel],inp.dataset.again).toFixed(2); return; }
+        if(!isFinite(v)||v<0) return;
         if(!cards[sel].animEspera) cards[sel].animEspera={};
         cards[sel].animEspera[inp.dataset.again]=Math.min(5,v);
-        reA();
+        refrescarTiempos(); redraw();
       };
+      inp.oninput=aplicar;
+      inp.onchange=aplicar;
     });
     el.querySelectorAll('[data-aup]').forEach(b=>b.onclick=()=>moverA(b.dataset.aup,-1));
     el.querySelectorAll('[data-adn]').forEach(b=>b.onclick=()=>moverA(b.dataset.adn,+1));
@@ -9190,6 +9296,11 @@ REGLAS IMPORTANTES:
     toca('capa-ital',q=>{ q.italic=!q.italic; });
     toca('capa-caps',q=>{ q.caps=!q.caps; });
     toca('capa-sombra',q=>{ q.sombra=!q.sombra; });
+    toca('capa-tw',q=>{ q.tw=!q.tw; if(q.tw&&q.twDur===undefined) q.twDur=1.2; });
+    toca('capa-twcur',q=>{ q.twCursor=(q.twCursor===false); });
+    {const td=el.querySelector('#capa-twdur');
+     if(td) td.oninput=()=>{ const q=g(); if(!q) return;
+       const v=parseFloat(td.value); if(isFinite(v)&&v>0){ q.twDur=Math.min(8,v); redraw(); } };}
     toca('capa-color-auto',q=>{ q.color=''; q._colSig=null; });
     toca('capa-color-blanco',q=>{ q.color='#ffffff'; });
     toca('capa-color-negro',q=>{ q.color='#111111'; });
@@ -9373,6 +9484,7 @@ REGLAS IMPORTANTES:
 
   document.getElementById('free-btn').onclick=()=>{const v=document.getElementById('free-prompt').value.trim();if(v)runSinglePrompt(v);};
   document.getElementById('free-prompt').onkeydown=e=>{if(e.key==='Enter'){const v=e.target.value.trim();if(v)runSinglePrompt(v);}};
+  _restaurar();
 }
 
 async function runSinglePrompt(instruction){
@@ -10303,7 +10415,8 @@ const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','card
   'titXY','bajXY','textoAuto'];
 // Estilo propio de cada tipo
 const TPL_TIPO={
-  media:['mediaW','mediaH','anchor','edgeFade','fadeSides','photoRule','blurBg','scrimInt','waveStyle'],
+  media:['mediaW','mediaH','anchor','edgeFade','fadeSides','photoRule','blurBg','scrimInt','waveStyle',
+         'fotoVelo','fotoVeloDir','fotoVeloColor'],
   cover:['coverAccent','coverBand','coverTypo','coverAlign','coverTextY','coverImgY','coverTitleSz'],
   mapa:['mapZoom','mapStyle','mapTilt','mapLabelStep','mapVignette','mapVigColor','mapVigWhere',
         'mapWater','mapWaterColor','mapLand','mapLandColor','mapBright','mapContrast','mapSat',
@@ -11359,6 +11472,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v175','El panel se queda quieto, y typewriter en los textos que sumás','Dos cosas. La primera es de uso y era una molestia seria: el panel derecho se reconstruye entero en cada cambio, así que cada clic en una flecha lo devolvía al principio y había que volver a bajar hasta el control. Ahora guarda dónde estaba la barra y la restituye; y los campos de espera de la animación ni siquiera reconstruyen el panel: recalculan los segundos en el lugar, así que se puede quedar apretando la flechita sin que nada se mueva. La segunda: una capa de texto puede escribirse a máquina. Botón «⌨ Typewriter» en la ficha de la capa, con el tiempo que tarda en escribirse y un cursor parpadeante opcional. Arranca cuando a esa capa le toca entrar según el orden, así que se puede encadenar: primero el nombre, después el dato, y al final la cita escribiéndose. El corte se hace sobre las líneas ya compuestas, no sobre el texto crudo, para que el bloque no se reacomode mientras escribe.'],
+    ['v174','Veladura de la foto','«Sombra del texto» oscurece el pie de la card, que es donde vive el título. Cuando la foto no llega hasta abajo —una imagen arriba y un bloque de color abajo— esa sombra cae sobre el color y no sirve para nada; y si lo que hay que hacer legible es una cita puesta encima de la imagen, no la toca. Control nuevo, «Veladura de la foto», que se queda DENTRO del rectángulo de la foto: intensidad de 0 a 100, dirección —desde abajo, desde arriba o pareja sobre toda la imagen— y color, con negro y blanco a un clic para velar sobre fotos claras. Es independiente de la sombra del texto: se pueden usar las dos, o ninguna. Viaja en el template junto con el resto de los ajustes de la foto.'],
     ['v173','El tiempo de cada elemento, uno por uno','Un solo «paso» parejo para todos hacía que entrara todo casi junto y se perdiera el valor indicativo de la secuencia: el nombre, lo que hizo, y recién después la cita, necesitan aire distinto entre sí. Ahora cada fila de la lista de orden tiene su propio número: cuánto espera ESE elemento desde que entró el anterior, de 0 a 5 segundos. El primero se rige por «Entrada»; los que no se tocaron usan el paso general, así que quien no quiera afinar nada sigue teniendo el comportamiento de antes. Al lado de cada número se ve el segundo exacto en que entra ese elemento, recalculado en vivo. Las esperas viajan en el template junto con el resto de la animación.'],
     ['v172','Interlineado en los textos que sumás','El panel de una capa de texto tenía cuerpo, ancho máximo, tipografía, peso, itálica, mayúsculas, alineación, sombra y color, pero no interlineado: el espacio entre líneas estaba fijo en 1,18 y no había manera de tocarlo. Ahora hay un control al lado del ancho máximo, de 0,8 a 2,2. Estos controles aparecen con la capa seleccionada, que se selecciona haciendo clic sobre ella en el preview o en la lista de CAPAS.'],
     ['v171','El color de los textos que sumás','Los textos agregados con ＋ Texto salían negros sobre las fotos oscuras y no se leían. El motivo: en automático tomaban el color de texto de la card, que en una card de foto es el que corresponde al bloque de texto de abajo, no a lo que hay detrás de la capa. Ahora «Automático» mide el brillo de lo que la capa tiene efectivamente detrás —la foto, el fondo, otra capa— y elige el que contrasta; la medición se cachea por posición, así que no cuesta nada aunque la capa se arrastre. Además, junto al selector de color de la capa hay ahora dos botones directos, Blanco y Negro, y el botón Automático queda marcado cuando es el que está actuando. Recordá que estos controles aparecen con la capa seleccionada: se la selecciona haciendo clic sobre ella en el preview, o en la lista de CAPAS.'],
