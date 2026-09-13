@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v184 «dibujar mirando referencias»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v185 «la tapa se corta pieza por pieza»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v184 «dibujar mirando referencias»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v185 «la tapa se corta pieza por pieza»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -4851,6 +4851,67 @@ function buscarFoto(img){
   }
   return elegida;
 }
+
+// Todas las imágenes de la página, no solo la principal. Se reusa la misma
+// máscara de buscarFoto, pero en vez de quedarse con la más grande se devuelven
+// todas las manchas que tengan medios tonos y un tamaño razonable. Sirve para
+// dos cosas: que cada foto sea su propia pieza, y —sobre todo— para borrarlas
+// de la tinta antes de cortar, porque una foto es una mancha maciza que tapa
+// las calles blancas por las que el corte tiene que pasar.
+function buscarFotos(img){
+  var W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  var w=360, h=Math.round(360*H/W);
+  var c=document.createElement('canvas'); c.width=w; c.height=h;
+  var g=c.getContext('2d',{willReadFrequently:true});
+  g.drawImage(img,0,0,w,h);
+  var px=g.getImageData(0,0,w,h).data;
+  var gris=new Float32Array(w*h), sat=new Float32Array(w*h);
+  for(var i=0;i<w*h;i++){
+    var r=px[i*4], vv=px[i*4+1], b=px[i*4+2];
+    gris[i]=(r+vv+b)/3;
+    sat[i]=Math.max(r,vv,b)-Math.min(r,vv,b);
+  }
+  var sg=integral(gris,w,h), ss=integral(sat,w,h);
+  var m=new Uint8Array(w*h);
+  for(var y=0;y<h;y++) for(var x=0;x<w;x++){
+    var k=y*w+x;
+    m[k] = (mediaVentana(sg,w,h,x,y,6)<212 || mediaVentana(ss,w,h,x,y,6)>22) ? 1 : 0;
+  }
+  var ANCHO_LINEA=Math.max(2,Math.round(w*0.012));
+  function trazoFino(x,y){
+    var i2=y*w+x;
+    if(gris[i2]>=232) return false;
+    var a=x, b2=x;
+    while(a-1>=0 && gris[y*w+a-1]<232){ a--; if(b2-a+1>ANCHO_LINEA) return false; }
+    while(b2+1<w && gris[y*w+b2+1]<232){ b2++; if(b2-a+1>ANCHO_LINEA) return false; }
+    return true;
+  }
+  var cov=new Float32Array(w);
+  for(var x2=0;x2<w;x2++){
+    var n=0; for(var y2=0;y2<h;y2++) if(gris[y2*w+x2]<232) n++;
+    cov[x2]=n/h;
+  }
+  for(var x3=0;x3<w;x3++){
+    if(cov[x3]<0.02||cov[x3]>0.80){
+      var vacia=cov[x3]<0.02;
+      for(var d=-1;d<=1;d++){ var xx=x3+d; if(xx<0||xx>=w) continue;
+        for(var y3=0;y3<h;y3++) if(vacia||trazoFino(xx,y3)) m[y3*w+xx]=0; }
+    }
+  }
+  m=erosionar(dilatar(m,w,h,1,2),w,h,1,2);
+  m=dilatar(erosionar(m,w,h,2,2),w,h,2,2);
+  m=taparHuecos(m,w,h);
+  var k2=W/w, out=[];
+  componentes(m,w,h).sort(function(a,b){return b.area-a.area;}).slice(0,14).forEach(function(cp){
+    if(cp.area < w*h*0.004) return;                 // una mancha muy chica no es foto
+    var cj=cp.caja;
+    var caja=[Math.round(cj[0]*k2),Math.round(cj[1]*k2),Math.round(cj[2]*k2),Math.round(cj[3]*k2)];
+    if((caja[2]-caja[0])<W*0.04 || (caja[3]-caja[1])<H*0.02) return;
+    if(!mediosTonos(img,caja)) return;              // un titular grande no pasa
+    out.push(recortarAFoto(img,caja));
+  });
+  return out;
+}
 function mediosTonos(img, caja){
   var w=Math.max(1,Math.min(120,caja[2]-caja[0])), h=Math.max(1,Math.min(160,caja[3]-caja[1]));
   var c=document.createElement('canvas'); c.width=w; c.height=h;
@@ -4903,7 +4964,7 @@ function recortarAFoto(img, caja){
 // ── 1b. el corte en piezas ───────────────────────────────────────────
 // Corte XY: se parte por las calles blancas horizontales, dentro de cada
 // franja por los corondeles, y así hasta llegar a bloques.
-function cortarPiezas(img, foto){
+function cortarPiezas(img, foto, fotos){
   var W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
   var w=560, h=Math.round(560*H/W), esc=w/W, k=1/esc;
   var c=document.createElement('canvas'); c.width=w; c.height=h;
@@ -4912,11 +4973,13 @@ function cortarPiezas(img, foto){
   var px=g.getImageData(0,0,w,h).data;
   var tinta=new Uint8Array(w*h);
   for(var i=0;i<w*h;i++) tinta[i]=((px[i*4]+px[i*4+1]+px[i*4+2])/3 < 232)?1:0;
-  if(foto){
-    var f=[Math.round(foto[0]*esc),Math.round(foto[1]*esc),Math.round(foto[2]*esc),Math.round(foto[3]*esc)];
+  var _borrar=(fotos&&fotos.length)?fotos.slice():[];
+  if(foto) _borrar.push(foto);
+  _borrar.forEach(function(fb){
+    var f=[Math.round(fb[0]*esc),Math.round(fb[1]*esc),Math.round(fb[2]*esc),Math.round(fb[3]*esc)];
     for(var y=Math.max(0,f[1]-3);y<Math.min(h,f[3]+3);y++)
       for(var x=Math.max(0,f[0]-3);x<Math.min(w,f[2]+3);x++) tinta[y*w+x]=0;
-  }
+  });
   // Filetes: filas y columnas casi llenas. OJO: una banda de color maciza —el
   // rojo del cabezal— también da filas llenas. Si se la trata como filete, el
   // corte la parte al medio y queda una línea blanca cruzando el logo. Por eso
@@ -4953,8 +5016,20 @@ function cortarPiezas(img, foto){
 
   var GH=Math.max(5,Math.round(h*0.010)), GV=Math.max(4,Math.round(w*0.008));
   var salida=[];
-  function filaTiene(y,x0,x1){ for(var x=x0;x<x1;x++) if(tinta[y*w+x]) return true; return false; }
-  function colTiene(x,y0,y1){ for(var y=y0;y<y1;y++) if(tinta[y*w+x]) return true; return false; }
+  // Una sola mota de tinta convertía una calle blanca en una fila «con texto» y
+  // los dos bloques de sus lados quedaban pegados para siempre. Una linea de
+  // texto de verdad ocupa una parte apreciable del ancho del bloque; una mota,
+  // no. Se pide ese mínimo y las calles vuelven a abrirse.
+  function filaTiene(y,x0,x1){
+    var n=0, min=Math.max(1,(x1-x0)*0.015);
+    for(var x=x0;x<x1;x++) if(tinta[y*w+x]){ n++; if(n>min) return true; }
+    return false;
+  }
+  function colTiene(x,y0,y1){
+    var n=0, min=Math.max(1,(y1-y0)*0.015);
+    for(var y=y0;y<y1;y++) if(tinta[y*w+x]){ n++; if(n>min) return true; }
+    return false;
+  }
   function huecos(vacio,minimo){
     var tramos=[], ini=null;
     for(var i=0;i<=vacio.length;i++){
@@ -4971,11 +5046,39 @@ function cortarPiezas(img, foto){
     for(x=x0;x<x1;x++) if(colTiene(x,fy0,fy1)){ if(fx0<0) fx0=x; fx1=x+1; }
     if(fx0<0) return;
     x0=fx0; x1=fx1; y0=fy0; y1=fy1;
-    if(prof>6||(x1-x0)<w*0.02||(y1-y0)<h*0.004){ salida.push([x0,y0,x1,y1]); return; }
+    // El tope de profundidad era 6, y a una tapa de diario no le alcanza: la
+    // recursión se quedaba sin permiso a media página y volcaba el rectángulo
+    // entero como una sola pieza. Eso es lo que se veía entrar como losas.
+    if(prof>11||(x1-x0)<w*0.02||(y1-y0)<h*0.004){ salida.push([x0,y0,x1,y1]); return; }
     var vacio=[], largo;
     if(horizontal){ largo=y1-y0; for(y=y0;y<y1;y++) vacio.push(!filaTiene(y,x0,x1)); }
     else          { largo=x1-x0; for(x=x0;x<x1;x++) vacio.push(!colTiene(x,y0,y1)); }
-    var hs=huecos(vacio, horizontal?GH:GV);
+    // La calle que separa dos secciones de la página es ancha; la que separa un
+    // titular de su cuerpo, no. Se pide menos hueco a medida que se baja.
+    var afloja = prof<2 ? 1 : (prof<5 ? 0.6 : 0.42);
+    var minHueco = Math.max(3, Math.round((horizontal?GH:GV)*afloja));
+    if(!horizontal){
+      // El espacio entre dos palabras de un titular de 90 puntos es más ancho
+      // que la calle entre dos columnas de texto de cuerpo. Con un minimo fijo,
+      // el corte vertical entraba por ahí y separaba «Rosario» de «ya vibra»:
+      // después cada palabra volaba por su cuenta. La calle tiene que medir al
+      // menos medio renglón del bloque, y así el tamaño de la letra decide.
+      var bandas=0, prevB=false;
+      for(var yb=y0;yb<y1;yb++){
+        var hayB=filaTiene(yb,x0,x1);
+        if(hayB&&!prevB) bandas++;
+        prevB=hayB;
+      }
+      // Solo cuando la banda es UN renglón —o dos— la altura de la banda mide
+      // el cuerpo de la letra. Con varios renglones de cuerpos distintos el
+      // promedio no dice nada, y pedir esa calle bloqueaba cortes legitimos:
+      // era lo que dejaba el titular y la columna de al lado en una sola pieza.
+      if(bandas<=2){
+        var renglon=(y1-y0)/Math.max(1,bandas);
+        minHueco=Math.max(minHueco, Math.round(renglon*0.55));
+      }
+    }
+    var hs=huecos(vacio, minHueco);
     if(hs.length){
       var cortes=[0];
       for(var i=0;i<hs.length;i++){ cortes.push(hs[i][0]); cortes.push(hs[i][1]); }
@@ -4988,10 +5091,73 @@ function cortarPiezas(img, foto){
       }
       return;
     }
-    if(horizontal&&prof<6) return cortar(x0,y0,x1,y1,false,prof+1);
+    if(horizontal&&prof<11) return cortar(x0,y0,x1,y1,false,prof+1);
     salida.push([x0,y0,x1,y1]);
   }
   cortar(0,0,w,h,true,0);
+
+  // Cortar fino separa los elementos, pero si se corta de más un párrafo sale
+  // hecho líneas sueltas y la tapa se arma como una lluvia de tiritas. Acá se
+  // vuelven a pegar: dos piezas que comparten columna, están una encima de la
+  // otra a menos de un renglón de distancia Y tienen el mismo cuerpo tipográfico
+  // son el mismo párrafo. Lo del cuerpo es lo que evita que un titular se pegue
+  // con su bajada: entre ellos la altura cambia, y ahi el pegado no se aplica.
+  // Cuánta tinta tiene una caja, de 0 a 1. Se muestrea de a dos píxeles: la
+  // proporción no cambia y cuesta la cuarta parte.
+  // El renglón de una caja: su alto dividido por cuántas bandas de tinta tiene.
+  // Es el cuerpo tipográfico aproximado, y sirve para saber si dos piezas son
+  // el mismo texto partido o dos textos distintos.
+  function renglonDe(c){
+    var bandas=0, prev=false;
+    for(var y=c[1];y<c[3];y++){
+      var hay=false;
+      for(var x=c[0];x<c[2] && !hay;x++) if(tinta[y*w+x]) hay=true;
+      if(hay&&!prev) bandas++;
+      prev=hay;
+    }
+    return (c[3]-c[1])/Math.max(1,bandas);
+  }
+  function densidad(c){
+    var n=0, t=0;
+    for(var y=c[1];y<c[3];y+=2) for(var x=c[0];x<c[2];x+=2){ t++; if(tinta[y*w+x]) n++; }
+    return t ? n/t : 0;
+  }
+  (function reagrupar(){
+    var cambio=true, vueltas=0;
+    while(cambio && vueltas++<8){
+      cambio=false;
+      for(var i=0;i<salida.length;i++){
+        if(!salida[i]) continue;
+        for(var j=i+1;j<salida.length;j++){
+          if(!salida[j]) continue;
+          var A=salida[i], B=salida[j];
+          var solape=Math.min(A[2],B[2])-Math.max(A[0],B[0]);
+          var anchoMin=Math.min(A[2]-A[0], B[2]-B[0]);
+          if(anchoMin<=0 || solape < anchoMin*0.70) continue;      // no comparten columna
+          var hA=A[3]-A[1], hB=B[3]-B[1], hMin=Math.max(1,Math.min(hA,hB));
+          // Lo que tiene que coincidir es el CUERPO de la letra, no el alto de
+          // la caja: un titular de dos líneas y su tercera línea suelta miden
+          // distinto y son el mismo titular. Se compara el renglón —el alto
+          // dividido por cuántas bandas de tinta tiene— y ahí sí son iguales.
+          var rA=renglonDe(A), rB=renglonDe(B);
+          if(Math.max(rA,rB)/Math.max(1,Math.min(rA,rB)) > 1.5) continue;
+          // Una banda maciza —el cabezal en color, un zócalo negro— tiene la
+          // tinta llena; un texto, menos de la mitad. Pegarlos junta la marca
+          // del diario con el titular de abajo en un solo bloque enorme.
+          var dA=densidad(A), dB=densidad(B);
+          if(dA>0.72 || dB>0.72) continue;
+          if(Math.max(dA,dB)/Math.max(0.01,Math.min(dA,dB)) > 2.2) continue;
+          var sep = (A[1]<B[1]) ? (B[1]-A[3]) : (A[1]-B[3]);
+          if(sep > hMin*1.40) continue;                            // demasiado lejos
+          if(sep < -hMin*0.5) continue;                            // se pisan raro
+          A[0]=Math.min(A[0],B[0]); A[1]=Math.min(A[1],B[1]);
+          A[2]=Math.max(A[2],B[2]); A[3]=Math.max(A[3],B[3]);
+          salida[j]=null; cambio=true;
+        }
+      }
+      salida=salida.filter(function(x){ return !!x; });
+    }
+  })();
 
   // Las tiras no son piezas. Un corondel aislado entre dos columnas sobrevive al
   // corte como un rectángulo larguísimo y angosto: si se lo anima aparte, entra
@@ -5105,10 +5271,31 @@ function satMedia(img, caja){
 }
 
 // ── análisis completo ────────────────────────────────────────────────
+// Cuál de las piezas de arriba es la marca del diario. Se mira la franja
+// superior y gana la más saturada: la banda de color del cabezal. Si la tapa
+// no tiene color —o el análisis no lo ve— gana la de cuerpo tipográfico más
+// alto, que es el logotipo. Devuelve un índice o null.
+function indiceMarca(img, an, lista, H, W){
+  var mejorColor=null, satMejor=14, mejorTipo=null, altoMejor=0;
+  for(var i=0;i<lista.length;i++){
+    var c=lista[i];
+    if(c[4]) continue;
+    if((c[1]+c[3])/2 > H*0.17) continue;            // no esta en el cabezal
+    var an2=(c[2]-c[0]), al2=(c[3]-c[1]);
+    if(an2 < W*0.20) continue;                      // la marca cruza la pagina
+    var sm=satMedia(img,c);
+    if(sm>satMejor){ satMejor=sm; mejorColor=i; }
+    var h2=alturaLinea(an,c);
+    if(h2>altoMejor){ altoMejor=h2; mejorTipo=i; }
+  }
+  return mejorColor!==null ? mejorColor : mejorTipo;
+}
+
 function analizar(img){
   var W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  var fotos=buscarFotos(img);
   var foto=buscarFoto(img);
-  var an=cortarPiezas(img,foto);
+  var an=cortarPiezas(img,foto,fotos);
   var lista=an.piezas;
   var iFoto=null;
   if(foto){
@@ -5125,9 +5312,31 @@ function analizar(img){
     });
     iFoto=lista.findIndex(function(c){return c[0]===foto[0]&&c[1]===foto[1]&&c[2]===foto[2]&&c[3]===foto[3];});
   }
+  // Cada foto secundaria vuelve a la lista como pieza propia: su tinta se
+  // borró para poder cortar, así que si no se la repone no entra nunca.
+  (fotos||[]).forEach(function(fb){
+    if(foto && Math.abs(fb[0]-foto[0])<4 && Math.abs(fb[1]-foto[1])<4 &&
+              Math.abs(fb[2]-foto[2])<4 && Math.abs(fb[3]-foto[3])<4) return;
+    var pisa=false;
+    for(var q=0;q<lista.length;q++){
+      var c2=lista[q];
+      var ix=Math.max(0,Math.min(c2[2],fb[2])-Math.max(c2[0],fb[0]));
+      var iy=Math.max(0,Math.min(c2[3],fb[3])-Math.max(c2[1],fb[1]));
+      var ar=(fb[2]-fb[0])*(fb[3]-fb[1]);
+      if(ar>0 && (ix*iy)/ar > 0.6){ pisa=true; break; }
+    }
+    if(!pisa) lista.push([fb[0],fb[1],fb[2],fb[3],0]);
+  });
+  lista.sort(function(a,b){
+    var fa=Math.round(a[1]/(H*0.05)), fb2=Math.round(b[1]/(H*0.05));
+    return fa!==fb2 ? fa-fb2 : a[0]-b[0];
+  });
+  if(foto) iFoto=lista.findIndex(function(c){return c[0]===foto[0]&&c[1]===foto[1]&&c[2]===foto[2]&&c[3]===foto[3];});
   var iTitulo=indiceTitulo(an,lista,H,W,iFoto===null?[]:[iFoto]);
   var ranking=porPeso(img,an,lista,iFoto);
-  return {W:W,H:H,foto:foto,piezas:lista,iFoto:iFoto,iTitulo:iTitulo,ranking:ranking};
+  var iMarca=indiceMarca(img,an,lista,H,W);
+  return {W:W,H:H,foto:foto,fotos:fotos,piezas:lista,iFoto:iFoto,iTitulo:iTitulo,
+          ranking:ranking,iMarca:iMarca};
 }
 
 // ── 2. el plan: cámara y agenda ──────────────────────────────────────
@@ -5213,9 +5422,10 @@ function plan(a, opt){
   // El cabezal —el logo del diario— es la pieza clave y cierra el armado: se
   // saca del orden por peso y se manda al final, pase lo que pase. Es lo que
   // hace que la tapa termine de existir.
+  // Última entra LA MARCA, no todo lo que esté arriba: ahí también viven los
+  // pases y la tira de fotos chicas, y mandarlos a todos al final los amontona.
   function esCabezal(j){
-    var q=a.piezas[j];
-    return ((q[1]+q[3])/2) < PH*0.12;
+    return a.iMarca!==null && a.iMarca!==undefined && j===a.iMarca;
   }
   var cabezal=orden.filter(function(j){ return esCabezal(j) && j!==iDe; });
   orden=orden.filter(function(j){ return cabezal.indexOf(j)<0; }).concat(cabezal);
@@ -12340,6 +12550,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v185','La tapa se corta pieza por pieza','Las piezas entraban como losas —media página de una vez, cortada por cualquier lado— por tres motivos que se sumaban. UNO: se buscaba UNA sola foto. Una tapa tiene cinco o seis, y las otras quedaban como tinta: manchas macizas que tapan las calles blancas por las que el corte tiene que pasar. Ahora se detectan todas, se borran de la tinta antes de cortar y vuelven después como piezas propias. DOS: el corte tenía un tope de profundidad de 6 niveles, y a una tapa de diario no le alcanza: la recursión se quedaba sin permiso a media página y volcaba el rectángulo entero como una sola pieza. Ahora llega a 11, y el hueco mínimo que pide para cortar se afloja a medida que baja —la calle entre dos secciones es ancha, la que separa un titular de su cuerpo no—. TRES: una sola mota de tinta convertía una calle blanca en una fila «con texto» y pegaba los dos bloques para siempre; ahora se pide que la fila tenga al menos un 1,5% del ancho del bloque, que es lo que ocupa una línea de verdad. Cortar más fino trajo su propio problema: los párrafos salían hechos líneas sueltas y la tapa se armaba como una lluvia de tiritas, y además el corte vertical entraba por el espacio entre dos palabras de un titular grande y separaba «Rosario» de «ya vibra». Lo primero se resuelve volviendo a pegar: dos piezas que comparten columna, están a menos de un renglón y medio de distancia y tienen el mismo cuerpo tipográfico son el mismo párrafo —el cuerpo se mide como alto dividido por bandas de tinta, no como alto de la caja, para que un titular de dos líneas y su tercera línea suelta se reconozcan como el mismo titular—, y una banda maciza como el cabezal en color nunca se pega con un texto. Lo segundo, exigiendo que una calle vertical mida al menos medio renglón cuando la banda es de un solo renglón, que es cuando ese alto mide de verdad el cuerpo de la letra. En una tapa de prueba con la estructura de Clarín, esto pasó de 26 piezas con media página de una sola vez a 15 piezas limpias: cada foto por su lado, el titular entero, cada columna la suya, y la marca cerrando. LA MARCA: «lo que esté arriba entra último» no alcanzaba, porque ahí también viven los pases y la tira de fotos chicas, y entraban todos amontonados al final. Ahora se identifica la marca por lo que es —la pieza más saturada del cabezal, la banda de color; y si la tapa es en negro, la de tipografía más alta— y esa, sola, cierra el armado.'],
     ['v184','Dibujar mirando referencias','Describir con palabras un encuadre, una paleta o un personaje cuesta mucho más que mostrarlo. Ahora el bloque de ilustrar tiene un cajón de referencias: hasta cuatro imágenes por card que viajan junto al pedido para que el modelo saque de ahí lo que el texto no alcanza a decir. Funciona en los dos modos. Sin foto de partida, la primera referencia hace de base; con foto, la foto va primera —es la que se edita— y las referencias detrás. El prompt avisa explícitamente que están y para qué: sin esa línea el modelo tiende a devolver la referencia retocada en vez de usarla como guía. Se achican a 1024 px de lado antes de subirlas, y no se guardan dentro de la card: son material de trabajo, y meterlas adentro inflaría el JSON de la card y de cualquier template que salga de ella.'],
     ['v183','Los textos pueden entrar con la foto','Con un estilo de tapa puesto, los elementos esperaban SIEMPRE a que la foto terminara de entrar. Con «Zoom out lento», que dura 3,5s, eso dejaba la placa muda medio video. Ahora hay un control, «Adelanto», al lado del de la foto: en 0% se comportan como hasta ahora; en 100% los textos arrancan junto con la foto; en el medio entran mientras la foto todavía se está acomodando, que es como se hace en televisión. Debajo del control dice a qué segundo entra el primer elemento, y los tiempos de la lista se corren en vivo mientras movés la barra. Elegir un estilo lo devuelve a 0, que es la forma de origen de ese estilo.'],
     ['v182','Mis logos, ilustrar desde cero, y la grilla quieta','Tres cosas. MIS LOGOS: una biblioteca propia, dentro del bloque de Capas. Los tres botones de la barra de arriba son una sola marca en sus tres versiones y se dibujan como sello en la esquina; esto es otra cosa, varios logos distintos —Incertis, Montevideo Portal, el cliente que sea— que se suben una vez, quedan guardados en el navegador y se ponen con un clic como capa, para arrastrarlos y escalarlos libremente. Se guardan a 400 px de lado, con transparencia, hasta 24. ILUSTRAR DESDE CERO: el bloque de ilustrar aparecía solo si ya había una foto cargada, porque por dentro edita la foto que está. Ahora, en una card vacía, aparece igual y usa el endpoint de creación: el recuadro de texto deja de ser un ajuste opcional y pasa a ser el tema —sin eso no se puede crear nada—, y el tamaño sale de la proporción de la card. LA GRILLA: se dibujaba adentro de la cámara de la animación de entrada, así que con la cámara al 20% salía un 20% más grande y se iba del cuadro por arriba y por los cuatro lados. Las guías y el marco de color pertenecen al cuadro, no al dibujo: ahora se deshace esa transformación y quedan pegados al borde.'],
