@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v183 «los textos pueden entrar con la foto»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v184 «dibujar mirando referencias»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v183 «los textos pueden entrar con la foto»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v184 «dibujar mirando referencias»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1106,6 +1106,34 @@ function logosInsertar(id){
   setStatus('«'+x.nombre+'» agregado como capa — arrastralo','');
 }
 
+// ── Referencias visuales del prompt ─────────────────────────────────
+// Describir con palabras un encuadre, una paleta o un personaje cuesta mucho
+// más que mostrarlo. Estas son imágenes que viajan junto al pedido: el modelo
+// las mira y saca de ahí lo que el texto no alcanza a decir.
+// No se guardan en la card: son material de trabajo, y meterlas adentro
+// inflaría el JSON de la card y de cualquier template que salga de ella.
+const refsCache={};
+const REFS_MAX=4;
+function refsDe(cardId){ return refsCache[cardId]||(refsCache[cardId]=[]); }
+function refsAgregar(cardId, file){
+  return new Promise(function(res){
+    const L=refsDe(cardId);
+    if(L.length>=REFS_MAX){ setStatus('Hasta '+REFS_MAX+' referencias por card','warn'); return res(false); }
+    const fr=new FileReader();
+    fr.onload=function(){
+      // 1024 de lado alcanza de sobra para una referencia y evita mandar
+      // megabytes por cada una: lo que importa es qué se ve, no el detalle.
+      logoAchicar(fr.result,1024).then(function(chica){
+        refsDe(cardId).push({src:chica, nombre:(file.name||'ref').slice(0,24)});
+        res(true);
+      });
+    };
+    fr.onerror=function(){ setStatus('No se pudo leer esa imagen','error'); res(false); };
+    fr.readAsDataURL(file);
+  });
+}
+function refsBorrar(cardId, i){ refsDe(cardId).splice(i,1); }
+
 const ILUS_LS='incertis_ilustraciones';
 let ILUS_EQUIPO=[];
 function ilusMios(){
@@ -1137,9 +1165,14 @@ function ilusCargarEquipo(){
   }).catch(()=>{ ILUS_EQUIPO=[]; return ILUS_EQUIPO; });
 }
 // Arma el prompt final: estilo + ajuste puntual + guardas de parecido/recorte.
-function ilusPrompt(estilo, extra, transparente){
+function ilusPrompt(estilo, extra, transparente, refs){
   var p=String(estilo&&estilo.prompt||'').trim();
   if(extra && extra.trim()) p+=' Additional instruction: '+extra.trim()+'.';
+  // Sin esta línea el modelo tiende a devolver la referencia retocada en vez
+  // de usarla como guía. Hay que decirle explícitamente para qué está ahí.
+  if(refs>0) p+=' '+(refs===1?'One reference image is attached':(refs+' reference images are attached'))+
+    ': use them as visual guidance for subject, composition, palette and style. Do not reproduce them verbatim; '+
+    'follow the written instruction above for what the final image must show.';
   p+=ILUS_PARECIDO;
   if(transparente) p+=ILUS_RECORTE;
   return p;
@@ -6685,6 +6718,64 @@ async function crearImagenConOpenAI(cardId, prompt, opts){
   });
 }
 
+// Dibujar mirando referencias. Va por /images/edits, que es el endpoint que
+// acepta imágenes de entrada; /generations no recibe ninguna. Si la card ya
+// tiene una foto, esa va primera —es la base que se edita— y las referencias
+// van detrás. Si no tiene, la primera referencia hace de base.
+async function ilustrarConReferencias(cardId, prompt, opts){
+  opts=opts||{};
+  const key=getOpenAIKey();
+  if(!key) throw new Error('Cargá tu OpenAI key arriba (sk-…)');
+  const refs=refsDe(cardId);
+  if(!refs.length) throw new Error('No hay referencias cargadas');
+  const m=mediaCache[cardId];
+  const base=(m&&m.type==='img')?(m._aiOriginal||m.dataUrl):null;
+  const fuentes=(base?[base]:[]).concat(refs.map(function(r){return r.src;}));
+  const preparadas=[];
+  for(let i=0;i<fuentes.length;i++) preparadas.push(await dataUrlToPngBlob(fuentes[i]));
+  const outSize = base ? bestOutputSize(preparadas[0].w, preparadas[0].h) : bestOutputSize(W,H);
+  const fd=new FormData();
+  fd.append('model','gpt-image-1.5');
+  // Con una sola imagen el campo es «image»; con varias, «image[]».
+  if(preparadas.length===1) fd.append('image', preparadas[0].blob, 'ref0.png');
+  else preparadas.forEach(function(p,i){ fd.append('image[]', p.blob, 'ref'+i+'.png'); });
+  fd.append('prompt', prompt);
+  if(base) fd.append('input_fidelity','high');
+  fd.append('quality','high');
+  fd.append('size', outSize);
+  fd.append('output_format','png');
+  if(opts.transparente) fd.append('background','transparent');
+  const resp=await fetch('https://api.openai.com/v1/images/edits',{
+    method:'POST', headers:{ 'Authorization':'Bearer '+key }, body:fd
+  });
+  if(!resp.ok){
+    let msg='Error '+resp.status;
+    try{ const e=await resp.json(); if(e.error&&e.error.message) msg=e.error.message; }catch(_){}
+    throw new Error(msg);
+  }
+  const data=await resp.json();
+  const b64=data&&data.data&&data.data[0]&&data.data[0].b64_json;
+  if(!b64) throw new Error('La API no devolvió imagen');
+  const dataUrl='data:image/png;base64,'+b64;
+  return new Promise(function(resolve,reject){
+    const img=new Image();
+    img.onload=function(){
+      if(m&&m.type==='img'){
+        if(!m._aiOriginal) m._aiOriginal=m.dataUrl;
+        m.el=img; m.dataUrl=dataUrl; m.thumbUrl=dataUrl;
+        resolve(m);
+      }else{
+        mediaCache[cardId]={type:'img', el:img, dataUrl:dataUrl, thumbUrl:dataUrl,
+                            zoom:1, cx:.5, cy:.5,
+                            fitMode:opts.transparente?'contain':'cover'};
+        resolve(mediaCache[cardId]);
+      }
+    };
+    img.onerror=function(){ reject(new Error('No se pudo cargar la imagen creada')); };
+    img.src=dataUrl;
+  });
+}
+
 async function loadMediaFromFile(file,cardId){
   const isVideo=file.type.startsWith('video/');
   const isAudio=file.type.startsWith('audio/');
@@ -7644,6 +7735,20 @@ function wireIlusBlock(el, c){
         }
         nomEl.oninput=guardarBorrador; txtEl.oninput=guardarBorrador;
 
+        {
+          const bRef=el.querySelector('#ilus-ref-add'), fRef=el.querySelector('#ilus-ref-file');
+          if(bRef&&fRef){
+            bRef.onclick=()=>fRef.click();
+            fRef.onchange=async ev=>{
+              const fs=[...(ev.target.files||[])]; ev.target.value='';
+              let alguna=false;
+              for(const f of fs){ if(await refsAgregar(c.id,f)) alguna=true; }
+              if(alguna) renderEditor(cards[sel]);
+            };
+          }
+          el.querySelectorAll('[data-refdel]').forEach(b=>{ b.onclick=()=>{
+            refsBorrar(c.id, +b.dataset.refdel); renderEditor(cards[sel]); }; });
+        }
         const desdeCero = blk.dataset.desde==='cero';
         const rotuloRun = desdeCero ? 'Crear la imagen' : 'Ilustrar';
         runEl.onclick=async()=>{
@@ -7655,12 +7760,14 @@ function wireIlusBlock(el, c){
             decir('Escribí qué se ve: sin foto de partida, ese texto es el tema.','err');
             extraEl.focus(); return;
           }
-          const p=ilusPrompt(x, extraEl.value, recorta);
+          const nRefs=refsDe(c.id).length;
+          const p=ilusPrompt(x, extraEl.value, recorta, nRefs);
           runEl.disabled=true; runEl.textContent=desdeCero?'Creando… (~20-40s)':'Ilustrando… (~20-40s)';
-          decir('Enviando a OpenAI…','work');
+          decir(nRefs?('Enviando a OpenAI con '+nRefs+' referencia'+(nRefs>1?'s':'')+'…'):'Enviando a OpenAI…','work');
           try{
-            if(desdeCero) await crearImagenConOpenAI(c.id, p, {transparente:recorta});
-            else          await editImageWithOpenAI(c.id, p, {transparente:recorta});
+            if(nRefs)          await ilustrarConReferencias(c.id, p, {transparente:recorta});
+            else if(desdeCero) await crearImagenConOpenAI(c.id, p, {transparente:recorta});
+            else               await editImageWithOpenAI(c.id, p, {transparente:recorta});
             if(recorta){ const m3=mediaCache[c.id]; if(m3) m3.fitMode='contain'; }
             decir('✓ '+x.nombre,'ok');
             renderList(); renderEditor(cards[sel]); repintar();
@@ -7743,7 +7850,7 @@ function wireIlusBlock(el, c){
         };
 }
 
-function ilusBlockHTML(hayFoto){
+function ilusBlockHTML(hayFoto, cid){
   return `<div class="ilus-block" id="ilus-block" data-desde="${hayFoto?'foto':'cero'}">
           <div class="aiedit-head"><span>✎ ${hayFoto?'Ilustrar la foto':'Ilustrar desde cero'}</span><span class="aiedit-sub">${hayFoto?'guarda el parecido':'sin foto de partida'}</span></div>
           <select id="ilus-sel" class="ilus-sel"></select>
@@ -7753,6 +7860,23 @@ function ilusBlockHTML(hayFoto){
             <button class="tipo-btn" id="ilus-norecorta" style="flex:1;font-size:11px">▣ No recortar fondo</button>
           </div>
           <textarea id="ilus-extra" class="ilus-extra" placeholder="${hayFoto?'Ajuste puntual, opcional: solo el busto, sacá el micrófono, más contraste…':'Qué se ve. Obligatorio: una avenida de palmeras de noche, autos con las luces encendidas, un cartel en la colina…'}"></textarea>
+          ${(function(){
+            const R=refsDe(cid);
+            return `<div style="border:1px solid var(--border);border-radius:3px;padding:7px;margin:6px 0">
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);flex:1">Referencias ${R.length?'· '+R.length+'/'+REFS_MAX:''}</span>
+                ${R.length<REFS_MAX?`<button class="tpl-mini" id="ilus-ref-add">＋ Sumar</button>`:''}
+              </div>
+              ${R.length?`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:6px">
+                ${R.map((r,i)=>`<div style="position:relative">
+                  <img src="${r.src}" title="${escapeHtml(r.nombre)}" style="width:100%;height:44px;object-fit:cover;border-radius:3px;display:block;border:1px solid var(--border)">
+                  <button class="capa-b del" data-refdel="${i}" title="Sacar esta referencia" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;line-height:1;font-size:9px;padding:0">✕</button>
+                </div>`).join('')}
+              </div>`
+              :`<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Sumá una imagen —un encuadre, una paleta, un personaje— y el modelo la mira mientras dibuja. Mostrar cuesta menos que describir.</div>`}
+            </div>`;
+          })()}
+          <input type="file" id="ilus-ref-file" accept="image/*" multiple style="display:none">
           <button class="aiedit-run" id="ilus-run">${hayFoto?'Ilustrar':'Crear la imagen'}</button>
           <div class="ilus-fila">
             <button class="tpl-mini" id="ilus-nuevo">＋ Guardar un prompt</button>
@@ -7794,7 +7918,7 @@ function renderEditor(c){
   if(c.tipo==='media'){
     const isAudio=m?.type==='audio';
     if(!m){
-      mediaSection=`<div class="field"><label>Media</label>${ilusBlockHTML(false)}<div class="img-drop" id="img-drop"><input type="file" id="img-file" accept="image/*,video/*,audio/*"/><div class="img-drop-txt">Imagen · GIF · Video · Audio</div></div></div>`;
+      mediaSection=`<div class="field"><label>Media</label>${ilusBlockHTML(false, c.id)}<div class="img-drop" id="img-drop"><input type="file" id="img-file" accept="image/*,video/*,audio/*"/><div class="img-drop-txt">Imagen · GIF · Video · Audio</div></div></div>`;
     } else if(isAudio){
       const dur=m.duration||0;
       const trimIn=m.trimIn||0, trimOut=m.trimOut!==undefined?m.trimOut:dur;
@@ -7936,7 +8060,7 @@ function renderEditor(c){
           ${m._aiOriginal?`<button class="aiedit-revert" id="aiedit-revert">↩ Volver al original</button>`:''}
           <div class="aiedit-status" id="aiedit-status"></div>
         </div>
-        ${ilusBlockHTML(true)}
+        ${ilusBlockHTML(true, c.id)}
         <div style="display:none">
           <button class="aiedit-run">x</button>
         </div>`:''}
@@ -12216,6 +12340,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v184','Dibujar mirando referencias','Describir con palabras un encuadre, una paleta o un personaje cuesta mucho más que mostrarlo. Ahora el bloque de ilustrar tiene un cajón de referencias: hasta cuatro imágenes por card que viajan junto al pedido para que el modelo saque de ahí lo que el texto no alcanza a decir. Funciona en los dos modos. Sin foto de partida, la primera referencia hace de base; con foto, la foto va primera —es la que se edita— y las referencias detrás. El prompt avisa explícitamente que están y para qué: sin esa línea el modelo tiende a devolver la referencia retocada en vez de usarla como guía. Se achican a 1024 px de lado antes de subirlas, y no se guardan dentro de la card: son material de trabajo, y meterlas adentro inflaría el JSON de la card y de cualquier template que salga de ella.'],
     ['v183','Los textos pueden entrar con la foto','Con un estilo de tapa puesto, los elementos esperaban SIEMPRE a que la foto terminara de entrar. Con «Zoom out lento», que dura 3,5s, eso dejaba la placa muda medio video. Ahora hay un control, «Adelanto», al lado del de la foto: en 0% se comportan como hasta ahora; en 100% los textos arrancan junto con la foto; en el medio entran mientras la foto todavía se está acomodando, que es como se hace en televisión. Debajo del control dice a qué segundo entra el primer elemento, y los tiempos de la lista se corren en vivo mientras movés la barra. Elegir un estilo lo devuelve a 0, que es la forma de origen de ese estilo.'],
     ['v182','Mis logos, ilustrar desde cero, y la grilla quieta','Tres cosas. MIS LOGOS: una biblioteca propia, dentro del bloque de Capas. Los tres botones de la barra de arriba son una sola marca en sus tres versiones y se dibujan como sello en la esquina; esto es otra cosa, varios logos distintos —Incertis, Montevideo Portal, el cliente que sea— que se suben una vez, quedan guardados en el navegador y se ponen con un clic como capa, para arrastrarlos y escalarlos libremente. Se guardan a 400 px de lado, con transparencia, hasta 24. ILUSTRAR DESDE CERO: el bloque de ilustrar aparecía solo si ya había una foto cargada, porque por dentro edita la foto que está. Ahora, en una card vacía, aparece igual y usa el endpoint de creación: el recuadro de texto deja de ser un ajuste opcional y pasa a ser el tema —sin eso no se puede crear nada—, y el tamaño sale de la proporción de la card. LA GRILLA: se dibujaba adentro de la cámara de la animación de entrada, así que con la cámara al 20% salía un 20% más grande y se iba del cuadro por arriba y por los cuatro lados. Las guías y el marco de color pertenecen al cuadro, no al dibujo: ahora se deshace esa transformación y quedan pegados al borde.'],
     ['v181','La tapa se arma desde el observador','Cuatro cosas en la tapa. LA FOTO: se cortaba en cualquier lado por dos motivos distintos. Uno, un corondel en cualquier parte de la página borraba la columna entera para despegar la foto de la columna vecina, y eso partía la foto en dos: después ganaba la mitad más grande. Ahora se borra solo donde la línea es fina de verdad —dentro de una foto el trazo es ancho y queda—. Dos, la caja venía con el titular adentro, porque una tipografía de 90 puntos es tan oscura como una foto y el cierre morfológico las pegaba en una sola mancha; ahora la caja se recorta midiendo medios tonos: una franja de fotografía tiene grises repartidos, una de texto es papel blanco con rayas negras. EL PUNTO DE VISTA: no hacía nada porque el arranque era siempre la foto y el punto marcado se recortaba para no salirse de ella. Ahora manda: la pieza donde cae el punto es la que está desde el primer cuadro, y el encuadre arranca ahí. EL LOGO: es la pieza clave y ahora entra siempre última, fuera del orden por peso, pase lo que pase. EL ENSAMBLADO: las piezas ya no entran corridas desde el borde; vienen desde donde está el que mira y se fijan en el plano. Se dibujan como si estuvieran cerca de la lente —más grandes y más corridas del centro de la pantalla— y al alejarse convergen solas a su lugar. El estilo viejo sigue disponible como «Desde afuera».'],
