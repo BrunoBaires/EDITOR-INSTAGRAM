@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v180 «forma, filete y sonido en las capas»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v183 «los textos pueden entrar con la foto»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v180 «forma, filete y sonido en las capas»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v183 «los textos pueden entrar con la foto»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1043,6 +1043,69 @@ const ILUS_BASE=[
 ];
 // Prompts propios: viven en el almacén del equipo (colección 'ilustraciones') y,
 // como respaldo, en este navegador. Mismo mecanismo que los templates.
+// ── Biblioteca de logos ──────────────────────────────────────────────
+// Los tres botones de la barra (blanco/negro/rojo) son UNA marca en sus tres
+// versiones, y se dibujan como sello en la esquina. Esto es otra cosa: varios
+// logos distintos —Incertis, Montevideo Portal, el cliente que sea— guardados
+// una vez y puestos como capa, donde se arrastran y escalan libremente.
+// Quedan en el navegador, así que están en todas las sesiones de esa máquina.
+const LOGOS_LS='incertis_logos_lib';
+const LOGOS_MAX=24;
+function logosLeer(){
+  try{ const v=JSON.parse(localStorage.getItem(LOGOS_LS)||'[]'); return Array.isArray(v)?v:[]; }
+  catch(e){ return []; }
+}
+function logosGuardar(l){
+  try{ localStorage.setItem(LOGOS_LS, JSON.stringify(l)); return true; }
+  catch(e){ return false; }   // se lleno el almacenamiento del navegador
+}
+// A 400px de lado un logo se ve nítido hasta bastante grande en la placa y
+// pesa poco; sin achicar, tres archivos llenan el almacenamiento y no entra
+// ninguno más. Se conserva la transparencia: se guarda PNG.
+function logoAchicar(dataUrl, max){
+  return new Promise(function(res){
+    const im=new Image();
+    im.onload=function(){
+      let w=im.naturalWidth||im.width, h=im.naturalHeight||im.height;
+      const m=max||400;
+      if(Math.max(w,h)>m){ const k=m/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      cv.getContext('2d').drawImage(im,0,0,w,h);
+      try{ res(cv.toDataURL('image/png')); }catch(e){ res(dataUrl); }
+    };
+    im.onerror=function(){ res(dataUrl); };
+    im.src=dataUrl;
+  });
+}
+function logosAgregar(file){
+  return new Promise(function(res){
+    const fr=new FileReader();
+    fr.onload=function(){
+      logoAchicar(fr.result,400).then(function(small){
+        const l=logosLeer();
+        if(l.length>=LOGOS_MAX){ setStatus('La biblioteca llegó a '+LOGOS_MAX+' logos: borrá alguno','warn'); return res(false); }
+        const nombre=(file.name||'logo').replace(/\.[a-z0-9]+$/i,'').slice(0,28);
+        l.push({id:'lg'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), nombre:nombre, src:small});
+        if(!logosGuardar(l)){ setStatus('No entró: el navegador no tiene más lugar. Borrá un logo y probá de nuevo','error'); return res(false); }
+        setStatus('Logo guardado · '+nombre,'');
+        res(true);
+      });
+    };
+    fr.onerror=function(){ setStatus('No se pudo leer el archivo','error'); res(false); };
+    fr.readAsDataURL(file);
+  });
+}
+function logosBorrar(id){
+  logosGuardar(logosLeer().filter(function(x){ return x.id!==id; }));
+}
+function logosInsertar(id){
+  const x=logosLeer().filter(function(z){ return z.id===id; })[0];
+  if(!x) return;
+  const capa=agregarCapaImagen(x.src,'img');
+  if(capa){ capa.logo=true; capa.w=22; capa.anchor='tr'; renderEditor(cards[sel]); repintar(); }
+  setStatus('«'+x.nombre+'» agregado como capa — arrastralo','');
+}
+
 const ILUS_LS='incertis_ilustraciones';
 let ILUS_EQUIPO=[];
 function ilusMios(){
@@ -4102,6 +4165,19 @@ function drawCardFrame(card){
   ctx.restore();
 }
 function drawGrid(){
+  // drawGrid() se llama al cierre de cada card, o sea DENTRO de la cámara de la
+  // animación de entrada: con la cámara al 20% la grilla se dibujaba un 20% más
+  // grande y se iba del cuadro, por arriba y por los cuatro lados. Las guías y
+  // el marco no pertenecen al dibujo sino al cuadro, así que se deshace
+  // exactamente la misma transformación —mismo centro, escala inversa— y
+  // quedan pegados al borde del canvas pase lo que pase con la camara.
+  var _cam=(typeof _camZ==='number'&&_camZ>1.0005)?_camZ:1;
+  if(_cam===1){ drawGridInterno(); return; }
+  ctx.save();
+  ctx.translate(W/2,H/2); ctx.scale(1/_cam,1/_cam); ctx.translate(-W/2,-H/2);
+  try{ drawGridInterno(); } finally { ctx.restore(); }
+}
+function drawGridInterno(){
   // El marco va acá porque drawGrid() se llama al cierre de todas las cards.
   drawCardFrame(cards.find(c=>c.id===_drawingCardId) || cards[sel]);
   // Se muestra si está activada manualmente, o transparente mientras se arrastra
@@ -4703,10 +4779,27 @@ function buscarFoto(img){
     var n=0; for(var y2=0;y2<h;y2++) if(gris[y2*w+x2]<232) n++;
     cov[x2]=n/h;
   }
+  // Un corondel hay que sacarlo para que la mancha de la foto no se pegue con la
+  // columna de al lado. Pero borrar la COLUMNA ENTERA de la pagina parte la foto
+  // en dos cuando el corondel esta mas abajo, en otra parte del diseno: despues
+  // gana la mitad mas grande y la foto sale cortada por cualquier lado. Se borra
+  // solo donde la linea es realmente fina: en esa fila, el trazo oscuro
+  // alrededor de esa x tiene que medir unos pocos pixeles. Dentro de una foto el
+  // trazo es ancho, no pasa la prueba, y la foto queda entera.
+  var ANCHO_LINEA=Math.max(2,Math.round(w*0.012));
+  function trazoFino(x,y){
+    var i=y*w+x;
+    if(gris[i]>=232) return false;
+    var a=x, b2=x;
+    while(a-1>=0 && gris[y*w+a-1]<232){ a--; if(b2-a+1>ANCHO_LINEA) return false; }
+    while(b2+1<w && gris[y*w+b2+1]<232){ b2++; if(b2-a+1>ANCHO_LINEA) return false; }
+    return true;
+  }
   for(var x3=0;x3<w;x3++){
     if(cov[x3]<0.02||cov[x3]>0.80){
+      var vacia = cov[x3]<0.02;
       for(var d=-1;d<=1;d++){ var xx=x3+d; if(xx<0||xx>=w) continue;
-        for(var y3=0;y3<h;y3++) m[y3*w+xx]=0; }
+        for(var y3=0;y3<h;y3++) if(vacia||trazoFino(xx,y3)) m[y3*w+xx]=0; }
     }
   }
   m=erosionar(dilatar(m,w,h,1,2),w,h,1,2);      // closing
@@ -4720,8 +4813,8 @@ function buscarFoto(img){
   for(var ci=0;ci<comps.length;ci++){
     var cj=comps[ci].caja;
     var caja=[Math.round(cj[0]*k2),Math.round(cj[1]*k2),Math.round(cj[2]*k2),Math.round(cj[3]*k2)];
-    if(!elegida) elegida=caja;
-    if(mediosTonos(img,caja)) return caja;
+    if(!elegida) elegida=recortarAFoto(img,caja);
+    if(mediosTonos(img,caja)) return recortarAFoto(img,caja);
   }
   return elegida;
 }
@@ -4736,6 +4829,42 @@ function mediosTonos(img, caja){
     if(l>60&&l<200) n++;
   }
   return n/(w*h) > 0.35;
+}
+
+// La caja candidata casi siempre viene con el titular pegado: una tipografia
+// de 90 puntos es tan oscura como una foto, y el cierre morfologico las une en
+// una sola mancha. El resultado es una caja que corta la foto por cualquier
+// lado y se come el titulo. Se arregla midiendo: una franja de fotografia tiene
+// medios tonos repartidos por todos lados; una franja de texto es blanco de
+// papel con unas rayas negras, y casi no tiene grises. Se recorta desde cada
+// borde mientras la franja no sea fotografica, y se para en la primera que si.
+function recortarAFoto(img, caja){
+  var cw=caja[2]-caja[0], ch=caja[3]-caja[1];
+  if(cw<8||ch<8) return caja;
+  var w=Math.max(24,Math.min(240,cw)), h=Math.max(24,Math.round(w*ch/cw));
+  var cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+  var g=cv.getContext('2d',{willReadFrequently:true});
+  g.drawImage(img,caja[0],caja[1],cw,ch,0,0,w,h);
+  var px=g.getImageData(0,0,w,h).data;
+  var medio=new Float32Array(w*h);
+  for(var i=0;i<w*h;i++){
+    var l=(px[i*4]+px[i*4+1]+px[i*4+2])/3;
+    medio[i]=(l>60&&l<205)?1:0;
+  }
+  function fila(y){ var n=0; for(var x=0;x<w;x++) n+=medio[y*w+x]; return n/w; }
+  function col(x){ var n=0; for(var y=0;y<h;y++) n+=medio[y*w+x]; return n/h; }
+  var UMBRAL=0.30;
+  // Nunca se come mas del 45% de un lado: si la foto entera es oscura o muy
+  // contrastada, mejor dejarla como esta que devolver una tirita.
+  var maxY=Math.floor(h*0.45), maxX=Math.floor(w*0.45);
+  var t=0;  while(t<maxY && fila(t)<UMBRAL) t++;
+  var b=h;  while(b-1>t && b>h-maxY && fila(b-1)<UMBRAL) b--;
+  var l2=0; while(l2<maxX && col(l2)<UMBRAL) l2++;
+  var r=w;  while(r-1>l2 && r>w-maxX && col(r-1)<UMBRAL) r--;
+  if(b-t<h*0.25||r-l2<w*0.25) return caja;
+  var kx=cw/w, ky=ch/h;
+  return [Math.round(caja[0]+l2*kx), Math.round(caja[1]+t*ky),
+          Math.round(caja[0]+r*kx),  Math.round(caja[1]+b*ky)];
 }
 
 // ── 1b. el corte en piezas ───────────────────────────────────────────
@@ -4977,7 +5106,14 @@ var CFG = {
   MARGEN:1.035, PAPEL:'#e9eef4',
   ARRANQUE:1.28, INICIO_ARMADO:0.50, PASO_TITULOS:0.70,
   ENTRA_GRANDE:1.30, ENTRA_BORRON:3.2, ENTRA_DESDE:0.30, DUR_GRANDE:0.85,
-  ENTRA_ZOOM:0.18, ENTRA_CORRE:0.22, DUR_PIEZA:0.46, PROTAGONISTAS:3
+  ENTRA_ZOOM:0.18, ENTRA_CORRE:0.22, DUR_PIEZA:0.46, PROTAGONISTAS:3,
+  // Ensamblado «vuelo»: la pieza no entra de costado, viene desde donde esta
+  // el que mira. Se la dibuja como si estuviera mas cerca de la camara: mas
+  // grande Y mas corrida del centro de la pantalla, porque eso es lo que hace
+  // una lente cuando algo se le acerca. Al alejarse hasta el plano, achica y
+  // converge sola a su lugar. Escalar alrededor del centro de la pantalla es
+  // todo el truco: no hace falta inventarle una trayectoria.
+  ENSAMBLE:'vuelo', VUELO_GRANDE:2.8, VUELO_CHICA:1.8, VUELO_BORRON:5.5
 };
 
 function plan(a, opt){
@@ -4992,13 +5128,24 @@ function plan(a, opt){
   var CX=LW/2, CY=LH/2;
   var PX=o.punto.x*PW+ox, PY=o.punto.y*PH+oy;
 
-  var iDe = a.iFoto!==null ? a.iFoto : 0;
+  // El punto que se marca sobre la tapa manda: la pieza donde cae es la que
+  // esta desde el primer cuadro, y el encuadre arranca ahi. Antes el arranque
+  // era siempre la foto y el punto se recortaba para que no saliera de ella:
+  // si la foto estaba mal detectada —o el punto caia en otro lado— el marcado
+  // no cambiaba nada, porque terminaba pegado al mismo borde de siempre.
+  var pxPag=o.punto.x*PW, pyPag=o.punto.y*PH;
+  var iDe=null, areaDe=Infinity;
+  for(var ip=0;ip<a.piezas.length;ip++){
+    var q=a.piezas[ip];
+    if(q[4]) continue;                       // un filete no es un arranque
+    if(pxPag>=q[0]&&pxPag<=q[2]&&pyPag>=q[1]&&pyPag<=q[3]){
+      var ar=(q[2]-q[0])*(q[3]-q[1]);        // la mas chica que lo contiene
+      if(ar<areaDe){ areaDe=ar; iDe=ip; }
+    }
+  }
+  if(iDe===null) iDe = a.iFoto!==null ? a.iFoto : 0;
   var c0=a.piezas[iDe];
   var wIni=Math.max(Math.min(c0[2]-c0[0],(c0[3]-c0[1])*asp)*o.ARRANQUE, LW*0.045);
-  // el cuadro de arranque no puede desbordar la pieza
-  var e0=[c0[0]+ox,c0[1]+oy,c0[2]+ox,c0[3]+oy];
-  if(e0[2]-e0[0]>=wIni) PX=Math.min(Math.max(PX,e0[0]+wIni/2),e0[2]-wIni/2);
-  if(e0[3]-e0[1]>=wIni/asp) PY=Math.min(Math.max(PY,e0[1]+wIni/(2*asp)),e0[3]-wIni/(2*asp));
   var R=LW/wIni;
 
   function encuadre(u){
@@ -5030,6 +5177,16 @@ function plan(a, opt){
   a.ranking.forEach(function(j){ if(j!==iDe&&orden.indexOf(j)<0) orden.push(j); });
   otros.forEach(function(j){ if(orden.indexOf(j)<0) orden.push(j); });
 
+  // El cabezal —el logo del diario— es la pieza clave y cierra el armado: se
+  // saca del orden por peso y se manda al final, pase lo que pase. Es lo que
+  // hace que la tapa termine de existir.
+  function esCabezal(j){
+    var q=a.piezas[j];
+    return ((q[1]+q[3])/2) < PH*0.12;
+  }
+  var cabezal=orden.filter(function(j){ return esCabezal(j) && j!==iDe; });
+  orden=orden.filter(function(j){ return cabezal.indexOf(j)<0; }).concat(cabezal);
+
   var fino={}; orden.forEach(function(j){ if(a.piezas[j][4]) fino[j]=1; });
   var gordos=orden.filter(function(j){ return !fino[j]; });
   var grande={}; gordos.slice(0,o.PROTAGONISTAS).forEach(function(j){grande[j]=1;});
@@ -5046,6 +5203,16 @@ function plan(a, opt){
     var base = k3<2 ? cabeza[k3] : arranqueResto+paso*(k3-2);
     agenda[j]=Math.min(Math.max(base, tAsoma(a.piezas[j])), tZoom-dur(j));
   });
+  // Y si alguna del cabezal se colo antes por el «asoma», se la vuelve a
+  // empujar al final: entra cuando ya no queda nada mas por entrar.
+  var ultimos=gordos.filter(esCabezal);
+  if(ultimos.length){
+    var tarde=0;
+    gordos.forEach(function(j){ if(ultimos.indexOf(j)<0) tarde=Math.max(tarde, agenda[j]+dur(j)); });
+    ultimos.forEach(function(j,k4){
+      agenda[j]=Math.min(tZoom-dur(j), Math.max(tarde, agenda[j]) + k4*0.10);
+    });
+  }
   // Cada filete entra con el bloque que tiene más cerca: es parte de ese bloque,
   // no un elemento propio. Sin viaje ni escala, aparece y ya está.
   var grupo={};
@@ -5122,6 +5289,19 @@ function dibujar(ctx, img, a, p, seg, W, H, tZoom){
     var w=anc[2]-anc[0], h=anc[3]-anc[1];
     var vx=(p.ox+anc[0]+w/2)-ecx, vy=(p.oy+anc[1]+h/2)-ecy;
     var n=Math.hypot(vx,vy)||1;
+    if(o.ENSAMBLE==='vuelo'){
+      // f es el acercamiento: 1 = apoyada en el plano.
+      var F=p.grande[r]?o.VUELO_GRANDE:o.VUELO_CHICA;
+      var f3=1+(F-1)*(1-e);
+      // `pegar` escala alrededor del centro de la pieza; para que la escala
+      // sea alrededor del centro de la PANTALLA —que es donde esta el ojo—
+      // se compensa con el corrimiento. De ahi sale que las piezas del borde
+      // lleguen desde afuera del cuadro y las del centro casi no se muevan.
+      var ax3=SX(p.ox+(anc[0]+anc[2])/2), ay3=SY(p.oy+(anc[1]+anc[3])/2);
+      var cx3=(W/2-ax3)*(1-f3), cy3=(H/2-ay3)*(1-f3);
+      pegar(c,anc,f3,[cx3,cy3], Math.min(1,e/0.32), o.VUELO_BORRON*(1-e)*(p.grande[r]?1:0.5));
+      return;
+    }
     if(p.grande[r]){
       // llega acercándose y viniendo un poco desde afuera
       var f=1+(o.ENTRA_GRANDE-1)*(1-e);
@@ -5255,10 +5435,12 @@ function tapaPlan(card){
   var d=tapaCache[card.id];
   if(!d||!d.a) return null;
   var firma=[currentFmt,W,H,card.tapaZoom,card.tapaArranque,card.tapaInicio,
+             card.tapaEnsamble||'vuelo',
              card.tapaPunto.x,card.tapaPunto.y].join('|');
   if(!d.plan||d.firma!==firma){
     d.plan=TAPA.plan(d.a,{asp:W/H, tZoom:card.tapaZoom||8, punto:card.tapaPunto,
-                          ARRANQUE:card.tapaArranque, INICIO_ARMADO:card.tapaInicio});
+                          ARRANQUE:card.tapaArranque, INICIO_ARMADO:card.tapaInicio,
+                          ENSAMBLE:card.tapaEnsamble||'vuelo'});
     d.firma=firma;
   }
   return d.plan;
@@ -5353,7 +5535,7 @@ function animSegundo(card, clave){
   var o=animOrden(card), i=o.indexOf(clave);
   if(i<0) return 0;
   var dur=(typeof getCardDur==='function')?getCardDur(card):4;
-  var t=animFotoLargo(card)+(card.animInicio!==undefined?card.animInicio:0.05)*dur;
+  var t=animFotoEspera(card)+(card.animInicio!==undefined?card.animInicio:0.05)*dur;
   // se acumulan las esperas: el primero entra en t, y cada uno después espera
   // lo suyo. Así se puede dejar respirar un nombre antes de que llegue el dato.
   for(var j=1;j<=i;j++) t+=animEspera(card,o[j]);
@@ -5395,6 +5577,19 @@ function animFotoLargo(card){
   var d=animEstiloDef(card.animEstilo); if(!d) return 0;
   return (typeof card.animFotoDur==='number'&&isFinite(card.animFotoDur)) ? card.animFotoDur : d[3].fotoDur;
 }
+// Cuanto de la entrada de la foto se solapa con la de los elementos. En 0 los
+// textos esperan a que la foto termine —que era lo único posible hasta ahora, y
+// con un zoom out largo dejaba la placa muda varios segundos—. En 1 arrancan
+// junto con la foto. En el medio, entran mientras la foto todavía se está
+// acomodando, que es como se hace en televisión.
+function animSolape(card){
+  var v=card&&card.animSolape;
+  return (typeof v==='number'&&isFinite(v)) ? Math.min(1,Math.max(0,v)) : 0;
+}
+function animFotoEspera(card){
+  var L=animFotoLargo(card);
+  return L ? L*(1-animSolape(card)) : 0;
+}
 function animAplicarEstilo(card, id){
   card.animEstilo=id||'';
   if(!id){ card.animFotoDur=undefined; return; }
@@ -5402,7 +5597,7 @@ function animAplicarEstilo(card, id){
   card.animOn=true;
   card.animFotoDur=d[3].fotoDur;
   card.animInicio=d[3].inicio; card.animPaso=d[3].paso; card.animLargo=d[3].largo;
-  card.animEspera={};
+  card.animEspera={}; card.animSolape=0;
 }
 // Caída con rebote corto: baja pasada de largo y vuelve.
 function _easeCaida(p){
@@ -5511,13 +5706,15 @@ async function musicaAlStream(card, stream){
 // y no adentro de la foto —así funciona igual con cualquier tipo de card, con
 // el fondo desenfocado, con una viñeta o con una cover— y todo se abre junto,
 // como una cámara que retrocede.
+var _camZ=1;     // escala de la cámara en curso; la grilla la deshace
 function drawCard(card,t){
   var _z = (card && card.animOn && (card.animZoom||0)>0)
     ? 1 + card.animZoom*(1-eo3(Math.max(0,Math.min(1,t||0)))) : 1;
-  if(_z<=1.0005) return drawCardBase(card,t);
+  if(_z<=1.0005){ _camZ=1; return drawCardBase(card,t); }
   ctx.save();
   ctx.translate(W/2,H/2); ctx.scale(_z,_z); ctx.translate(-W/2,-H/2);
-  try{ drawCardBase(card,t); } finally { ctx.restore(); }
+  _camZ=_z;
+  try{ drawCardBase(card,t); } finally { ctx.restore(); _camZ=1; }
 }
 
 function drawCardBase(card,t){
@@ -6450,6 +6647,44 @@ async function editImageWithOpenAI(cardId, prompt, opts){
   });
 }
 
+// Crear una imagen donde no hay ninguna. Es otro endpoint que el de editar:
+// /generations no recibe archivo. Por eso el recuadro de texto deja de ser un
+// ajuste y pasa a ser el tema, y el tamaño sale de la proporción de la card.
+async function crearImagenConOpenAI(cardId, prompt, opts){
+  opts=opts||{};
+  const key=getOpenAIKey();
+  if(!key) throw new Error('Cargá tu OpenAI key arriba (sk-…)');
+  const size=bestOutputSize(W,H);
+  const body={ model:'gpt-image-1.5', prompt:prompt, n:1,
+               quality:'high', size:size, output_format:'png' };
+  if(opts.transparente) body.background='transparent';
+  const resp=await fetch('https://api.openai.com/v1/images/generations',{
+    method:'POST',
+    headers:{ 'Authorization':'Bearer '+key, 'Content-Type':'application/json' },
+    body:JSON.stringify(body)
+  });
+  if(!resp.ok){
+    let msg='Error '+resp.status;
+    try{ const e=await resp.json(); if(e.error&&e.error.message) msg=e.error.message; }catch(_){}
+    throw new Error(msg);
+  }
+  const data=await resp.json();
+  const b64=data&&data.data&&data.data[0]&&data.data[0].b64_json;
+  if(!b64) throw new Error('La API no devolvió imagen');
+  const dataUrl='data:image/png;base64,'+b64;
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      mediaCache[cardId]={type:'img', el:img, dataUrl:dataUrl, thumbUrl:dataUrl,
+                          zoom:1, cx:.5, cy:.5,
+                          fitMode:opts.transparente?'contain':'cover'};
+      resolve(mediaCache[cardId]);
+    };
+    img.onerror=()=>reject(new Error('No se pudo cargar la imagen creada'));
+    img.src=dataUrl;
+  });
+}
+
 async function loadMediaFromFile(file,cardId){
   const isVideo=file.type.startsWith('video/');
   const isAudio=file.type.startsWith('audio/');
@@ -7321,6 +7556,228 @@ function bloqueFaltante(el, c){
   };
 }
 
+// El mismo bloque de ilustrar sirve con foto de partida y sin ella. Lo unico
+// que cambia es el titulo y que, sin foto, el texto deja de ser un ajuste
+// opcional y pasa a ser lo que hay que dibujar.
+// Cableado del menú de ilustraciones. Estaba metido dentro de la rama «la card
+// ya tiene una imagen», así que en una card vacía el bloque se dibujaba pero no
+// respondía: el select salía sin opciones y el botón sin handler. Ahora se
+// llama en las dos ramas y se planta o no según encuentre el bloque.
+function wireIlusBlock(el, c){
+        const blk=el.querySelector('#ilus-block'); if(!blk) return;
+        const selEl=el.querySelector('#ilus-sel'), descEl=el.querySelector('#ilus-desc');
+        const extraEl=el.querySelector('#ilus-extra');
+        const bRec=el.querySelector('#ilus-recorta'), bNoRec=el.querySelector('#ilus-norecorta');
+        const runEl=el.querySelector('#ilus-run'), stEl=el.querySelector('#ilus-status');
+        const cntEl=el.querySelector('#ilus-guardados');
+        const bNuevo=el.querySelector('#ilus-nuevo'), bEditar=el.querySelector('#ilus-editar'), bBorrar=el.querySelector('#ilus-borrar');
+        const form=el.querySelector('#ilus-form'), nomEl=el.querySelector('#ilus-nom'), txtEl=el.querySelector('#ilus-txt');
+        const bNRec=el.querySelector('#ilus-nrecorta'), bNNoRec=el.querySelector('#ilus-nnorecorta');
+        const errEl=el.querySelector('#ilus-error');
+        const bSave=el.querySelector('#ilus-save'), bCancel=el.querySelector('#ilus-cancel'), bBase=el.querySelector('#ilus-base');
+        let editando=null;    // id del prompt propio que se está editando
+        let recorta=true;     // recortar el fondo en la próxima ilustración
+        let nRecorta=true;    // el estilo que se está guardando recorta el fondo
+
+        function decir(txt,clase){ stEl.textContent=txt||''; stEl.className='aiedit-status'+(clase?' '+clase:''); }
+        function errorForm(txt){
+          errEl.textContent=txt||'';
+          errEl.style.display=txt?'block':'none';
+        }
+        function pintarFondoBtns(){
+          bRec.classList.toggle('active',recorta);
+          bNoRec.classList.toggle('active',!recorta);
+        }
+        function pintarFondoNuevo(){
+          bNRec.classList.toggle('active',nRecorta);
+          bNNoRec.classList.toggle('active',!nRecorta);
+        }
+        bRec.onclick=()=>{ recorta=true;  pintarFondoBtns(); };
+        bNoRec.onclick=()=>{ recorta=false; pintarFondoBtns(); };
+        bNRec.onclick=()=>{ nRecorta=true;  pintarFondoNuevo(); };
+        bNNoRec.onclick=()=>{ nRecorta=false; pintarFondoNuevo(); };
+
+        function contar(){
+          const n=ilusMios().length, e=ILUS_EQUIPO.length;
+          cntEl.textContent = n||e
+            ? ('Prompts propios: '+n+' en este navegador'+(e?(' · '+e+' del equipo'):''))
+            : 'Todavía no guardaste ninguno propio.';
+        }
+        function pintarLista(idSel){
+          const todos=ilusTodos();
+          const casa=todos.filter(x=>!x.propio), propios=todos.filter(x=>x.propio);
+          let html='<optgroup label="De la casa">'+casa.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.nombre)+'</option>').join('')+'</optgroup>';
+          if(propios.length) html+='<optgroup label="Propios y del equipo">'+propios.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.nombre)+'</option>').join('')+'</optgroup>';
+          selEl.innerHTML=html;
+          const elegir=idSel||window.__ilusUltimo||casa[0].id;
+          selEl.value=elegir;
+          if(!selEl.value) selEl.value=casa[0].id;
+          pintarDesc(); contar();
+        }
+        function pintarDesc(){
+          const x=ilusPorId(selEl.value);
+          window.__ilusUltimo=selEl.value;
+          descEl.textContent=x.desc||'';
+          recorta=!!x.transparente;      // cada estilo trae su default; se puede cambiar
+          pintarFondoBtns();
+          const esPropio=!!x.propio;
+          bEditar.style.display=esPropio?'':'none';
+          bBorrar.style.display=esPropio?'':'none';
+        }
+        selEl.onchange=pintarDesc;
+        pintarLista();
+        // Los del equipo se piden una sola vez por sesión, no en cada render.
+        if(!window.__ilusPedidos){
+          window.__ilusPedidos=true;
+          ilusCargarEquipo().then(()=>{ if(selEl.isConnected) pintarLista(selEl.value); });
+        }
+        // Si quedó un borrador a medio escribir, se recupera al volver a la card.
+        if(window.__ilusBorrador && (window.__ilusBorrador.nombre||window.__ilusBorrador.prompt)){
+          const b=window.__ilusBorrador;
+          form.style.display='flex';
+          nomEl.value=b.nombre||''; txtEl.value=b.prompt||'';
+          nRecorta=b.transparente!==false; editando=b.editando||null;
+          pintarFondoNuevo();
+        }
+        function guardarBorrador(){
+          window.__ilusBorrador={nombre:nomEl.value, prompt:txtEl.value, transparente:nRecorta, editando:editando};
+        }
+        nomEl.oninput=guardarBorrador; txtEl.oninput=guardarBorrador;
+
+        const desdeCero = blk.dataset.desde==='cero';
+        const rotuloRun = desdeCero ? 'Crear la imagen' : 'Ilustrar';
+        runEl.onclick=async()=>{
+          const x=ilusPorId(selEl.value);
+          if(!x.prompt){ decir('Ese estilo no tiene prompt.','err'); return; }
+          // Sin foto de partida el texto no es un ajuste: es el tema. Sin él,
+          // la API devolvería el estilo aplicado a nada.
+          if(desdeCero && !(extraEl.value||'').trim()){
+            decir('Escribí qué se ve: sin foto de partida, ese texto es el tema.','err');
+            extraEl.focus(); return;
+          }
+          const p=ilusPrompt(x, extraEl.value, recorta);
+          runEl.disabled=true; runEl.textContent=desdeCero?'Creando… (~20-40s)':'Ilustrando… (~20-40s)';
+          decir('Enviando a OpenAI…','work');
+          try{
+            if(desdeCero) await crearImagenConOpenAI(c.id, p, {transparente:recorta});
+            else          await editImageWithOpenAI(c.id, p, {transparente:recorta});
+            if(recorta){ const m3=mediaCache[c.id]; if(m3) m3.fitMode='contain'; }
+            decir('✓ '+x.nombre,'ok');
+            renderList(); renderEditor(cards[sel]); repintar();
+          }catch(err){
+            decir('✗ '+(err.message||'Error'),'err');
+            runEl.disabled=false; runEl.textContent=rotuloRun;
+          }
+        };
+
+        function abrirForm(base){
+          form.style.display='flex';
+          errorForm('');
+          nomEl.value=base?base.nombre:'';
+          txtEl.value=base?base.prompt:'';
+          nRecorta=base?!!base.transparente:true;
+          pintarFondoNuevo();
+          editando=(base&&base.propio)?base.id:null;
+          guardarBorrador();
+          nomEl.focus();
+        }
+        bNuevo.onclick=()=>abrirForm(null);
+        bEditar.onclick=()=>abrirForm(ilusPorId(selEl.value));
+        bBase.onclick=()=>{
+          const x=ilusPorId(selEl.value);
+          txtEl.value=x.prompt||'';
+          if(!nomEl.value.trim()) nomEl.value=x.nombre+' (mío)';
+          nRecorta=!!x.transparente; pintarFondoNuevo(); errorForm(''); guardarBorrador();
+        };
+        bCancel.onclick=()=>{ form.style.display='none'; editando=null; errorForm(''); window.__ilusBorrador=null; };
+
+        function guardar(){
+          const nombre=(nomEl.value||'').trim(), prompt=(txtEl.value||'').trim();
+          // Los avisos van DENTRO del formulario: el status de abajo se perdía
+          // de vista en el panel y parecía que el botón no hacía nada.
+          if(!nombre){ errorForm('Falta el nombre del estilo.'); nomEl.focus(); return; }
+          if(prompt.length<20){ errorForm('El prompt es muy corto. Describí trazo, color y nivel de detalle.'); txtEl.focus(); return; }
+          errorForm('');
+          const item={ id: editando||('u-'+Math.abs(hashTxt(nombre)).toString(36)),
+                       nombre:nombre, prompt:prompt, transparente:!!nRecorta,
+                       desc:'Prompt propio'+(nRecorta?' · recorta el fondo':' · conserva el fondo'),
+                       fecha:new Date().toISOString().slice(0,10) };
+          // 1) Guardado local: es el que manda. Si esto falla, se avisa fuerte.
+          const l=ilusMios(); const ya=l.findIndex(z=>z&&z.id===item.id);
+          if(ya>=0) l[ya]=item; else l.push(item);
+          if(!ilusGuardarMios(l)){
+            errorForm('Este navegador no dejó guardar (¿modo privado o almacenamiento lleno?). Copiá el prompt antes de cerrar.');
+            return;
+          }
+          form.style.display='none'; editando=null; window.__ilusBorrador=null;
+          pintarLista(item.id);
+          decir('✓ «'+nombre+'» guardado — ya está en la lista de arriba','ok');
+          // 2) Publicación al equipo: si no sale, el prompt YA está guardado.
+          bSave.disabled=true;
+          storeGuardar('ilustraciones', item).then(lista=>{
+            ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&z.prompt);
+            pintarLista(item.id);
+            decir('✓ «'+nombre+'» guardado y publicado para todo el equipo','ok');
+          }).catch(()=>{
+            decir('✓ «'+nombre+'» guardado acá. Al equipo no llegó: el almacén no respondió.','ok');
+          }).then(()=>{ bSave.disabled=false; });
+        }
+        bSave.onclick=guardar;
+        nomEl.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); guardar(); } };
+
+        bBorrar.onclick=async()=>{
+          const x=ilusPorId(selEl.value); if(!x.propio) return;
+          const l=ilusMios().filter(z=>z&&z.id!==x.id);
+          ilusGuardarMios(l);
+          ILUS_EQUIPO=ILUS_EQUIPO.filter(z=>z&&(z.id||('u-'+hashTxt(z.nombre)))!==x.id);
+          pintarLista(ILUS_BASE[0].id);
+          decir('Borrando para el equipo…','work');
+          try{
+            const lista=await storeBorrar('ilustraciones', x.nombre);
+            ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&z.prompt);
+            pintarLista(ILUS_BASE[0].id);
+            decir('«'+x.nombre+'» borrado');
+          }catch(err){
+            decir('Borrado acá; en el equipo sigue disponible');
+          }
+        };
+}
+
+function ilusBlockHTML(hayFoto){
+  return `<div class="ilus-block" id="ilus-block" data-desde="${hayFoto?'foto':'cero'}">
+          <div class="aiedit-head"><span>✎ ${hayFoto?'Ilustrar la foto':'Ilustrar desde cero'}</span><span class="aiedit-sub">${hayFoto?'guarda el parecido':'sin foto de partida'}</span></div>
+          <select id="ilus-sel" class="ilus-sel"></select>
+          <div class="ilus-desc" id="ilus-desc"></div>
+          <div class="ilus-fondo">
+            <button class="tipo-btn" id="ilus-recorta" style="flex:1;font-size:11px">✂ Recortar fondo</button>
+            <button class="tipo-btn" id="ilus-norecorta" style="flex:1;font-size:11px">▣ No recortar fondo</button>
+          </div>
+          <textarea id="ilus-extra" class="ilus-extra" placeholder="${hayFoto?'Ajuste puntual, opcional: solo el busto, sacá el micrófono, más contraste…':'Qué se ve. Obligatorio: una avenida de palmeras de noche, autos con las luces encendidas, un cartel en la colina…'}"></textarea>
+          <button class="aiedit-run" id="ilus-run">${hayFoto?'Ilustrar':'Crear la imagen'}</button>
+          <div class="ilus-fila">
+            <button class="tpl-mini" id="ilus-nuevo">＋ Guardar un prompt</button>
+            <button class="tpl-mini" id="ilus-editar" style="display:none">✎ Editar</button>
+            <button class="tpl-mini del" id="ilus-borrar" style="display:none">Borrar</button>
+          </div>
+          <div class="ilus-guardados" id="ilus-guardados"></div>
+          <div class="ilus-form" id="ilus-form" style="display:none">
+            <input type="text" id="ilus-nom" placeholder="Nombre del estilo (ej: Acuarela suave)" maxlength="48"/>
+            <textarea id="ilus-txt" placeholder="Prompt, preferentemente en inglés. Describí el trazo, el color y el nivel de detalle; el parecido de la persona y el recorte del fondo los agrega el editor."></textarea>
+            <div class="ilus-fondo">
+              <button class="tipo-btn" id="ilus-nrecorta" style="flex:1;font-size:11px">✂ Recorta el fondo</button>
+              <button class="tipo-btn" id="ilus-nnorecorta" style="flex:1;font-size:11px">▣ Conserva el fondo</button>
+            </div>
+            <div class="ilus-err" id="ilus-error" style="display:none"></div>
+            <div class="ilus-fila">
+              <button class="tpl-mini" id="ilus-base">Partir del estilo elegido</button>
+              <button class="tpl-mini" id="ilus-cancel">Cancelar</button>
+              <button class="btn-p" id="ilus-save" style="flex:1;padding:6px 10px;font-size:12px">Guardar</button>
+            </div>
+          </div>
+          <div class="aiedit-status" id="ilus-status"></div>
+        </div>`;
+}
+
 function renderEditor(c){
   const el=document.getElementById('editor-area');
   // El panel se reconstruye entero en cada cambio. Sin esto, cada clic en una
@@ -7337,7 +7794,7 @@ function renderEditor(c){
   if(c.tipo==='media'){
     const isAudio=m?.type==='audio';
     if(!m){
-      mediaSection=`<div class="field"><label>Media</label><div class="img-drop" id="img-drop"><input type="file" id="img-file" accept="image/*,video/*,audio/*"/><div class="img-drop-txt">Imagen · GIF · Video · Audio</div></div></div>`;
+      mediaSection=`<div class="field"><label>Media</label>${ilusBlockHTML(false)}<div class="img-drop" id="img-drop"><input type="file" id="img-file" accept="image/*,video/*,audio/*"/><div class="img-drop-txt">Imagen · GIF · Video · Audio</div></div></div>`;
     } else if(isAudio){
       const dur=m.duration||0;
       const trimIn=m.trimIn||0, trimOut=m.trimOut!==undefined?m.trimOut:dur;
@@ -7479,37 +7936,9 @@ function renderEditor(c){
           ${m._aiOriginal?`<button class="aiedit-revert" id="aiedit-revert">↩ Volver al original</button>`:''}
           <div class="aiedit-status" id="aiedit-status"></div>
         </div>
-        <div class="ilus-block" id="ilus-block">
-          <div class="aiedit-head"><span>✎ Ilustrar la foto</span><span class="aiedit-sub">guarda el parecido</span></div>
-          <select id="ilus-sel" class="ilus-sel"></select>
-          <div class="ilus-desc" id="ilus-desc"></div>
-          <div class="ilus-fondo">
-            <button class="tipo-btn" id="ilus-recorta" style="flex:1;font-size:11px">✂ Recortar fondo</button>
-            <button class="tipo-btn" id="ilus-norecorta" style="flex:1;font-size:11px">▣ No recortar fondo</button>
-          </div>
-          <textarea id="ilus-extra" class="ilus-extra" placeholder="Ajuste puntual, opcional: solo el busto, sacá el micrófono, más contraste…"></textarea>
-          <button class="aiedit-run" id="ilus-run">Ilustrar</button>
-          <div class="ilus-fila">
-            <button class="tpl-mini" id="ilus-nuevo">＋ Guardar un prompt</button>
-            <button class="tpl-mini" id="ilus-editar" style="display:none">✎ Editar</button>
-            <button class="tpl-mini del" id="ilus-borrar" style="display:none">Borrar</button>
-          </div>
-          <div class="ilus-guardados" id="ilus-guardados"></div>
-          <div class="ilus-form" id="ilus-form" style="display:none">
-            <input type="text" id="ilus-nom" placeholder="Nombre del estilo (ej: Acuarela suave)" maxlength="48"/>
-            <textarea id="ilus-txt" placeholder="Prompt, preferentemente en inglés. Describí el trazo, el color y el nivel de detalle; el parecido de la persona y el recorte del fondo los agrega el editor."></textarea>
-            <div class="ilus-fondo">
-              <button class="tipo-btn" id="ilus-nrecorta" style="flex:1;font-size:11px">✂ Recorta el fondo</button>
-              <button class="tipo-btn" id="ilus-nnorecorta" style="flex:1;font-size:11px">▣ Conserva el fondo</button>
-            </div>
-            <div class="ilus-err" id="ilus-error" style="display:none"></div>
-            <div class="ilus-fila">
-              <button class="tpl-mini" id="ilus-base">Partir del estilo elegido</button>
-              <button class="tpl-mini" id="ilus-cancel">Cancelar</button>
-              <button class="btn-p" id="ilus-save" style="flex:1;padding:6px 10px;font-size:12px">Guardar</button>
-            </div>
-          </div>
-          <div class="aiedit-status" id="ilus-status"></div>
+        ${ilusBlockHTML(true)}
+        <div style="display:none">
+          <button class="aiedit-run">x</button>
         </div>`:''}
       </div>
       <div class="field" style="margin-top:2px"><label>Efectos</label>
@@ -8063,6 +8492,11 @@ function renderEditor(c){
     </div>
     ${_d&&_d.a?`
     <div class="field"><label>Punto de arranque</label>
+      <div style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin:8px 0 4px">Cómo se arma</div>
+      <div style="display:flex;gap:4px;margin-bottom:6px">
+        <button class="tipo-btn${(c.tapaEnsamble||'vuelo')==='vuelo'?' active':''}" data-tens="vuelo" style="flex:1" title="Las piezas vienen desde donde estás vos y se fijan en el plano">Desde el observador</button>
+        <button class="tipo-btn${c.tapaEnsamble==='afuera'?' active':''}" data-tens="afuera" style="flex:1" title="Las piezas entran corridas desde el borde">Desde afuera</button>
+      </div>
       <button class="btn-g" id="tapa-marcar" style="width:100%">${c._marcando?'✓ Listo, guardar el punto':'◎ Marcar sobre la tapa'}</button>
       <div style="font-size:11px;color:var(--text3);margin-top:4px">${c._marcando?'Hacé clic en el rostro o el detalle donde querés que empiece.':'Ahora empieza en '+Math.round(c.tapaPunto.x*100)+'% / '+Math.round(c.tapaPunto.y*100)+'%'}</div>
     </div>
@@ -8171,6 +8605,10 @@ function renderEditor(c){
       <div style="font-size:11px;color:var(--text3);line-height:1.45;margin-bottom:4px">${escapeHtml(animEstiloDef(c.animEstilo)[2])}</div>
       <div class="range-block" style="margin-bottom:6px">
         <div class="range-row"><label>Foto</label><input type="range" id="sl-afd" min="0.2" max="5" step="0.05" value="${animFotoLargo(c)}"/><span class="range-val">${animFotoLargo(c).toFixed(2)}s</span></div>
+        <div class="range-row"><label>Adelanto</label><input type="range" id="sl-asol" min="0" max="1" step="0.01" value="${animSolape(c)}"/><span class="range-val">${Math.round(animSolape(c)*100)}%</span></div>
+      </div>
+      <div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-bottom:6px">«Adelanto» es cuánto se pisan la foto y los elementos. En 0% los textos esperan a que la foto termine de entrar; en 100% arrancan con ella. El primero entra a los ${animSegundo(c, (animOrden(c)[0]||'titulo')).toFixed(2)}s.</div>
+      <div style="display:none">
       </div>`:''}
       ${animOrden(c).length?`<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-bottom:6px">
         <div style="display:flex;align-items:center;gap:6px;padding:4px 7px;background:var(--bg);border-bottom:1px solid var(--border);font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3)">
@@ -8217,6 +8655,26 @@ function renderEditor(c){
         <button class="tipo-btn" id="capa-add-vid" style="flex:1">＋ Video</button>
         <button class="tipo-btn" id="capa-add-txt" style="flex:1">＋ Texto</button>
       </div>
+      ${(function(){
+        const L=logosLeer();
+        return `<div style="border:1px solid var(--border);border-radius:3px;padding:7px;margin-bottom:6px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:${L.length?'6px':'0'}">
+            <span style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);flex:1">Mis logos</span>
+            <button class="tpl-mini" id="logolib-add">＋ Subir logo</button>
+          </div>
+          ${L.length?`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">
+            ${L.map(x=>`<div style="position:relative">
+              <button class="tipo-btn" data-logoins="${x.id}" title="${escapeHtml(x.nombre)} — agregar como capa" style="width:100%;height:42px;padding:3px;display:flex;align-items:center;justify-content:center;background:var(--bg2)">
+                <img src="${x.src}" style="max-width:100%;max-height:100%;object-fit:contain;pointer-events:none">
+              </button>
+              <button class="capa-b del" data-logodel="${x.id}" title="Borrar de la biblioteca" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;line-height:1;font-size:9px;padding:0">✕</button>
+            </div>`).join('')}
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:5px;line-height:1.4">Un clic lo suma como capa, arriba a la derecha. Después lo arrastrás y lo escalás como cualquier elemento.</div>`
+          :`<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Subí los logos que uses seguido —Incertis, Montevideo Portal, el cliente que sea— y quedan guardados en este navegador para todas las cards.</div>`}
+        </div>`;
+      })()}
+      <input type="file" id="logolib-file" accept="image/*" style="display:none">
       <input type="file" id="capa-file" accept="image/*" style="display:none">
       <input type="file" id="capa-vfile" accept="video/webm,video/mp4,video/*" style="display:none">
       ${(c.capas&&c.capas.length)?`
@@ -8549,6 +9007,7 @@ function renderEditor(c){
   if(c.tipo==='media'){
     const mWire=mediaCache[c.id];
     const isAudioWire=mWire?.type==='audio';
+    wireIlusBlock(el, c);
 
     if(!mWire){
       const imgFile=el.querySelector('#img-file');
@@ -8744,176 +9203,9 @@ function renderEditor(c){
       // Tres estilos de la casa más los que sume el equipo. El prompt final lo
       // arma ilusPrompt(): estilo + ajuste puntual + las guardas de parecido y
       // de recorte, para que nadie tenga que acordarse de escribirlas.
-      (function(){
-        const blk=el.querySelector('#ilus-block'); if(!blk) return;
-        const selEl=el.querySelector('#ilus-sel'), descEl=el.querySelector('#ilus-desc');
-        const extraEl=el.querySelector('#ilus-extra');
-        const bRec=el.querySelector('#ilus-recorta'), bNoRec=el.querySelector('#ilus-norecorta');
-        const runEl=el.querySelector('#ilus-run'), stEl=el.querySelector('#ilus-status');
-        const cntEl=el.querySelector('#ilus-guardados');
-        const bNuevo=el.querySelector('#ilus-nuevo'), bEditar=el.querySelector('#ilus-editar'), bBorrar=el.querySelector('#ilus-borrar');
-        const form=el.querySelector('#ilus-form'), nomEl=el.querySelector('#ilus-nom'), txtEl=el.querySelector('#ilus-txt');
-        const bNRec=el.querySelector('#ilus-nrecorta'), bNNoRec=el.querySelector('#ilus-nnorecorta');
-        const errEl=el.querySelector('#ilus-error');
-        const bSave=el.querySelector('#ilus-save'), bCancel=el.querySelector('#ilus-cancel'), bBase=el.querySelector('#ilus-base');
-        let editando=null;    // id del prompt propio que se está editando
-        let recorta=true;     // recortar el fondo en la próxima ilustración
-        let nRecorta=true;    // el estilo que se está guardando recorta el fondo
+      // El cableado del menú de ilustraciones vive afuera: se usa igual con foto
+      // de partida y sin ella, y estas dos ramas son distintas.
 
-        function decir(txt,clase){ stEl.textContent=txt||''; stEl.className='aiedit-status'+(clase?' '+clase:''); }
-        function errorForm(txt){
-          errEl.textContent=txt||'';
-          errEl.style.display=txt?'block':'none';
-        }
-        function pintarFondoBtns(){
-          bRec.classList.toggle('active',recorta);
-          bNoRec.classList.toggle('active',!recorta);
-        }
-        function pintarFondoNuevo(){
-          bNRec.classList.toggle('active',nRecorta);
-          bNNoRec.classList.toggle('active',!nRecorta);
-        }
-        bRec.onclick=()=>{ recorta=true;  pintarFondoBtns(); };
-        bNoRec.onclick=()=>{ recorta=false; pintarFondoBtns(); };
-        bNRec.onclick=()=>{ nRecorta=true;  pintarFondoNuevo(); };
-        bNNoRec.onclick=()=>{ nRecorta=false; pintarFondoNuevo(); };
-
-        function contar(){
-          const n=ilusMios().length, e=ILUS_EQUIPO.length;
-          cntEl.textContent = n||e
-            ? ('Prompts propios: '+n+' en este navegador'+(e?(' · '+e+' del equipo'):''))
-            : 'Todavía no guardaste ninguno propio.';
-        }
-        function pintarLista(idSel){
-          const todos=ilusTodos();
-          const casa=todos.filter(x=>!x.propio), propios=todos.filter(x=>x.propio);
-          let html='<optgroup label="De la casa">'+casa.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.nombre)+'</option>').join('')+'</optgroup>';
-          if(propios.length) html+='<optgroup label="Propios y del equipo">'+propios.map(x=>'<option value="'+x.id+'">'+escapeHtml(x.nombre)+'</option>').join('')+'</optgroup>';
-          selEl.innerHTML=html;
-          const elegir=idSel||window.__ilusUltimo||casa[0].id;
-          selEl.value=elegir;
-          if(!selEl.value) selEl.value=casa[0].id;
-          pintarDesc(); contar();
-        }
-        function pintarDesc(){
-          const x=ilusPorId(selEl.value);
-          window.__ilusUltimo=selEl.value;
-          descEl.textContent=x.desc||'';
-          recorta=!!x.transparente;      // cada estilo trae su default; se puede cambiar
-          pintarFondoBtns();
-          const esPropio=!!x.propio;
-          bEditar.style.display=esPropio?'':'none';
-          bBorrar.style.display=esPropio?'':'none';
-        }
-        selEl.onchange=pintarDesc;
-        pintarLista();
-        // Los del equipo se piden una sola vez por sesión, no en cada render.
-        if(!window.__ilusPedidos){
-          window.__ilusPedidos=true;
-          ilusCargarEquipo().then(()=>{ if(selEl.isConnected) pintarLista(selEl.value); });
-        }
-        // Si quedó un borrador a medio escribir, se recupera al volver a la card.
-        if(window.__ilusBorrador && (window.__ilusBorrador.nombre||window.__ilusBorrador.prompt)){
-          const b=window.__ilusBorrador;
-          form.style.display='flex';
-          nomEl.value=b.nombre||''; txtEl.value=b.prompt||'';
-          nRecorta=b.transparente!==false; editando=b.editando||null;
-          pintarFondoNuevo();
-        }
-        function guardarBorrador(){
-          window.__ilusBorrador={nombre:nomEl.value, prompt:txtEl.value, transparente:nRecorta, editando:editando};
-        }
-        nomEl.oninput=guardarBorrador; txtEl.oninput=guardarBorrador;
-
-        runEl.onclick=async()=>{
-          const x=ilusPorId(selEl.value);
-          if(!x.prompt){ decir('Ese estilo no tiene prompt.','err'); return; }
-          const p=ilusPrompt(x, extraEl.value, recorta);
-          runEl.disabled=true; runEl.textContent='Ilustrando… (~20-40s)';
-          decir('Enviando a OpenAI…','work');
-          try{
-            await editImageWithOpenAI(c.id, p, {transparente:recorta});
-            if(recorta){ const m3=mediaCache[c.id]; if(m3) m3.fitMode='contain'; }
-            decir('✓ '+x.nombre,'ok');
-            renderList(); renderEditor(cards[sel]); redraw();
-          }catch(err){
-            decir('✗ '+(err.message||'Error'),'err');
-            runEl.disabled=false; runEl.textContent='Ilustrar';
-          }
-        };
-
-        function abrirForm(base){
-          form.style.display='flex';
-          errorForm('');
-          nomEl.value=base?base.nombre:'';
-          txtEl.value=base?base.prompt:'';
-          nRecorta=base?!!base.transparente:true;
-          pintarFondoNuevo();
-          editando=(base&&base.propio)?base.id:null;
-          guardarBorrador();
-          nomEl.focus();
-        }
-        bNuevo.onclick=()=>abrirForm(null);
-        bEditar.onclick=()=>abrirForm(ilusPorId(selEl.value));
-        bBase.onclick=()=>{
-          const x=ilusPorId(selEl.value);
-          txtEl.value=x.prompt||'';
-          if(!nomEl.value.trim()) nomEl.value=x.nombre+' (mío)';
-          nRecorta=!!x.transparente; pintarFondoNuevo(); errorForm(''); guardarBorrador();
-        };
-        bCancel.onclick=()=>{ form.style.display='none'; editando=null; errorForm(''); window.__ilusBorrador=null; };
-
-        function guardar(){
-          const nombre=(nomEl.value||'').trim(), prompt=(txtEl.value||'').trim();
-          // Los avisos van DENTRO del formulario: el status de abajo se perdía
-          // de vista en el panel y parecía que el botón no hacía nada.
-          if(!nombre){ errorForm('Falta el nombre del estilo.'); nomEl.focus(); return; }
-          if(prompt.length<20){ errorForm('El prompt es muy corto. Describí trazo, color y nivel de detalle.'); txtEl.focus(); return; }
-          errorForm('');
-          const item={ id: editando||('u-'+Math.abs(hashTxt(nombre)).toString(36)),
-                       nombre:nombre, prompt:prompt, transparente:!!nRecorta,
-                       desc:'Prompt propio'+(nRecorta?' · recorta el fondo':' · conserva el fondo'),
-                       fecha:new Date().toISOString().slice(0,10) };
-          // 1) Guardado local: es el que manda. Si esto falla, se avisa fuerte.
-          const l=ilusMios(); const ya=l.findIndex(z=>z&&z.id===item.id);
-          if(ya>=0) l[ya]=item; else l.push(item);
-          if(!ilusGuardarMios(l)){
-            errorForm('Este navegador no dejó guardar (¿modo privado o almacenamiento lleno?). Copiá el prompt antes de cerrar.');
-            return;
-          }
-          form.style.display='none'; editando=null; window.__ilusBorrador=null;
-          pintarLista(item.id);
-          decir('✓ «'+nombre+'» guardado — ya está en la lista de arriba','ok');
-          // 2) Publicación al equipo: si no sale, el prompt YA está guardado.
-          bSave.disabled=true;
-          storeGuardar('ilustraciones', item).then(lista=>{
-            ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&z.prompt);
-            pintarLista(item.id);
-            decir('✓ «'+nombre+'» guardado y publicado para todo el equipo','ok');
-          }).catch(()=>{
-            decir('✓ «'+nombre+'» guardado acá. Al equipo no llegó: el almacén no respondió.','ok');
-          }).then(()=>{ bSave.disabled=false; });
-        }
-        bSave.onclick=guardar;
-        nomEl.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); guardar(); } };
-
-        bBorrar.onclick=async()=>{
-          const x=ilusPorId(selEl.value); if(!x.propio) return;
-          const l=ilusMios().filter(z=>z&&z.id!==x.id);
-          ilusGuardarMios(l);
-          ILUS_EQUIPO=ILUS_EQUIPO.filter(z=>z&&(z.id||('u-'+hashTxt(z.nombre)))!==x.id);
-          pintarLista(ILUS_BASE[0].id);
-          decir('Borrando para el equipo…','work');
-          try{
-            const lista=await storeBorrar('ilustraciones', x.nombre);
-            ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&z.prompt);
-            pintarLista(ILUS_BASE[0].id);
-            decir('«'+x.nombre+'» borrado');
-          }catch(err){
-            decir('Borrado acá; en el equipo sigue disponible');
-          }
-        };
-      })();
       // ── Ken Burns ──
       const kbBtn=el.querySelector('#kb-toggle');
       if(kbBtn){kbBtn.onclick=()=>{const m2=mediaCache[c.id];if(!m2)return;m2.kenBurns=!m2.kenBurns;if(m2.kenBurns)m2.cinematic=false;renderEditor(cards[sel]);if(!raf)play(cards[sel]);};}
@@ -9530,6 +9822,10 @@ REGLAS IMPORTANTES:
         renderEditor(cards[sel]); renderList(); play(cards[sel]);
       }catch(err){ aviso('✕ '+err.message); setStatus('No se pudo leer la tapa','error'); }
     };
+    el.querySelectorAll('[data-tens]').forEach(b=>{ b.onclick=()=>{
+      cards[sel].tapaEnsamble=b.dataset.tens;
+      const dd=tapaCache[cards[sel].id]; if(dd) dd.plan=null;
+      renderEditor(cards[sel]); play(cards[sel]); }; });
     const bM=el.querySelector('#tapa-marcar');
     if(bM) bM.onclick=()=>{
       cards[sel]._marcando=!cards[sel]._marcando;
@@ -9623,6 +9919,11 @@ REGLAS IMPORTANTES:
     slA('#sl-al','animLargo',v=>v.toFixed(2)+'s');
     slA('#sl-az','animZoom',v=>Math.round(v*100)+'%');
     slA('#sl-afd','animFotoDur',v=>v.toFixed(2)+'s');
+    slA('#sl-asol','animSolape',v=>Math.round(v*100)+'%');
+    // Los tiempos de la lista se corren con el adelanto: se refrescan en vivo,
+    // sin volver a dibujar el panel, que si no la barra se va al principio.
+    {const sa=el.querySelector('#sl-asol');
+     if(sa) sa.addEventListener('input',()=>{ if(typeof refrescarTiempos==='function') refrescarTiempos(); });}
     el.querySelectorAll('[data-aest]').forEach(b=>{ b.onclick=()=>{ animAplicarEstilo(cards[sel], b.dataset.aest); renderEditor(cards[sel]); if(!raf) play(cards[sel]); else redraw(); }; });
     const musF=el.querySelector('#mus-file');
     if(musF) musF.onchange=async e=>{ const f=e.target.files[0]; if(f) await musicaCargar(f, cards[sel]); };
@@ -9672,6 +9973,18 @@ REGLAS IMPORTANTES:
       fVid.onchange=e=>{ const f=e.target.files[0]; if(!f)return;
         agregarCapaImagen(URL.createObjectURL(f),'video'); e.target.value=''; }; }
     if(bTxt) bTxt.onclick=()=>agregarCapaTexto();
+    {
+      const bLg=el.querySelector('#logolib-add'), fLg=el.querySelector('#logolib-file');
+      if(bLg&&fLg){
+        bLg.onclick=()=>fLg.click();
+        fLg.onchange=async e=>{ const f=e.target.files[0]; e.target.value='';
+          if(!f) return;
+          if(await logosAgregar(f)) renderEditor(cards[sel]); };
+      }
+      el.querySelectorAll('[data-logoins]').forEach(b=>{ b.onclick=()=>logosInsertar(b.dataset.logoins); });
+      el.querySelectorAll('[data-logodel]').forEach(b=>{ b.onclick=ev=>{ ev.stopPropagation();
+        logosBorrar(b.dataset.logodel); renderEditor(cards[sel]); }; });
+    }
     el.querySelectorAll('[data-capa]').forEach(r=>{
       r.onclick=ev=>{ if(ev.target.closest('.capa-b')) return;
         capaSel=parseInt(r.dataset.capa); renderEditor(cards[sel]); repintar(); };
@@ -10837,7 +11150,7 @@ document.getElementById('png-btn').onclick=()=>{
 // ════════════════════════════════
 const TPL_LS='incertis_templates';
 // Estilo que comparten todos los tipos de card
-const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animZoom','animEstilo','animFotoDur','titleColor','bodyColor','kickerColor','cardBg','cardTextColor','frameW','frameColor','numbered',
+const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animZoom','animEstilo','animFotoDur','animSolape','titleColor','bodyColor','kickerColor','cardBg','cardTextColor','frameW','frameColor','numbered',
   'titleSz','bodySz','titleFont','titleItalic','bodyItalic','volantaColor',
   'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur',
   // Posición exacta del título y de la bajada. Es lo que permite dejar la placa
@@ -11903,6 +12216,9 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v183','Los textos pueden entrar con la foto','Con un estilo de tapa puesto, los elementos esperaban SIEMPRE a que la foto terminara de entrar. Con «Zoom out lento», que dura 3,5s, eso dejaba la placa muda medio video. Ahora hay un control, «Adelanto», al lado del de la foto: en 0% se comportan como hasta ahora; en 100% los textos arrancan junto con la foto; en el medio entran mientras la foto todavía se está acomodando, que es como se hace en televisión. Debajo del control dice a qué segundo entra el primer elemento, y los tiempos de la lista se corren en vivo mientras movés la barra. Elegir un estilo lo devuelve a 0, que es la forma de origen de ese estilo.'],
+    ['v182','Mis logos, ilustrar desde cero, y la grilla quieta','Tres cosas. MIS LOGOS: una biblioteca propia, dentro del bloque de Capas. Los tres botones de la barra de arriba son una sola marca en sus tres versiones y se dibujan como sello en la esquina; esto es otra cosa, varios logos distintos —Incertis, Montevideo Portal, el cliente que sea— que se suben una vez, quedan guardados en el navegador y se ponen con un clic como capa, para arrastrarlos y escalarlos libremente. Se guardan a 400 px de lado, con transparencia, hasta 24. ILUSTRAR DESDE CERO: el bloque de ilustrar aparecía solo si ya había una foto cargada, porque por dentro edita la foto que está. Ahora, en una card vacía, aparece igual y usa el endpoint de creación: el recuadro de texto deja de ser un ajuste opcional y pasa a ser el tema —sin eso no se puede crear nada—, y el tamaño sale de la proporción de la card. LA GRILLA: se dibujaba adentro de la cámara de la animación de entrada, así que con la cámara al 20% salía un 20% más grande y se iba del cuadro por arriba y por los cuatro lados. Las guías y el marco de color pertenecen al cuadro, no al dibujo: ahora se deshace esa transformación y quedan pegados al borde.'],
+    ['v181','La tapa se arma desde el observador','Cuatro cosas en la tapa. LA FOTO: se cortaba en cualquier lado por dos motivos distintos. Uno, un corondel en cualquier parte de la página borraba la columna entera para despegar la foto de la columna vecina, y eso partía la foto en dos: después ganaba la mitad más grande. Ahora se borra solo donde la línea es fina de verdad —dentro de una foto el trazo es ancho y queda—. Dos, la caja venía con el titular adentro, porque una tipografía de 90 puntos es tan oscura como una foto y el cierre morfológico las pegaba en una sola mancha; ahora la caja se recorta midiendo medios tonos: una franja de fotografía tiene grises repartidos, una de texto es papel blanco con rayas negras. EL PUNTO DE VISTA: no hacía nada porque el arranque era siempre la foto y el punto marcado se recortaba para no salirse de ella. Ahora manda: la pieza donde cae el punto es la que está desde el primer cuadro, y el encuadre arranca ahí. EL LOGO: es la pieza clave y ahora entra siempre última, fuera del orden por peso, pase lo que pase. EL ENSAMBLADO: las piezas ya no entran corridas desde el borde; vienen desde donde está el que mira y se fijan en el plano. Se dibujan como si estuvieran cerca de la lente —más grandes y más corridas del centro de la pantalla— y al alejarse convergen solas a su lugar. El estilo viejo sigue disponible como «Desde afuera».'],
     ['v180','Forma, filete y sonido en las capas','Tres cosas para las fotos y los videos que se suman como capa. FORMA: original, cuadrada o redonda. Con cuadrada o redonda la caja deja de seguir la proporción del archivo y la imagen se recorta al centro para llenarla, en vez de aplastarse. FILETE: un borde de 0 a 16 px, opcional, blanco o del color que elijas, que sigue la forma —recto o circular— y va por dentro del borde para que el recorte no se lo coma. Sirve para separar una foto de un fondo del mismo tono, y también para tapar un borde sucio del archivo. SONIDO: hasta ahora una capa de video iba siempre muda. Ahora se puede encender por capa, y el audio entra tanto en el preview como en el MP4 exportado.'],
     ['v179','Quitar la foto, y la velocidad del video','Dos agujeros y un control nuevo. El primero: el botón para sacar la foto existía solo en las cards «media» y «cover». En cualquier otro tipo la foto quedaba pegada y no había forma de sacarla salvo borrar la card entera. El segundo: los controles de brillo, contraste y saturación también vivían solo en «media», así que una tapa con foto no se podía corregir. Ninguno de los dos se arregló copiando el bloque en cada plantilla —así se llegó hasta acá—: ahora el panel, después de armarse, se fija qué controles le faltan y agrega solo esos. Si el tipo ya los trae, no se duplica nada. Y el control nuevo: VELOCIDAD. Un slider de 0,25× a 3× para el video de fondo de la card y otro para cada capa de video, independientes. Como un clip de 10s a 2× dura 5s, la duración de la card acompaña: al acelerar se acorta sola, así no queda la segunda mitad congelada en el último cuadro.'],
     ['v178','Estilos de tapa, video de fondo y música en cualquier card','Tres cosas, todas en el bloque «Animación de entrada». La primera: ESTILOS DE TAPA. Hasta ahora la foto estaba quieta desde el primer cuadro y solo entraban los textos. Ahora la foto tiene su propia entrada, y recién cuando terminó arrancan el título, la bajada y las capas. Cinco estilos: Caída (la foto cae desde arriba y se planta con un rebote corto), Golpe (aparece de golpe con un flash blanco), Fundido lento (sube de negro, con aire), Zoom out lento (arranca cerrada y se abre hasta el encuadre) y Revelado (una cortina la descubre sobre el fondo). Cada estilo deja los tiempos como punto de partida —el control «Foto» es lo que tarda la foto en entrar— y después se afina todo a mano, como siempre. Funciona en cards de foto, cover e infografía, y viaja en el template. La segunda: VIDEO DE FONDO. Un video en una cover o en una card de foto ahora manda la duración de la card, igual que en la card de video; y Ken Burns y los presets cinemáticos, que estaban apagados sobre video, ahora también lo mueven. El video de fondo no loopea: la card termina cuando termina el video. La tercera: MÚSICA en cualquier card, aparte del fondo. Soltás un MP3, WAV, M4A o un MP4 —del video se usa solo el sonido— y se monta de atrás para adelante: el final de la pista cae en el final de la card, para que el cierre pegue. Si sobra pista se recorta la cabeza; si falta, entra más tarde. Nunca loopea, porque WhatsApp e Instagram no loopean y en X el loop lo pone la red. Sale en el MP4 con su pista de audio. Y una cuarta, en «Color de texto»: cada texto puede llevar su color propio —título, bajada, y kicker en la cover— con un selector al lado de Auto/Blanco/Negro. Pisa el automático solo en ese texto; el × vuelve al automático. Viaja en el template.'],
