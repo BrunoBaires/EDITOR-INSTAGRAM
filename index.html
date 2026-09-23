@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v185 «la tapa se corta pieza por pieza»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v187 «cada capa con su prompt»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v185 «la tapa se corta pieza por pieza»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v187 «cada capa con su prompt»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -5209,7 +5209,9 @@ function cortarPiezas(img, foto, fotos){
     var fa=Math.round(a[1]/(H*0.05)), fb=Math.round(b2[1]/(H*0.05));
     return fa!==fb ? fa-fb : a[0]-b2[0];
   });
-  return {piezas:out, tinta:tinta, w:w, h:h, esc:esc};
+  var tintaFull=new Uint8Array(w*h);
+  for(var q=0;q<w*h;q++) tintaFull[q]=((px[q*4]+px[q*4+1]+px[q*4+2])/3 < 238)?1:0;
+  return {piezas:out, tinta:tinta, tintaFull:tintaFull, w:w, h:h, esc:esc};
 }
 
 // ── 1c. peso tipográfico ─────────────────────────────────────────────
@@ -5425,6 +5427,7 @@ function plan(a, opt){
   // Última entra LA MARCA, no todo lo que esté arriba: ahí también viven los
   // pases y la tira de fotos chicas, y mandarlos a todos al final los amontona.
   function esCabezal(j){
+    if(a.roles && a.roles[j] && a.roles[j].tipo==='marca') return true;
     return a.iMarca!==null && a.iMarca!==undefined && j===a.iMarca;
   }
   var cabezal=orden.filter(function(j){ return esCabezal(j) && j!==iDe; });
@@ -5559,8 +5562,178 @@ function dibujar(ctx, img, a, p, seg, W, H, tZoom){
   ctx.restore();
 }
 
-return {analizar:analizar, plan:plan, dibujar:dibujar, CFG:CFG,
-        curvaCamara:curvaCamara};
+// ══════════════════════════════════════════════════════════════════
+// LEER LA TAPA  ·  primero entender, después cortar (v186)
+// ══════════════════════════════════════════════════════════════════
+// Contar manchas de tinta no sabe que eso es un titular y aquello un epígrafe.
+// Un modelo de visión sí lo sabe. Pero al revés: sabe QUÉ hay y es flojo
+// diciendo DÓNDE exactamente —devuelve cajas corridas veinte o treinta píxeles,
+// cortando letras—. Así que cada uno hace lo suyo: la IA nombra y jerarquiza,
+// la geometría ajusta el contorno contra la tinta real.
+
+// Encoge la caja hasta la tinta que contiene y después la estira mientras siga
+// habiendo tinta pegada al borde: lo primero saca el papel que sobra, lo
+// segundo recupera la letra que la IA dejó afuera.
+function ajustarCaja(an, caja, W, H){
+  var t=an.tintaFull||an.tinta, w=an.w, h=an.h, esc=an.esc;
+  var x0=Math.max(0,Math.min(w-1,Math.round(caja[0]*esc)));
+  var y0=Math.max(0,Math.min(h-1,Math.round(caja[1]*esc)));
+  var x1=Math.max(x0+1,Math.min(w,Math.round(caja[2]*esc)));
+  var y1=Math.max(y0+1,Math.min(h,Math.round(caja[3]*esc)));
+  function filaHay(y,a,b){ for(var x=a;x<b;x++) if(t[y*w+x]) return true; return false; }
+  function colHay(x,a,b){ for(var y=a;y<b;y++) if(t[y*w+x]) return true; return false; }
+  // Antes que nada, soltar al vecino. Una caja corrida suele entrar unos
+  // píxeles en el elemento de al lado, y ese resto de tinta queda pegado al
+  // borde. Si entre ese resto y el cuerpo de la caja hay una calle blanca —y el
+  // resto es una porción chica de la caja— el borde arranca después de la calle.
+  // Lo de «porción chica» es lo que evita comerse la primera línea de un
+  // titular, que también tiene una calle debajo pero ocupa un tercio de la caja.
+  var CALLE_F=Math.max(4,Math.round(h*0.008)), CALLE_C=Math.max(4,Math.round(w*0.008));
+  function soltarVecino(){
+    var alto=y1-y0, ancho=x1-x0, run, y, x, corte;
+    // arriba
+    run=0; corte=-1;
+    for(y=y0;y<y0+Math.floor(alto*0.25);y++){
+      if(!filaHay(y,x0,x1)) run++;
+      else { if(run>=CALLE_F) corte=y; run=0; }
+    }
+    if(corte>0) y0=corte;
+    // abajo
+    run=0; corte=-1;
+    for(y=y1-1;y>y1-Math.floor(alto*0.25);y--){
+      if(!filaHay(y,x0,x1)) run++;
+      else { if(run>=CALLE_F) corte=y+1; run=0; }
+    }
+    if(corte>0) y1=corte;
+    // izquierda
+    run=0; corte=-1;
+    for(x=x0;x<x0+Math.floor(ancho*0.25);x++){
+      if(!colHay(x,y0,y1)) run++;
+      else { if(run>=CALLE_C) corte=x; run=0; }
+    }
+    if(corte>0) x0=corte;
+    // derecha
+    run=0; corte=-1;
+    for(x=x1-1;x>x1-Math.floor(ancho*0.25);x--){
+      if(!colHay(x,y0,y1)) run++;
+      else { if(run>=CALLE_C) corte=x+1; run=0; }
+    }
+    if(corte>0) x1=corte;
+  }
+  soltarVecino();
+
+  // PRIMERO encoger. Si se estira antes, el borde de la caja suele estar en el
+  // blanco que separa dos elementos, encuentra la tinta del vecino y se lo come
+  // entero: la cabecera se tragaba la tira de pases de arriba. Encogiendo, el
+  // borde queda apoyado en la tinta propia y afuera hay papel: no hay de dónde
+  // seguir.
+  while(y0<y1-1 && !filaHay(y0,x0,x1)) y0++;
+  while(y1>y0+1 && !filaHay(y1-1,x0,x1)) y1--;
+  while(x0<x1-1 && !colHay(x0,y0,y1)) x0++;
+  while(x1>x0+1 && !colHay(x1-1,y0,y1)) x1--;
+  // DESPUÉS estirar, y solo un poco: esto recupera la letra que la caja cortó
+  // por la mitad, no busca vecinos. Si el borde quedó sobre tinta y la fila de
+  // afuera también tiene, es la misma letra partida.
+  var MAX=Math.max(2,Math.round(Math.min(w,h)*0.012));
+  var k;
+  for(k=0;k<MAX&&y0-1>=0;k++){ if(!filaHay(y0,x0,x1)&&!filaHay(y0-1,x0,x1)) break; if(!filaHay(y0-1,x0,x1)) break; y0--; }
+  for(k=0;k<MAX&&y1<h;k++){ if(!filaHay(y1,x0,x1)) break; y1++; }
+  for(k=0;k<MAX&&x0-1>=0;k++){ if(!colHay(x0-1,y0,y1)) break; x0--; }
+  for(k=0;k<MAX&&x1<w;k++){ if(!colHay(x1,y0,y1)) break; x1++; }
+  var k2=1/esc;
+  return [Math.round(x0*k2), Math.round(y0*k2), Math.round(x1*k2), Math.round(y1*k2)];
+}
+
+// Arma el análisis a partir de lo que leyó la IA. Si algo no cierra —no hay
+// elementos, o ninguno tiene caja— devuelve null y el que llama se queda con
+// el análisis geométrico de siempre.
+var ROLES_ORDEN=['foto','titular','volanta','bajada','epigrafe','cuerpo','pase','fecha','otro','marca'];
+function analizarConIA(img, elementos){
+  if(!elementos || !elementos.length) return null;
+  var W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  var an=cortarPiezas(img,null,null);
+  // Para las fotos hay algo mejor que ajustar contra la tinta: el detector
+  // geométrico, que mide el rectángulo de una imagen con un píxel de error.
+  // Si la IA marcó una foto y hay una detectada ahí mismo, manda la detectada.
+  var detectadas=[];
+  try{ detectadas=buscarFotos(img)||[]; }catch(e){}
+  function fotoDetectada(caja){
+    var mejor=null, mejorSol=0;
+    detectadas.forEach(function(f){
+      var ix=Math.max(0,Math.min(f[2],caja[2])-Math.max(f[0],caja[0]));
+      var iy=Math.max(0,Math.min(f[3],caja[3])-Math.max(f[1],caja[1]));
+      var inter=ix*iy;
+      var uni=(f[2]-f[0])*(f[3]-f[1])+(caja[2]-caja[0])*(caja[3]-caja[1])-inter;
+      var sol=uni>0?inter/uni:0;
+      if(sol>mejorSol){ mejorSol=sol; mejor=f; }
+    });
+    return mejorSol>0.45 ? mejor : null;
+  }
+  var piezas=[], roles=[];
+  elementos.forEach(function(e){
+    var c=e.caja;
+    if(!c || c.length!==4) return;
+    var caja=[Math.round(c[0]/1000*W), Math.round(c[1]/1000*H),
+              Math.round(c[2]/1000*W), Math.round(c[3]/1000*H)];
+    if(caja[2]-caja[0]<W*0.012 || caja[3]-caja[1]<H*0.004) return;
+    var tipo=String(e.tipo||'otro').toLowerCase();
+    var aj = ajustarCaja(an, caja, W, H);
+    // El detector geometrico mide el rectangulo de una foto con un pixel de
+    // error, pero a veces le pega el zócalo negro del epígrafe. Se lo usa solo
+    // cuando no agranda: si lo que devuelve es más chico o igual, es más fino
+    // que el ajuste por tinta; si es más grande, se quedó con algo de al lado.
+    if(tipo==='foto'){
+      var det=fotoDetectada(caja);
+      if(det){
+        var aD=(det[2]-det[0])*(det[3]-det[1]), aJ=(aj[2]-aj[0])*(aj[3]-aj[1]);
+        if(aD<=aJ*1.02) aj=det.slice(0,4);
+      }
+    }
+    if(aj[2]-aj[0]<W*0.012 || aj[3]-aj[1]<H*0.004) return;
+    piezas.push([aj[0],aj[1],aj[2],aj[3],0]);
+    roles.push({tipo:tipo,
+                texto:String(e.texto||'').slice(0,70),
+                jer:(typeof e.jerarquia==='number'&&isFinite(e.jerarquia))?e.jerarquia:3});
+  });
+  if(piezas.length<3) return null;
+  // ordenar de arriba a abajo, manteniendo el rol al lado de su caja
+  var idx=piezas.map(function(_,i){return i;});
+  idx.sort(function(a,b){
+    var fa=Math.round(piezas[a][1]/(H*0.05)), fb=Math.round(piezas[b][1]/(H*0.05));
+    return fa!==fb ? fa-fb : piezas[a][0]-piezas[b][0];
+  });
+  piezas=idx.map(function(i){return piezas[i];});
+  roles=idx.map(function(i){return roles[i];});
+
+  function primero(tipo, jer){
+    for(var i=0;i<roles.length;i++)
+      if(roles[i].tipo===tipo && (jer===undefined||roles[i].jer===jer)) return i;
+    return null;
+  }
+  var iFoto = primero('foto',1); if(iFoto===null) iFoto=primero('foto');
+  var iTitulo = primero('titular',1); if(iTitulo===null) iTitulo=primero('titular');
+  var iMarca = primero('marca');
+
+  // El orden sale de los roles y de la jerarquía que dio la IA, no de un
+  // puntaje inventado sobre el tamaño de la mancha.
+  var ranking=piezas.map(function(_,i){return i;}).filter(function(i){
+    return i!==iFoto && i!==iMarca;
+  });
+  ranking.sort(function(a,b){
+    var ja=roles[a].jer, jb=roles[b].jer;
+    if(ja!==jb) return ja-jb;
+    var ra=ROLES_ORDEN.indexOf(roles[a].tipo), rb=ROLES_ORDEN.indexOf(roles[b].tipo);
+    if(ra<0) ra=ROLES_ORDEN.length; if(rb<0) rb=ROLES_ORDEN.length;
+    if(ra!==rb) return ra-rb;
+    return piezas[a][1]-piezas[b][1];
+  });
+  return {W:W,H:H, foto:(iFoto!==null?piezas[iFoto].slice(0,4):null), fotos:null,
+          piezas:piezas, iFoto:iFoto, iTitulo:iTitulo, ranking:ranking,
+          iMarca:iMarca, roles:roles, porIA:true};
+}
+
+return {analizar:analizar, analizarConIA:analizarConIA, plan:plan, dibujar:dibujar,
+        CFG:CFG, curvaCamara:curvaCamara};
 })();
 
 
@@ -5617,11 +5790,103 @@ async function tapaCargar(file, card, aviso){
   if(aviso) aviso('Buscando la foto y cortando las piezas…');
   await new Promise(function(r){setTimeout(r,30);});     // que el aviso se pinte
   var a=TAPA.analizar(img);
-  tapaCache[card.id]={img:img, a:a, plan:null};
+  tapaCache[card.id]={img:img, a:a, plan:null, aGeo:a};
   card.tapaSrc=url;
   if(a.foto) card.tapaPunto={x:(a.foto[0]+a.foto[2])/2/a.W, y:(a.foto[1]+a.foto[3])/2/a.H};
   if(aviso) aviso(a.piezas.length+' piezas · foto '+(a.foto?'detectada':'no encontrada'));
-  return a;
+  // Y ahora la lectura de verdad. El corte geometrico queda como red: si la
+  // lectura falla —sin key, sin red, respuesta rara— la tapa ya es usable.
+  if(getKey() && card.tapaIA!==false){
+    try{ await tapaAplicarIA(card, aviso); }
+    catch(err){ if(aviso) aviso('La lectura falló ('+err.message+'). Queda el corte geométrico.'); }
+  }
+  return tapaCache[card.id].a;
+}
+
+// Lee la tapa, arma el análisis con esa lectura y lo deja en el caché. Si algo
+// no cierra deja el geométrico y avisa: nunca rompe una tapa que ya andaba.
+async function tapaAplicarIA(card, aviso){
+  var d=tapaCache[card.id];
+  if(!d||!d.img) throw new Error('No hay tapa cargada');
+  var lista=await tapaLeerIA(d.img, aviso);
+  if(aviso) aviso('Ajustando las '+lista.length+' cajas contra la tinta…');
+  await new Promise(function(r){setTimeout(r,20);});
+  var aIA=TAPA.analizarConIA(d.img, lista);
+  if(!aIA) throw new Error('La lectura no se pudo ajustar');
+  d.a=aIA; d.plan=null;
+  card.tapaIA=true;
+  if(aIA.foto) card.tapaPunto={x:(aIA.foto[0]+aIA.foto[2])/2/aIA.W, y:(aIA.foto[1]+aIA.foto[3])/2/aIA.H};
+  if(aviso) aviso('✓ '+aIA.piezas.length+' elementos leídos'+(aIA.iMarca!==null?' · marca reconocida':''));
+  return aIA;
+}
+
+// ── leer la tapa con IA ──────────────────────────────────────────────
+// Una imagen de 1400px de lado mayor alcanza para leer hasta los epígrafes y
+// es un cuarto del peso de la raster completa. Las coordenadas se piden en una
+// grilla de 0 a 1000 —no en píxeles— porque así el modelo no tiene que saber
+// cuánto mide la imagen que le mandamos.
+function tapaMiniatura(img, lado){
+  var W=img.naturalWidth||img.width, H=img.naturalHeight||img.height;
+  var k=Math.min(1,(lado||1400)/Math.max(W,H));
+  var cv=document.createElement('canvas');
+  cv.width=Math.round(W*k); cv.height=Math.round(H*k);
+  var g=cv.getContext('2d'); g.imageSmoothingQuality='high';
+  g.fillStyle='#fff'; g.fillRect(0,0,cv.width,cv.height);
+  g.drawImage(img,0,0,cv.width,cv.height);
+  return cv.toDataURL('image/jpeg',0.88);
+}
+
+const TAPA_PROMPT_LECTURA =
+'Sos un diagramador. Mirá esta tapa de diario e identificá TODOS sus elementos gráficos.\n\n'+
+'Devolvé SOLO un array JSON, sin texto alrededor y sin cercas de código. Cada elemento:\n'+
+'{"tipo":"...","texto":"...","jerarquia":1,"caja":[x0,y0,x1,y1]}\n\n'+
+'tipo: uno de marca, titular, volanta, bajada, epigrafe, cuerpo, foto, pase, fecha, otro.\n'+
+'  marca = el logotipo del diario, la cabecera. Hay uno solo.\n'+
+'  pase = los avisos de la tira superior, arriba de la cabecera.\n'+
+'  cuerpo = un bloque de texto corrido. Una columna entera es UN elemento.\n'+
+'  foto = una fotografía o ilustración. Cada una por separado.\n'+
+'texto: las primeras palabras, para identificarlo. Vacío si es una foto.\n'+
+'jerarquia: 1 la nota principal de la tapa, 2 las secundarias, 3 el resto.\n'+
+'caja: [izquierda, arriba, derecha, abajo] en una grilla de 0 a 1000 sobre la\n'+
+'  imagen, donde 0,0 es la esquina superior izquierda y 1000,1000 la inferior\n'+
+'  derecha. Ajustala a lo que ocupa el elemento, sin dejar papel de más.\n\n'+
+'Reglas: no agrupes dos notas distintas en un elemento. No partas un titular en\n'+
+'sus líneas: va entero. Un epígrafe sobre una foto es un elemento aparte de la\n'+
+'foto. Ignorá los filetes y los corondeles.';
+
+async function tapaLeerIA(img, aviso){
+  var key=getKey();
+  if(!key) throw new Error('Cargá tu API key de Claude arriba');
+  if(aviso) aviso('Leyendo la tapa…');
+  var dataUrl=tapaMiniatura(img,1400);
+  var b64=dataUrl.split(',')[1];
+  var resp=await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','x-api-key':key,
+             'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+    body:JSON.stringify({
+      model:'claude-sonnet-4-6', max_tokens:4000,
+      messages:[{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},
+        {type:'text',text:TAPA_PROMPT_LECTURA}
+      ]}]
+    })
+  });
+  if(!resp.ok){
+    var msg='Error '+resp.status;
+    try{ var e=await resp.json(); if(e.error&&e.error.message) msg=e.error.message; }catch(_){}
+    throw new Error(msg);
+  }
+  var data=await resp.json();
+  var txt=(data&&data.content&&data.content[0]&&data.content[0].text)||'';
+  // El modelo a veces envuelve el JSON en cercas de código pese al pedido.
+  txt=txt.replace(/^[\s\S]*?```(?:json)?/,'').replace(/```[\s\S]*$/,'').trim();
+  if(txt[0]!=='[') { var i0=txt.indexOf('['), i1=txt.lastIndexOf(']');
+    if(i0>=0&&i1>i0) txt=txt.slice(i0,i1+1); }
+  var lista;
+  try{ lista=JSON.parse(txt); }catch(e){ throw new Error('La respuesta no vino en JSON'); }
+  if(!Array.isArray(lista)||!lista.length) throw new Error('No identificó elementos');
+  return lista;
 }
 
 // ── el golpe final de la música ──────────────────────────────────────
@@ -5774,11 +6039,23 @@ function animEspera(card, clave){
   return (typeof v==='number'&&isFinite(v)) ? v
        : (card.animPaso!==undefined?card.animPaso:0.30);
 }
+// Cuánto tarda en entrar el PRIMER elemento, en segundos, contados desde que
+// la foto terminó de entrar. Si hay un valor escrito a mano manda ese; si no,
+// el porcentaje del slider «Entrada» sobre la duración de la card.
+function animRetrasoInicial(card){
+  var o=animOrden(card);
+  if(o.length){
+    var e=card.animEspera||{}, v=e[o[0]];
+    if(typeof v==='number'&&isFinite(v)) return v;
+  }
+  var dur=(typeof getCardDur==='function')?getCardDur(card):4;
+  return (card.animInicio!==undefined?card.animInicio:0.05)*dur;
+}
 function animSegundo(card, clave){
   var o=animOrden(card), i=o.indexOf(clave);
   if(i<0) return 0;
   var dur=(typeof getCardDur==='function')?getCardDur(card):4;
-  var t=animFotoEspera(card)+(card.animInicio!==undefined?card.animInicio:0.05)*dur;
+  var t=animFotoEspera(card)+animRetrasoInicial(card);
   // se acumulan las esperas: el primero entra en t, y cada uno después espera
   // lo suyo. Así se puede dejar respirar un nombre antes de que llegue el dato.
   for(var j=1;j<=i;j++) t+=animEspera(card,o[j]);
@@ -6984,6 +7261,62 @@ async function ilustrarConReferencias(cardId, prompt, opts){
     img.onerror=function(){ reject(new Error('No se pudo cargar la imagen creada')); };
     img.src=dataUrl;
   });
+}
+
+// Editar con IA una CAPA, no la foto de fondo de la card. Hasta ahora el
+// bloque de IA trabajaba siempre sobre mediaCache —la foto de la card—, así
+// que una imagen sumada como capa entraba y ya: no había forma de retocarla ni
+// de volver a pedírsela distinta. Cada capa guarda su propio prompt y su
+// original, así que se puede repromptear cuantas veces haga falta sin perder
+// de dónde salió.
+async function editarCapaConIA(card, indice, prompt, opts){
+  opts=opts||{};
+  const key=getOpenAIKey();
+  if(!key) throw new Error('Cargá tu OpenAI key arriba (sk-…)');
+  const L=(typeof capasDe==='function')?capasDe(card):[];
+  const capa=L[indice];
+  if(!capa) throw new Error('No hay capa seleccionada');
+  if(capa.k!=='img') throw new Error('Por ahora solo las capas de imagen');
+  // Siempre se edita sobre el original: si no, cada pedido se apila sobre el
+  // anterior y a la tercera vuelta la imagen ya no se parece a nada.
+  const src=capa._srcOriginal||capa.src;
+  const prep=await dataUrlToPngBlob(src);
+  const fd=new FormData();
+  fd.append('model','gpt-image-1.5');
+  fd.append('image', prep.blob, 'capa.png');
+  fd.append('prompt', prompt);
+  fd.append('input_fidelity','high');
+  fd.append('quality','high');
+  fd.append('size', bestOutputSize(prep.w, prep.h));
+  fd.append('output_format','png');
+  if(opts.transparente) fd.append('background','transparent');
+  const resp=await fetch('https://api.openai.com/v1/images/edits',{
+    method:'POST', headers:{ 'Authorization':'Bearer '+key }, body:fd
+  });
+  if(!resp.ok){
+    let msg='Error '+resp.status;
+    try{ const e=await resp.json(); if(e.error&&e.error.message) msg=e.error.message; }catch(_){}
+    throw new Error(msg);
+  }
+  const data=await resp.json();
+  const b64=data&&data.data&&data.data[0]&&data.data[0].b64_json;
+  if(!b64) throw new Error('La API no devolvió imagen');
+  if(!capa._srcOriginal) capa._srcOriginal=capa.src;
+  capa.src='data:image/png;base64,'+b64;
+  capa.prompt=prompt;
+  // El elemento cacheado apunta al src viejo: si no se tira, sigue dibujando
+  // la imagen anterior aunque la capa ya tenga la nueva.
+  if(typeof gfxCache!=='undefined' && gfxCache[capa.id]) delete gfxCache[capa.id];
+  return capa;
+}
+function revertirCapaIA(card, indice){
+  const L=(typeof capasDe==='function')?capasDe(card):[];
+  const capa=L[indice];
+  if(!capa||!capa._srcOriginal) return false;
+  capa.src=capa._srcOriginal;
+  capa._srcOriginal=null;
+  if(typeof gfxCache!=='undefined' && gfxCache[capa.id]) delete gfxCache[capa.id];
+  return true;
 }
 
 async function loadMediaFromFile(file,cardId){
@@ -8831,6 +9164,21 @@ function renderEditor(c){
         <button class="tipo-btn${(c.tapaEnsamble||'vuelo')==='vuelo'?' active':''}" data-tens="vuelo" style="flex:1" title="Las piezas vienen desde donde estás vos y se fijan en el plano">Desde el observador</button>
         <button class="tipo-btn${c.tapaEnsamble==='afuera'?' active':''}" data-tens="afuera" style="flex:1" title="Las piezas entran corridas desde el borde">Desde afuera</button>
       </div>
+      ${_d&&_d.a?`<div style="border:1px solid var(--border);border-radius:3px;padding:7px;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);flex:1">${_d.a.porIA?'Leído con IA':'Corte geométrico'}</span>
+          <button class="tpl-mini" id="tapa-releer">${_d.a.porIA?'↻ Releer':'✦ Leer con IA'}</button>
+        </div>
+        ${_d.a.roles?`<div style="max-height:150px;overflow:auto;margin-top:6px">
+          ${_d.a.roles.map((r,i)=>`<div style="display:flex;gap:6px;font-size:11px;padding:2px 0;border-top:${i?'1px solid var(--border)':'0'}">
+            <span style="width:62px;color:var(--text3);text-transform:uppercase;font-size:9px;letter-spacing:.4px;padding-top:2px">${escapeHtml(r.tipo)}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.texto||'—')}</span>
+            <span style="color:var(--text3);font-family:'IBM Plex Mono',monospace;font-size:9px;padding-top:2px">${r.jer}</span>
+          </div>`).join('')}
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:5px;line-height:1.4">El orden de entrada sale de esta lectura: la foto principal primero, la marca al final.</div>`
+        :`<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Se cortó midiendo manchas de tinta. Leerla con IA identifica qué es cada cosa —titular, epígrafe, marca— y ordena la entrada por jerarquía. Una llamada por tapa.</div>`}
+      </div>`:''}
       <button class="btn-g" id="tapa-marcar" style="width:100%">${c._marcando?'✓ Listo, guardar el punto':'◎ Marcar sobre la tapa'}</button>
       <div style="font-size:11px;color:var(--text3);margin-top:4px">${c._marcando?'Hacé clic en el rostro o el detalle donde querés que empiece.':'Ahora empieza en '+Math.round(c.tapaPunto.x*100)+'% / '+Math.round(c.tapaPunto.y*100)+'%'}</div>
     </div>
@@ -8954,8 +9302,7 @@ function renderEditor(c){
         ${animOrden(c).map((kk,ii)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 7px;${ii?'border-top:1px solid var(--border);':''}">
           <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:16px">${ii+1}</span>
           <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(animNombre(c,kk))}</span>
-          ${ii?`<input type="number" data-again="${kk}" value="${animEspera(c,kk).toFixed(2)}" min="0" max="5" step="0.05" title="Cuánto espera desde el elemento anterior" style="width:52px;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:3px 4px;outline:none"/>`
-              :`<span style="width:52px;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);text-align:center">1º</span>`}
+          <input type="number" data-again="${kk}" value="${(ii?animEspera(c,kk):animRetrasoInicial(c)).toFixed(2)}" min="0" max="8" step="0.05" title="${ii?'Cuánto espera desde el elemento anterior':'Cuánto tarda en entrar el primero, contado desde el arranque'}" style="width:52px;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:3px 4px;outline:none"/>
           <span data-aat="${kk}" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:38px;text-align:right">${animSegundo(c,kk).toFixed(2)}s</span>
           <button class="tipo-btn" data-aup="${kk}" style="padding:2px 7px"${ii===0?' disabled':''}>↑</button>
           <button class="tipo-btn" data-adn="${kk}" style="padding:2px 7px"${ii===animOrden(c).length-1?' disabled':''}>↓</button>
@@ -9078,6 +9425,18 @@ function renderEditor(c){
             <button class="tipo-btn${g.fxBW?' active':''}" id="capa-bw" style="flex:1">Blanco y negro</button>
             <button class="tipo-btn" id="capa-adj-reset" style="flex:1">Reiniciar ajustes</button>
           </div>
+          ${g.k==='img'?`
+          <div class="ilus-block" style="margin-top:8px">
+            <div class="aiedit-head"><span>✦ Esta capa, con IA</span><span class="aiedit-sub">${g._srcOriginal?'editada':'el prompt queda guardado'}</span></div>
+            <textarea id="capa-ia-txt" class="ilus-extra" placeholder="Qué querés que pase con esta imagen: recortá la figura, pasala a ilustración de trazo, sacale el fondo, hacela blanco y negro con grano…">${escapeHtml(g.prompt||'')}</textarea>
+            <div class="ilus-fondo" style="margin-top:6px">
+              <button class="tipo-btn${g.iaRecorta?' active':''}" id="capa-ia-rec" style="flex:1;font-size:11px">✂ Recortar fondo</button>
+              <button class="tipo-btn${g.iaRecorta?'':' active'}" id="capa-ia-norec" style="flex:1;font-size:11px">▣ Conservar fondo</button>
+            </div>
+            <button class="aiedit-run" id="capa-ia-run">${g.prompt?'Volver a pedirlo':'Aplicar a esta capa'}</button>
+            ${g._srcOriginal?`<button class="aiedit-revert" id="capa-ia-revert">↩ Volver al original</button>`:''}
+            <div class="aiedit-status" id="capa-ia-status"></div>
+          </div>`:''}
           <div style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);margin:8px 0 4px">Forma</div>
           <div style="display:flex;gap:4px">
             <button class="tipo-btn${!g.forma?' active':''}" data-capaforma="" style="flex:1" title="Como viene el archivo">Original</button>
@@ -10160,6 +10519,20 @@ REGLAS IMPORTANTES:
       cards[sel].tapaEnsamble=b.dataset.tens;
       const dd=tapaCache[cards[sel].id]; if(dd) dd.plan=null;
       renderEditor(cards[sel]); play(cards[sel]); }; });
+    {
+      const bRe=el.querySelector('#tapa-releer');
+      if(bRe) bRe.onclick=async()=>{
+        const cc=cards[sel];
+        bRe.disabled=true; bRe.textContent='Leyendo…';
+        try{
+          await tapaAplicarIA(cc, m=>{ if(st) st.textContent=m; });
+          renderEditor(cards[sel]); play(cards[sel]);
+        }catch(err){
+          if(st) st.textContent='✗ '+(err.message||'Error');
+          bRe.disabled=false; bRe.textContent='✦ Leer con IA';
+        }
+      };
+    }
     const bM=el.querySelector('#tapa-marcar');
     if(bM) bM.onclick=()=>{
       cards[sel]._marcando=!cards[sel]._marcando;
@@ -10282,7 +10655,7 @@ REGLAS IMPORTANTES:
         const v=parseFloat(inp.value);
         if(!isFinite(v)||v<0) return;
         if(!cards[sel].animEspera) cards[sel].animEspera={};
-        cards[sel].animEspera[inp.dataset.again]=Math.min(5,v);
+        cards[sel].animEspera[inp.dataset.again]=Math.min(8,v);
         refrescarTiempos(); redraw();
       };
       inp.oninput=aplicar;
@@ -10362,6 +10735,35 @@ REGLAS IMPORTANTES:
     toca('capa-color-negro',q=>{ q.color='#111111'; });
     toca('capa-reset',q=>{ q.dx=0; q.dy=0; });
     toca('capa-bw',q=>{ q.fxBW=!q.fxBW; });
+    toca('capa-ia-rec',q=>{ q.iaRecorta=true; });
+    toca('capa-ia-norec',q=>{ q.iaRecorta=false; });
+    {
+      const ta=el.querySelector('#capa-ia-txt');
+      if(ta) ta.oninput=()=>{ const q=g(); if(q) q.prompt=ta.value; };
+      const run=el.querySelector('#capa-ia-run'), est=el.querySelector('#capa-ia-status');
+      const decirC=(t,cl)=>{ if(est){ est.textContent=t||''; est.className='aiedit-status'+(cl?' '+cl:''); } };
+      if(run) run.onclick=async()=>{
+        const q=g(); if(!q) return;
+        const txt=(ta&&ta.value||'').trim();
+        if(!txt){ decirC('Escribí qué querés que pase con esta imagen.','err'); if(ta) ta.focus(); return; }
+        const i=capaSel;
+        run.disabled=true; run.textContent='Trabajando… (~20-40s)';
+        decirC('Enviando a OpenAI…','work');
+        try{
+          await editarCapaConIA(cards[sel], i, txt, {transparente:!!q.iaRecorta});
+          decirC('✓ Listo','ok');
+          renderEditor(cards[sel]); repintar();
+        }catch(err){
+          decirC('✗ '+(err.message||'Error'),'err');
+          run.disabled=false; run.textContent='Aplicar a esta capa';
+        }
+      };
+      const rev=el.querySelector('#capa-ia-revert');
+      if(rev) rev.onclick=()=>{
+        if(revertirCapaIA(cards[sel], capaSel)){ renderEditor(cards[sel]); repintar();
+          setStatus('La capa volvió a su imagen original',''); }
+      };
+    }
     vivo('capa-fil',(q,v)=>{ q.filete=parseInt(v);
       const b=el.querySelector('#capa-fil-v'); if(b)b.textContent=q.filete?(q.filete+' px'):'sin';
       if(q.filete&&!q.fileteColor) q.fileteColor='#ffffff'; });
@@ -12550,6 +12952,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v187','Cada capa con su prompt','Dos cosas. LA CAPA COMO PROMPT: el bloque de IA trabajaba siempre sobre la foto de fondo de la card, así que una imagen sumada como capa entraba y ya —no había forma de retocarla ni de volver a pedírsela distinta—. Ahora cada capa de imagen tiene su propio recuadro de prompt, con recortar o conservar el fondo, y el texto queda guardado en la capa: se puede repromptear cuantas veces haga falta. Cada pedido sale del ORIGINAL, no del resultado anterior, porque apilando pedidos a la tercera vuelta la imagen ya no se parece a nada; el original queda guardado y hay un botón para volver a él. EL PRIMER ELEMENTO: no tenía casilla de tiempo. Su entrada salía del slider «Entrada», que es un porcentaje de la duración de la card y está tres bloques más abajo, así que para adelantar el primer texto había que calcular un porcentaje —y encima se movía solo al cambiar la duración—. Ahora tiene su casilla en segundos, igual que los demás; el slider queda como valor por defecto mientras no se toque.'],
+    ['v186','La tapa se lee antes de cortarse','Contar manchas de tinta nunca supo que eso era un titular y aquello un epígrafe: cada arreglo era una regla más sobre un sistema que no entiende lo que mira. Ahora la tapa se lee. Al soltar el PDF sale una llamada de visión que devuelve la lista de elementos con su rol —marca, titular, volanta, bajada, epígrafe, cuerpo, foto, pase— y su jerarquía: cuál es la nota principal, cuáles las secundarias. Pero un modelo de visión es bueno diciendo QUÉ hay y flojo diciendo DÓNDE exactamente: devuelve cajas corridas veinte o treinta píxeles, que cortan letras. Así que cada uno hace lo suyo. La IA nombra y jerarquiza; la geometría ajusta el contorno: cada caja se estira mientras siga habiendo tinta pegada a su borde —para recuperar la letra que quedó afuera— y después se encoge hasta la tinta, para sacar el papel que sobra. El orden de entrada sale de los roles y no de un puntaje sobre el tamaño de la mancha: la foto principal está desde el primer cuadro, después el titular, la bajada, y el resto por jerarquía; la marca cierra siempre. El corte geométrico queda como red: si no hay key, si falla la red o si la respuesta viene rara, la tapa se arma igual como antes y el panel lo dice. En el panel se ve la lectura completa —qué identificó, con qué texto y qué jerarquía— y hay un botón para releer.'],
     ['v185','La tapa se corta pieza por pieza','Las piezas entraban como losas —media página de una vez, cortada por cualquier lado— por tres motivos que se sumaban. UNO: se buscaba UNA sola foto. Una tapa tiene cinco o seis, y las otras quedaban como tinta: manchas macizas que tapan las calles blancas por las que el corte tiene que pasar. Ahora se detectan todas, se borran de la tinta antes de cortar y vuelven después como piezas propias. DOS: el corte tenía un tope de profundidad de 6 niveles, y a una tapa de diario no le alcanza: la recursión se quedaba sin permiso a media página y volcaba el rectángulo entero como una sola pieza. Ahora llega a 11, y el hueco mínimo que pide para cortar se afloja a medida que baja —la calle entre dos secciones es ancha, la que separa un titular de su cuerpo no—. TRES: una sola mota de tinta convertía una calle blanca en una fila «con texto» y pegaba los dos bloques para siempre; ahora se pide que la fila tenga al menos un 1,5% del ancho del bloque, que es lo que ocupa una línea de verdad. Cortar más fino trajo su propio problema: los párrafos salían hechos líneas sueltas y la tapa se armaba como una lluvia de tiritas, y además el corte vertical entraba por el espacio entre dos palabras de un titular grande y separaba «Rosario» de «ya vibra». Lo primero se resuelve volviendo a pegar: dos piezas que comparten columna, están a menos de un renglón y medio de distancia y tienen el mismo cuerpo tipográfico son el mismo párrafo —el cuerpo se mide como alto dividido por bandas de tinta, no como alto de la caja, para que un titular de dos líneas y su tercera línea suelta se reconozcan como el mismo titular—, y una banda maciza como el cabezal en color nunca se pega con un texto. Lo segundo, exigiendo que una calle vertical mida al menos medio renglón cuando la banda es de un solo renglón, que es cuando ese alto mide de verdad el cuerpo de la letra. En una tapa de prueba con la estructura de Clarín, esto pasó de 26 piezas con media página de una sola vez a 15 piezas limpias: cada foto por su lado, el titular entero, cada columna la suya, y la marca cerrando. LA MARCA: «lo que esté arriba entra último» no alcanzaba, porque ahí también viven los pases y la tira de fotos chicas, y entraban todos amontonados al final. Ahora se identifica la marca por lo que es —la pieza más saturada del cabezal, la banda de color; y si la tapa es en negro, la de tipografía más alta— y esa, sola, cierra el armado.'],
     ['v184','Dibujar mirando referencias','Describir con palabras un encuadre, una paleta o un personaje cuesta mucho más que mostrarlo. Ahora el bloque de ilustrar tiene un cajón de referencias: hasta cuatro imágenes por card que viajan junto al pedido para que el modelo saque de ahí lo que el texto no alcanza a decir. Funciona en los dos modos. Sin foto de partida, la primera referencia hace de base; con foto, la foto va primera —es la que se edita— y las referencias detrás. El prompt avisa explícitamente que están y para qué: sin esa línea el modelo tiende a devolver la referencia retocada en vez de usarla como guía. Se achican a 1024 px de lado antes de subirlas, y no se guardan dentro de la card: son material de trabajo, y meterlas adentro inflaría el JSON de la card y de cualquier template que salga de ella.'],
     ['v183','Los textos pueden entrar con la foto','Con un estilo de tapa puesto, los elementos esperaban SIEMPRE a que la foto terminara de entrar. Con «Zoom out lento», que dura 3,5s, eso dejaba la placa muda medio video. Ahora hay un control, «Adelanto», al lado del de la foto: en 0% se comportan como hasta ahora; en 100% los textos arrancan junto con la foto; en el medio entran mientras la foto todavía se está acomodando, que es como se hace en televisión. Debajo del control dice a qué segundo entra el primer elemento, y los tiempos de la lista se corren en vivo mientras movés la barra. Elegir un estilo lo devuelve a 0, que es la forma de origen de ese estilo.'],
