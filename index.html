@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v188 «la foto puede tapar al texto»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v190 «el fondo deja de ser plano»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v188 «la foto puede tapar al texto»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v190 «el fondo deja de ser plano»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1432,8 +1432,27 @@ function creditOf(card){
 function cardBgOf(card){ return (card&&card.cardBg)||CHALK; }
 // Pinta el color de fondo y, encima, las capas marcadas "detrás de la foto".
 // Se usa en todos los tipos de card, así el orden vale para todos.
+// El relleno del fondo: un color plano, o un degradado entre dos si hay un
+// segundo color elegido. Cuatro direcciones, que son las que se usan de verdad
+// en una placa: de arriba abajo, de lado a lado, en diagonal, o desde el centro.
+function fondoRelleno(card){
+  var a=cardBgOf(card), b=card&&card.cardBg2;
+  if(!b || b===a) return a;
+  var dir=(card&&card.bgDir)||'v', g;
+  if(dir==='r'){
+    g=ctx.createRadialGradient(W/2,H/2,Math.min(W,H)*0.05,W/2,H/2,Math.max(W,H)*0.72);
+  }else if(dir==='h'){
+    g=ctx.createLinearGradient(0,0,W,0);
+  }else if(dir==='d'){
+    g=ctx.createLinearGradient(0,0,W,H);
+  }else{
+    g=ctx.createLinearGradient(0,0,0,H);
+  }
+  g.addColorStop(0,a); g.addColorStop(1,b);
+  return g;
+}
 function pintarFondo(card){
-  ctx.fillStyle=cardBgOf(card);
+  ctx.fillStyle=fondoRelleno(card);
   ctx.fillRect(0,0,W,H);
   if(typeof drawCapas==='function') drawCapas(card,true, (typeof animCapas==='function')?animCapas(card,_lastAnimT):null);
 }
@@ -6051,15 +6070,35 @@ function animRetrasoInicial(card){
   var dur=(typeof getCardDur==='function')?getCardDur(card):4;
   return (card.animInicio!==undefined?card.animInicio:0.05)*dur;
 }
-function animSegundo(card, clave){
+// El momento de un elemento segun la cadena vieja: la foto, el retraso inicial
+// y la suma de las esperas de todos los que estan arriba en la lista. Sigue
+// vivo porque es el valor de arranque de cada elemento: mientras nadie escriba
+// un tiempo propio, la card se ve igual que siempre.
+function animSegundoEncadenado(card, clave){
   var o=animOrden(card), i=o.indexOf(clave);
   if(i<0) return 0;
-  var dur=(typeof getCardDur==='function')?getCardDur(card):4;
   var t=animFotoEspera(card)+animRetrasoInicial(card);
-  // se acumulan las esperas: el primero entra en t, y cada uno después espera
-  // lo suyo. Así se puede dejar respirar un nombre antes de que llegue el dato.
   for(var j=1;j<=i;j++) t+=animEspera(card,o[j]);
   return t;
+}
+// El momento de verdad. Si hay un tiempo escrito a mano manda ese, y es
+// absoluto: no depende de lo que hagan los demas. Por eso dos elementos pueden
+// compartir segundo, y cualquiera puede entrar antes que la foto termine.
+function animSegundo(card, clave){
+  var T=card&&card.animT;
+  if(T && typeof T[clave]==='number' && isFinite(T[clave])) return Math.max(0,T[clave]);
+  return animSegundoEncadenado(card, clave);
+}
+// Pasa la card entera a tiempos propios, congelando lo que hoy se ve. Se llama
+// la primera vez que se toca un tiempo: sin esto, escribir el segundo de un
+// elemento correria a todos los de abajo, que es justo lo que se quiere sacar.
+function animFijarTiempos(card){
+  if(!card) return;
+  if(!card.animT) card.animT={};
+  animOrden(card).forEach(function(k){
+    if(typeof card.animT[k]!=='number' || !isFinite(card.animT[k]))
+      card.animT[k]=animSegundoEncadenado(card,k);
+  });
 }
 // Devuelve {a, dy} para un elemento: cuánta tinta tiene y cuánto le falta
 // bajar. Con la animación apagada, todo vale 1 y la card dibuja como siempre.
@@ -9314,19 +9353,21 @@ function renderEditor(c){
       ${animOrden(c).length?`<div style="border:1px solid var(--border);border-radius:3px;overflow:hidden;margin-bottom:6px">
         <div style="display:flex;align-items:center;gap:6px;padding:4px 7px;background:var(--bg);border-bottom:1px solid var(--border);font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3)">
           <span style="width:16px"></span><span style="flex:1">Elemento</span>
-          <span style="width:52px;text-align:center">Espera</span>
-          <span style="width:38px;text-align:right">Entra</span>
+          <span style="width:56px;text-align:center">Entra a</span>
+          <span style="width:34px;text-align:right">seg</span>
           <span style="width:56px"></span>
         </div>
         ${animOrden(c).map((kk,ii)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 7px;${ii?'border-top:1px solid var(--border);':''}">
           <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:16px">${ii+1}</span>
           <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(animNombre(c,kk))}</span>
-          <input type="number" data-again="${kk}" value="${(ii?animEspera(c,kk):animRetrasoInicial(c)).toFixed(2)}" min="0" max="8" step="0.05" title="${ii?'Cuánto espera desde el elemento anterior':'Cuánto tarda en entrar el primero, contado desde el arranque'}" style="width:52px;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:3px 4px;outline:none"/>
-          <span data-aat="${kk}" style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text3);width:38px;text-align:right">${animSegundo(c,kk).toFixed(2)}s</span>
+          <input type="number" data-again="${kk}" value="${animSegundo(c,kk).toFixed(2)}" min="0" max="20" step="0.05" title="A qué segundo entra este elemento. Dos con el mismo número entran juntos." style="width:56px;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:3px 4px;outline:none"/>
+          <span data-aat="${kk}" style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text3);width:34px;text-align:right">${animSegundo(c,kk).toFixed(2)}</span>
           <button class="tipo-btn" data-aup="${kk}" style="padding:2px 7px"${ii===0?' disabled':''}>↑</button>
           <button class="tipo-btn" data-adn="${kk}" style="padding:2px 7px"${ii===animOrden(c).length-1?' disabled':''}>↓</button>
+          <button class="capa-b del" data-adel="${kk}" title="Sacar este elemento de la card" style="padding:2px 6px">✕</button>
         </div>`).join('')}
-      </div>`:`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Todavía no hay nada que entre. Escribí un título o sumá una capa.</div>`}
+      </div>
+      <div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-bottom:6px">Cada número es <b>el segundo en que entra ese elemento</b>, contado desde el arranque de la card. Dos con el mismo número entran juntos, y cualquiera puede entrar mientras la foto todavía hace su zoom. La ✕ lo saca de la card.</div>`:`<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Todavía no hay nada que entre. Escribí un título o sumá una capa.</div>`}
       <div class="range-block">
         <div class="range-row"><label>Entrada</label><input type="range" id="sl-ai" min="0" max="0.6" step="0.01" value="${c.animInicio!==undefined?c.animInicio:.05}"/><span class="range-val">${Math.round((c.animInicio!==undefined?c.animInicio:.05)*100)}%</span></div>
         <div class="range-row"><label>Paso</label><input type="range" id="sl-ap" min="0.05" max="1.2" step="0.01" value="${c.animPaso!==undefined?c.animPaso:.30}"/><span class="range-val">${(c.animPaso!==undefined?c.animPaso:.30).toFixed(2)}s</span></div>
@@ -9614,6 +9655,21 @@ function renderEditor(c){
         ${INCERTIS_BG.map(p=>`<div class="bg-swatch${c.cardBg===p.hex?' active':''}" data-bg="${p.hex}" style="background:${p.hex};${isColorDark(p.hex)?'border-color:rgba(255,255,255,0.25)':''}" title="${p.label}"></div>`).join('')}
         <div class="bg-custom-wrap" style="background:${c.cardBg||CHALK}" title="Color personalizado"><input type="color" id="bg-custom" value="${c.cardBg||CHALK}"/></div>
       </div>
+      <div style="display:flex;gap:5px;align-items:center;margin-top:8px">
+        <span style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);flex:1">Degradado</span>
+        ${c.cardBg2?`<button class="tpl-mini del" id="bg2-off">Quitar</button>`:''}
+      </div>
+      <div style="display:flex;gap:5px;align-items:center;margin-top:5px">
+        <span style="font-size:10.5px;color:var(--text3)">Va de</span>
+        <span style="width:22px;height:22px;border-radius:4px;border:1px solid var(--border);background:${c.cardBg||CHALK};flex-shrink:0"></span>
+        <span style="font-size:10.5px;color:var(--text3)">a</span>
+        <div class="bg-custom-wrap" style="background:${c.cardBg2||c.cardBg||CHALK}" title="Segundo color"><input type="color" id="bg2-custom" value="${c.cardBg2||c.cardBg||CHALK}"/></div>
+        <button class="tpl-mini" id="bg2-sugerir" title="Una variante más oscura del color de fondo">Sugerir</button>
+      </div>
+      ${c.cardBg2?`<div style="display:flex;gap:4px;margin-top:6px">
+        ${[['v','↓ Abajo'],['h','→ Lado'],['d','↘ Diagonal'],['r','◎ Centro']].map(([v,l])=>
+          `<button class="tipo-btn${(c.bgDir||'v')===v?' active':''}" data-bgdir="${v}" style="flex:1;font-size:11px">${l}</button>`).join('')}
+      </div>`:`<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Elegí un segundo color y la placa deja de ser plana: el fondo va de uno a otro.</div>`}
     </div>
     <div class="field"><label>Marco — <b id="sl-frame-val">${c.frameW?c.frameW+'px':'sin marco'}</b></label>
       <input type="range" id="sl-frame" min="0" max="120" step="2" value="${c.frameW||0}" style="width:100%;margin-top:4px"/>
@@ -10660,10 +10716,19 @@ REGLAS IMPORTANTES:
     const musC=el.querySelector('#mus-clear');
     if(musC) musC.onclick=()=>{ musicaQuitar(cards[sel]); renderEditor(cards[sel]); redraw(); };
     const moverA=(clave,d)=>{
-      const o=animOrden(cards[sel]), i=o.indexOf(clave), j=i+d;
+      const cc=cards[sel];
+      const o=animOrden(cc), i=o.indexOf(clave), j=i+d;
       if(i<0||j<0||j>=o.length) return;
+      // Con tiempos propios, mover una fila sin mover su segundo no cambia nada
+      // de lo que se ve: la lista quedaria en un orden y la animacion en otro.
+      // Por eso las flechas intercambian tambien los tiempos.
+      if(cc.animT){
+        const a=o[i], b=o[j];
+        const ta=cc.animT[a], tb=cc.animT[b];
+        if(typeof ta==='number' && typeof tb==='number'){ cc.animT[a]=tb; cc.animT[b]=ta; }
+      }
       o.splice(j,0,o.splice(i,1)[0]);
-      cards[sel].animOrden=o; reA();
+      cc.animOrden=o; reA();
     };
     // Al tocar una espera NO se reconstruye el panel: se recalculan los segundos
     // en el lugar. Si no, cada clic en la flechita del campo devolvía el panel
@@ -10677,12 +10742,35 @@ REGLAS IMPORTANTES:
       const aplicar=()=>{
         const v=parseFloat(inp.value);
         if(!isFinite(v)||v<0) return;
-        if(!cards[sel].animEspera) cards[sel].animEspera={};
-        cards[sel].animEspera[inp.dataset.again]=Math.min(8,v);
+        // La primera vez se congela lo que hoy se ve: si no, escribir el segundo
+        // de un elemento correria a todos los de abajo, que es lo que se quiere
+        // sacar de encima.
+        animFijarTiempos(cards[sel]);
+        cards[sel].animT[inp.dataset.again]=Math.min(20,v);
         refrescarTiempos(); redraw();
       };
       inp.oninput=aplicar;
       inp.onchange=aplicar;
+    });
+    // Sacar un elemento de la card desde la misma lista donde se le da el
+    // tiempo: una capa se borra, un titulo o una bajada se vacian.
+    el.querySelectorAll('[data-adel]').forEach(b=>{
+      b.onclick=()=>{
+        const cc=cards[sel], k=b.dataset.adel;
+        if(k==='titulo') cc.titulo='';
+        else if(k==='bajada') cc.cuerpo='';
+        else if(k.indexOf('capa:')===0){
+          const id=k.slice(5), L=capasDe(cc);
+          const i=L.findIndex(x=>String(x.id)===id);
+          if(i>=0){ if(gfxCache[L[i].id]) delete gfxCache[L[i].id];
+            L.splice(i,1); capaSel=L.length?Math.min(i,L.length-1):null; }
+        }
+        if(cc.animT) delete cc.animT[k];
+        if(cc.animEspera) delete cc.animEspera[k];
+        if(Array.isArray(cc.animOrden)) cc.animOrden=cc.animOrden.filter(x=>x!==k);
+        setStatus('Elemento quitado','');
+        renderList(); renderEditor(cards[sel]); repintar();
+      };
     });
     el.querySelectorAll('[data-aup]').forEach(b=>b.onclick=()=>moverA(b.dataset.aup,-1));
     el.querySelectorAll('[data-adn]').forEach(b=>b.onclick=()=>moverA(b.dataset.adn,+1));
@@ -10976,6 +11064,32 @@ REGLAS IMPORTANTES:
       renderEditor(cards[sel]); redraw();
     };
   });
+  {
+    const b2=el.querySelector('#bg2-custom');
+    if(b2) b2.oninput=e=>{ cards[sel].cardBg2=e.target.value;
+      if(!cards[sel].bgDir) cards[sel].bgDir='v';
+      e.target.closest('.bg-custom-wrap').style.background=e.target.value;
+      redraw(); };
+    if(b2) b2.onchange=()=>renderEditor(cards[sel]);
+    const bOff=el.querySelector('#bg2-off');
+    if(bOff) bOff.onclick=()=>{ cards[sel].cardBg2=null; renderEditor(cards[sel]); redraw(); };
+    const bSug=el.querySelector('#bg2-sugerir');
+    if(bSug) bSug.onclick=()=>{
+      // Una variante del mismo color, no un color al azar: sobre un fondo claro
+      // oscurece, sobre uno oscuro aclara. Es lo que hace que no parezca un
+      // degradado de plantilla.
+      const base=cards[sel].cardBg||CHALK;
+      const r=parseInt(base.slice(1,3),16), g2=parseInt(base.slice(3,5),16), b3=parseInt(base.slice(5,7),16);
+      const oscuro=isColorDark(base), k=oscuro?1.55:0.62;
+      const mez=v=>Math.max(0,Math.min(255,Math.round(v*k)));
+      const hex=v=>('0'+mez(v).toString(16)).slice(-2);
+      cards[sel].cardBg2='#'+hex(r)+hex(g2)+hex(b3);
+      if(!cards[sel].bgDir) cards[sel].bgDir='v';
+      renderEditor(cards[sel]); redraw();
+    };
+    el.querySelectorAll('[data-bgdir]').forEach(b=>{ b.onclick=()=>{
+      cards[sel].bgDir=b.dataset.bgdir; renderEditor(cards[sel]); redraw(); }; });
+  }
   const frCustom=el.querySelector('#frame-custom');
   if(frCustom) frCustom.oninput=e=>{
     cards[sel].frameColor=e.target.value;
@@ -11909,7 +12023,7 @@ document.getElementById('png-btn').onclick=()=>{
 // ════════════════════════════════
 const TPL_LS='incertis_templates';
 // Estilo que comparten todos los tipos de card
-const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animZoom','animEstilo','animFotoDur','animSolape','fotoSobreTexto','titleColor','bodyColor','kickerColor','cardBg','cardTextColor','frameW','frameColor','numbered',
+const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animT','animZoom','animEstilo','animFotoDur','animSolape','fotoSobreTexto','titleColor','bodyColor','kickerColor','cardBg','cardBg2','bgDir','cardTextColor','frameW','frameColor','numbered',
   'titleSz','bodySz','titleFont','titleItalic','bodyItalic','volantaColor',
   'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur',
   // Posición exacta del título y de la bajada. Es lo que permite dejar la placa
@@ -12975,6 +13089,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v190','El fondo deja de ser plano','El fondo de la card era un color y nada más. Ahora se puede elegir un segundo color y la placa va de uno a otro, en cuatro direcciones: de arriba abajo, de lado a lado, en diagonal o desde el centro. El botón «Sugerir» no tira un color al azar: toma una variante del color que ya elegiste —oscurece si el fondo es claro, aclara si es oscuro—, que es lo que hace que no parezca un degradado de plantilla. El degradado vive solo donde se pinta la placa entera; el fundido de bordes, el filete de la foto y las decisiones de contraste del texto siguen usando el primer color, porque necesitan un color y no un degradado.'],
+    ['v189','Cada elemento entra cuando uno dice','La animación era una cadena: cada elemento esperaba al anterior y su momento salía de sumar todas las esperas de arriba. Eso dejaba afuera dos cosas. Que dos elementos entren JUNTOS —imposible, siempre había una espera entre medio—. Y que alguno entre MIENTRAS la foto todavía hace su zoom, porque la cadena recién arrancaba cuando la foto terminaba: había que esperar que una animación terminara para que empezara la otra, y el resultado era gomoso. Ahora cada elemento tiene su segundo propio, absoluto, contado desde que arranca la card. Dos con el mismo número entran a la vez; uno en 0,2 entra con el zoom corriendo. La cadena vieja sigue como valor de arranque: una card que nunca se tocó se ve exactamente igual que antes, y la primera vez que se escribe un tiempo se congelan los de todos, para que tocar uno no corra a los de abajo. Las flechas ↑↓ ahora intercambian también los tiempos, si no la lista quedaba en un orden y la animación en otro. Y cada fila tiene una ✕ que saca el elemento de la card: una capa se borra, un título o una bajada se vacían.'],
     ['v188','La foto puede tapar al texto','El efecto de tapa de revista —el sujeto recortado pasando por delante del título, como hace Time— no se podía hacer cuando el retrato era la foto de la card: el orden de dibujo es foto y después texto, así que el título siempre quedaba arriba. Ahora hay un botón, «La foto tapa al texto», en el bloque de Efectos de la card. No da vuelta el dibujo —eso arrastraría la veladura, el fundido de bordes y el filete, que tienen que seguir debajo del texto—: vuelve a pasar la foto encima del título. Donde el PNG es transparente el texto se sigue viendo; donde hay figura, la tapa. Por eso solo tiene sentido con el fondo recortado: con una foto opaca el texto desaparece entero. La foto queda por delante del título y la bajada, pero sigue por detrás de las capas y del pie, así que un logo puesto como capa sigue arriba de todo.'],
     ['v187','Cada capa con su prompt','Dos cosas. LA CAPA COMO PROMPT: el bloque de IA trabajaba siempre sobre la foto de fondo de la card, así que una imagen sumada como capa entraba y ya —no había forma de retocarla ni de volver a pedírsela distinta—. Ahora cada capa de imagen tiene su propio recuadro de prompt, con recortar o conservar el fondo, y el texto queda guardado en la capa: se puede repromptear cuantas veces haga falta. Cada pedido sale del ORIGINAL, no del resultado anterior, porque apilando pedidos a la tercera vuelta la imagen ya no se parece a nada; el original queda guardado y hay un botón para volver a él. EL PRIMER ELEMENTO: no tenía casilla de tiempo. Su entrada salía del slider «Entrada», que es un porcentaje de la duración de la card y está tres bloques más abajo, así que para adelantar el primer texto había que calcular un porcentaje —y encima se movía solo al cambiar la duración—. Ahora tiene su casilla en segundos, igual que los demás; el slider queda como valor por defecto mientras no se toque.'],
     ['v186','La tapa se lee antes de cortarse','Contar manchas de tinta nunca supo que eso era un titular y aquello un epígrafe: cada arreglo era una regla más sobre un sistema que no entiende lo que mira. Ahora la tapa se lee. Al soltar el PDF sale una llamada de visión que devuelve la lista de elementos con su rol —marca, titular, volanta, bajada, epígrafe, cuerpo, foto, pase— y su jerarquía: cuál es la nota principal, cuáles las secundarias. Pero un modelo de visión es bueno diciendo QUÉ hay y flojo diciendo DÓNDE exactamente: devuelve cajas corridas veinte o treinta píxeles, que cortan letras. Así que cada uno hace lo suyo. La IA nombra y jerarquiza; la geometría ajusta el contorno: cada caja se estira mientras siga habiendo tinta pegada a su borde —para recuperar la letra que quedó afuera— y después se encoge hasta la tinta, para sacar el papel que sobra. El orden de entrada sale de los roles y no de un puntaje sobre el tamaño de la mancha: la foto principal está desde el primer cuadro, después el titular, la bajada, y el resto por jerarquía; la marca cierra siempre. El corte geométrico queda como red: si no hay key, si falla la red o si la respuesta viene rara, la tapa se arma igual como antes y el panel lo dice. En el panel se ve la lectura completa —qué identificó, con qué texto y qué jerarquía— y hay un botón para releer.'],
