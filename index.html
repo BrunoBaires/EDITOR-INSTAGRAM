@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v187 «cada capa con su prompt»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v188 «la foto puede tapar al texto»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v187 «cada capa con su prompt»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v188 «la foto puede tapar al texto»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -6127,6 +6127,21 @@ function _easeCaida(p){
 }
 // Envuelve el dibujo de la foto con la entrada del estilo. Con el estilo
 // apagado, o una vez que la foto ya entró, dibuja tal cual.
+// ── La foto por delante del texto (efecto tapa de revista) ──────────
+// El orden normal es foto y después texto, así que el título siempre queda
+// arriba. Para el efecto Time —el sujeto recortado tapando parte del título—
+// hace falta al revés. En vez de dar vuelta todo el dibujo, que arrastraría la
+// veladura, el fundido de bordes y el filete, se vuelve a pasar la foto encima
+// del texto: donde el PNG es transparente el texto sigue viéndose, y donde hay
+// figura la tapa. Por eso solo tiene sentido con un recorte: con una foto
+// opaca, el texto desaparece entero.
+function fotoDelante(card,t,m,zx,zy,zw,zh,alfa){
+  if(!card || !card.fotoSobreTexto || !m) return;
+  ctx.save();
+  ctx.globalAlpha=(alfa===undefined?1:alfa);
+  fotoEntrada(card,t,zx,zy,zw,zh,function(){ drawMedia(m,zx,zy,zw,zh,t); });
+  ctx.restore();
+}
 function fotoEntrada(card,t,x,y,w,h,fn){
   var L=animFotoLargo(card);
   if(!L){ fn(); return; }
@@ -6468,6 +6483,7 @@ function drawCardBase(card,t){
     // Si la foto no cubre la placa, el pie va sobre el FONDO de la card:
     // hay que mirar ese color, no asumir claro.
     else _chromeDark = isColorDark(cardBgOf(card));
+    fotoDelante(card,t,m,zx,zy,zoneW,zoneH,cA);
     drawChrome(chromeA,card.id,_chromeDark);drawGrid();
 
   } else {
@@ -6534,7 +6550,8 @@ function drawCardBase(card,t){
       const _blT=wrap(card.cuerpo,W-M*2);
       card._bodyBox={x:M,y:_bodyTop-bSz,w:W-M*2,h:_blT.length*bLH+bSz};
     }
-    ctx.restore();drawChrome(chromeA,card.id,CC.dark);drawGrid();
+    ctx.restore();
+    drawChrome(chromeA,card.id,CC.dark);drawGrid();
   }
 }
 
@@ -8614,6 +8631,8 @@ function renderEditor(c){
           <button class="tipo-btn${m.cinematic?' active':''}" id="cine-toggle" style="flex:1">🎬 Cinemático</button>
           <button class="tipo-btn${cards[sel].blurBg?' active':''}" id="blurbg-toggle" style="flex:1">◎ Blur</button>
         </div>
+        <button class="tipo-btn${c.fotoSobreTexto?' active':''}" id="foto-sobre-texto" style="width:100%;margin-top:6px;font-size:11px" title="La figura de la foto pasa por delante del título, como en una tapa de revista">${c.fotoSobreTexto?'▣ La foto tapa al texto':'▢ La foto tapa al texto'}</button>
+        <div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Para el efecto de tapa de revista: el sujeto recortado pasa por delante del título. Necesita una foto <b>con el fondo recortado</b> —un PNG con transparencia—; con una foto opaca el texto desaparece entero.</div>
         ${m.kenBurns?`
         <div class="range-block">
           <div style="display:flex;gap:4px;margin-bottom:5px">
@@ -9900,6 +9919,10 @@ function renderEditor(c){
       // de partida y sin ella, y estas dos ramas son distintas.
 
       // ── Ken Burns ──
+      {const fst=el.querySelector('#foto-sobre-texto');
+       if(fst) fst.onclick=()=>{ cards[sel].fotoSobreTexto=!cards[sel].fotoSobreTexto;
+         setStatus(cards[sel].fotoSobreTexto?'La foto pasa por delante del texto':'La foto vuelve atrás del texto','');
+         renderEditor(cards[sel]); repintar(); };}
       const kbBtn=el.querySelector('#kb-toggle');
       if(kbBtn){kbBtn.onclick=()=>{const m2=mediaCache[c.id];if(!m2)return;m2.kenBurns=!m2.kenBurns;if(m2.kenBurns)m2.cinematic=false;renderEditor(cards[sel]);if(!raf)play(cards[sel]);};}
       // ── Cinemático ──
@@ -11886,7 +11909,7 @@ document.getElementById('png-btn').onclick=()=>{
 // ════════════════════════════════
 const TPL_LS='incertis_templates';
 // Estilo que comparten todos los tipos de card
-const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animZoom','animEstilo','animFotoDur','animSolape','titleColor','bodyColor','kickerColor','cardBg','cardTextColor','frameW','frameColor','numbered',
+const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animZoom','animEstilo','animFotoDur','animSolape','fotoSobreTexto','titleColor','bodyColor','kickerColor','cardBg','cardTextColor','frameW','frameColor','numbered',
   'titleSz','bodySz','titleFont','titleItalic','bodyItalic','volantaColor',
   'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur',
   // Posición exacta del título y de la bajada. Es lo que permite dejar la placa
@@ -12952,6 +12975,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v188','La foto puede tapar al texto','El efecto de tapa de revista —el sujeto recortado pasando por delante del título, como hace Time— no se podía hacer cuando el retrato era la foto de la card: el orden de dibujo es foto y después texto, así que el título siempre quedaba arriba. Ahora hay un botón, «La foto tapa al texto», en el bloque de Efectos de la card. No da vuelta el dibujo —eso arrastraría la veladura, el fundido de bordes y el filete, que tienen que seguir debajo del texto—: vuelve a pasar la foto encima del título. Donde el PNG es transparente el texto se sigue viendo; donde hay figura, la tapa. Por eso solo tiene sentido con el fondo recortado: con una foto opaca el texto desaparece entero. La foto queda por delante del título y la bajada, pero sigue por detrás de las capas y del pie, así que un logo puesto como capa sigue arriba de todo.'],
     ['v187','Cada capa con su prompt','Dos cosas. LA CAPA COMO PROMPT: el bloque de IA trabajaba siempre sobre la foto de fondo de la card, así que una imagen sumada como capa entraba y ya —no había forma de retocarla ni de volver a pedírsela distinta—. Ahora cada capa de imagen tiene su propio recuadro de prompt, con recortar o conservar el fondo, y el texto queda guardado en la capa: se puede repromptear cuantas veces haga falta. Cada pedido sale del ORIGINAL, no del resultado anterior, porque apilando pedidos a la tercera vuelta la imagen ya no se parece a nada; el original queda guardado y hay un botón para volver a él. EL PRIMER ELEMENTO: no tenía casilla de tiempo. Su entrada salía del slider «Entrada», que es un porcentaje de la duración de la card y está tres bloques más abajo, así que para adelantar el primer texto había que calcular un porcentaje —y encima se movía solo al cambiar la duración—. Ahora tiene su casilla en segundos, igual que los demás; el slider queda como valor por defecto mientras no se toque.'],
     ['v186','La tapa se lee antes de cortarse','Contar manchas de tinta nunca supo que eso era un titular y aquello un epígrafe: cada arreglo era una regla más sobre un sistema que no entiende lo que mira. Ahora la tapa se lee. Al soltar el PDF sale una llamada de visión que devuelve la lista de elementos con su rol —marca, titular, volanta, bajada, epígrafe, cuerpo, foto, pase— y su jerarquía: cuál es la nota principal, cuáles las secundarias. Pero un modelo de visión es bueno diciendo QUÉ hay y flojo diciendo DÓNDE exactamente: devuelve cajas corridas veinte o treinta píxeles, que cortan letras. Así que cada uno hace lo suyo. La IA nombra y jerarquiza; la geometría ajusta el contorno: cada caja se estira mientras siga habiendo tinta pegada a su borde —para recuperar la letra que quedó afuera— y después se encoge hasta la tinta, para sacar el papel que sobra. El orden de entrada sale de los roles y no de un puntaje sobre el tamaño de la mancha: la foto principal está desde el primer cuadro, después el titular, la bajada, y el resto por jerarquía; la marca cierra siempre. El corte geométrico queda como red: si no hay key, si falla la red o si la respuesta viene rara, la tapa se arma igual como antes y el panel lo dice. En el panel se ve la lectura completa —qué identificó, con qué texto y qué jerarquía— y hay un botón para releer.'],
     ['v185','La tapa se corta pieza por pieza','Las piezas entraban como losas —media página de una vez, cortada por cualquier lado— por tres motivos que se sumaban. UNO: se buscaba UNA sola foto. Una tapa tiene cinco o seis, y las otras quedaban como tinta: manchas macizas que tapan las calles blancas por las que el corte tiene que pasar. Ahora se detectan todas, se borran de la tinta antes de cortar y vuelven después como piezas propias. DOS: el corte tenía un tope de profundidad de 6 niveles, y a una tapa de diario no le alcanza: la recursión se quedaba sin permiso a media página y volcaba el rectángulo entero como una sola pieza. Ahora llega a 11, y el hueco mínimo que pide para cortar se afloja a medida que baja —la calle entre dos secciones es ancha, la que separa un titular de su cuerpo no—. TRES: una sola mota de tinta convertía una calle blanca en una fila «con texto» y pegaba los dos bloques para siempre; ahora se pide que la fila tenga al menos un 1,5% del ancho del bloque, que es lo que ocupa una línea de verdad. Cortar más fino trajo su propio problema: los párrafos salían hechos líneas sueltas y la tapa se armaba como una lluvia de tiritas, y además el corte vertical entraba por el espacio entre dos palabras de un titular grande y separaba «Rosario» de «ya vibra». Lo primero se resuelve volviendo a pegar: dos piezas que comparten columna, están a menos de un renglón y medio de distancia y tienen el mismo cuerpo tipográfico son el mismo párrafo —el cuerpo se mide como alto dividido por bandas de tinta, no como alto de la caja, para que un titular de dos líneas y su tercera línea suelta se reconozcan como el mismo titular—, y una banda maciza como el cabezal en color nunca se pega con un texto. Lo segundo, exigiendo que una calle vertical mida al menos medio renglón cuando la banda es de un solo renglón, que es cuando ese alto mide de verdad el cuerpo de la letra. En una tapa de prueba con la estructura de Clarín, esto pasó de 26 piezas con media página de una sola vez a 15 piezas limpias: cada foto por su lado, el titular entero, cada columna la suya, y la marca cerrando. LA MARCA: «lo que esté arriba entra último» no alcanzaba, porque ahí también viven los pases y la tira de fotos chicas, y entraban todos amontonados al final. Ahora se identifica la marca por lo que es —la pieza más saturada del cabezal, la banda de color; y si la tapa es en negro, la de tipografía más alta— y esa, sola, cierra el armado.'],
