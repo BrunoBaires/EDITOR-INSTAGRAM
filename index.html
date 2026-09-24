@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v190 «el fondo deja de ser plano»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v192 «el estilo es de la pieza»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v190 «el fondo deja de ser plano»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v192 «el estilo es de la pieza»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1430,6 +1430,26 @@ function creditOf(card){
 }
 // Fondo efectivo de la card: si no se eligió ninguno, blanco tiza.
 function cardBgOf(card){ return (card&&card.cardBg)||CHALK; }
+// Escribe un cambio de estilo —fondo o cuerpo tipografico— en todas las cards
+// que corresponda y devuelve cuantas toco. Si la card en pantalla esta
+// apartada, solo se toca esa.
+function fondoAplicar(cambios){
+  var act=cards[sel];
+  if(!act) return 0;
+  var destino = act.bgPropio ? [act]
+              : cards.filter(function(c){ return c===act || !c.bgPropio; });
+  destino.forEach(function(c){
+    for(var k in cambios) if(Object.prototype.hasOwnProperty.call(cambios,k)) c[k]=cambios[k];
+  });
+  return destino.length;
+}
+// Cuantas cards se verian afectadas por el proximo cambio. Sirve para decirlo
+// en el panel antes de que pase, no despues.
+function fondoAlcance(){
+  var act=cards[sel];
+  if(!act) return 0;
+  return act.bgPropio ? 1 : cards.filter(function(c){ return c===act || !c.bgPropio; }).length;
+}
 // Pinta el color de fondo y, encima, las capas marcadas "detrás de la foto".
 // Se usa en todos los tipos de card, así el orden vale para todos.
 // El relleno del fondo: un color plano, o un degradado entre dos si hay un
@@ -9649,7 +9669,12 @@ function renderEditor(c){
         })()}
       </div>
     </div>
-    <div class="field"><label>Fondo de card</label>
+    ${c.tipo==='infografia'?`
+    <div class="field"><label>Cuerpo del texto</label>
+      <button class="tipo-btn${c.infoFit!==false?' active':''}" id="info-fit" style="width:100%;font-size:11px">${c.infoFit!==false?'↕ Ajuste automático activado':'↕ Ajuste automático apagado'}</button>
+      <div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Con el ajuste puesto, el cuerpo se achica solo hasta que el texto entre en su zona. Es cómodo, pero hace que el mismo epígrafe mida distinto en cada placa según cuánto texto tenga. Apagalo para que respete el tamaño que elegiste.</div>
+    </div>`:''}
+    <div class="field"><label>Fondo${cards.length>1?' — <span style="font-weight:400;letter-spacing:0;text-transform:none;font-size:10px;color:var(--text3)">'+(c.bgPropio?'solo esta card':'las '+fondoAlcance()+' cards')+'</span>':''}</label>
       <div class="bg-swatch-row">
         <div class="bg-swatch-none${!c.cardBg?' active':''}" id="bg-none" title="Por defecto (Blanco tiza)">✕</div>
         ${INCERTIS_BG.map(p=>`<div class="bg-swatch${c.cardBg===p.hex?' active':''}" data-bg="${p.hex}" style="background:${p.hex};${isColorDark(p.hex)?'border-color:rgba(255,255,255,0.25)':''}" title="${p.label}"></div>`).join('')}
@@ -9670,6 +9695,11 @@ function renderEditor(c){
         ${[['v','↓ Abajo'],['h','→ Lado'],['d','↘ Diagonal'],['r','◎ Centro']].map(([v,l])=>
           `<button class="tipo-btn${(c.bgDir||'v')===v?' active':''}" data-bgdir="${v}" style="flex:1;font-size:11px">${l}</button>`).join('')}
       </div>`:`<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Elegí un segundo color y la placa deja de ser plana: el fondo va de uno a otro.</div>`}
+      ${cards.length>1?`
+      <div style="display:flex;gap:5px;align-items:center;margin-top:8px;padding-top:7px;border-top:1px solid var(--border)">
+        <span style="flex:1;font-size:10.5px;color:var(--text3);line-height:1.4">${c.bgPropio?'Esta card va aparte: el fondo y los cuerpos que elijas en las demás no la tocan.':'El fondo y los cuerpos tipográficos se aplican a todas las cards a la vez.'}</span>
+        <button class="tipo-btn${c.bgPropio?' active':''}" id="bg-propio" style="font-size:11px;white-space:nowrap">${c.bgPropio?'↩ Volver al común':'Solo esta'}</button>
+      </div>`:''}
     </div>
     <div class="field"><label>Marco — <b id="sl-frame-val">${c.frameW?c.frameW+'px':'sin marco'}</b></label>
       <input type="range" id="sl-frame" min="0" max="120" step="2" value="${c.frameW||0}" style="width:100%;margin-top:4px"/>
@@ -10014,12 +10044,14 @@ function renderEditor(c){
   if(c.tipo!=='cover'){
     const slT=document.getElementById('sl-tsz');
     const slB=document.getElementById('sl-bsz');
-    if(slT){slT.oninput=e=>{cards[sel].titleSz=parseInt(e.target.value);document.getElementById('sl-tsz-val').textContent=e.target.value+'px';redraw();};}
-    if(slB){slB.oninput=e=>{cards[sel].bodySz=parseInt(e.target.value);document.getElementById('sl-bsz-val').textContent=e.target.value+'px';redraw();};}
+    // El cuerpo tipografico se elige una vez para la pieza: tenerlo por card
+    // hacia que el mismo epigrafe midiera distinto en cada placa.
+    if(slT){slT.oninput=e=>{fondoAplicar({titleSz:parseInt(e.target.value)});document.getElementById('sl-tsz-val').textContent=e.target.value+'px';redraw();};}
+    if(slB){slB.oninput=e=>{fondoAplicar({bodySz:parseInt(e.target.value)});document.getElementById('sl-bsz-val').textContent=e.target.value+'px';redraw();};}
     // ── Selector de fuente (biblioteca curada) ──
     var tfSel=document.getElementById('tfont-select');
     if(tfSel) tfSel.onchange=()=>{
-      cards[sel].titleFont=tfSel.value;
+      fondoAplicar({titleFont:tfSel.value});
       ensureFont(tfSel.value, ()=>redraw());   // baja on-demand si hace falta
       renderEditor(cards[sel]);
       redraw();
@@ -10985,8 +11017,8 @@ REGLAS IMPORTANTES:
     btn.onclick=()=>{const d=parseInt(btn.dataset.dur)||0;cards[sel].fixedDur=d||null;el.querySelectorAll('.dur-pill').forEach(b=>b.classList.remove('active'));btn.classList.add('active');};
   });
   const bgNone=el.querySelector('#bg-none');
-  if(bgNone){bgNone.onclick=()=>{cards[sel].cardBg=null;renderEditor(cards[sel]);redraw();};}
-  el.querySelectorAll('.bg-swatch[data-bg]:not([data-gc])').forEach(sw=>{sw.onclick=()=>{cards[sel].cardBg=sw.dataset.bg;renderEditor(cards[sel]);redraw();};});
+  if(bgNone){bgNone.onclick=()=>{fondoAplicar({cardBg:null});renderEditor(cards[sel]);redraw();};}
+  el.querySelectorAll('.bg-swatch[data-bg]:not([data-gc])').forEach(sw=>{sw.onclick=()=>{fondoAplicar({cardBg:sw.dataset.bg});renderEditor(cards[sel]);redraw();};});
 
   // ── Numeración de la placa ──
   const _numOn=el.querySelector('#tg-num-on'), _numOff=el.querySelector('#tg-num-off');
@@ -11003,7 +11035,7 @@ REGLAS IMPORTANTES:
   });
   el.querySelectorAll('[data-colclr]').forEach(b=>{ b.onclick=()=>{ cards[sel][b.dataset.colclr]=null; delete cards[sel]._autoSig; renderEditor(cards[sel]); redraw(); }; });
   const bgCustom=el.querySelector('#bg-custom');
-  if(bgCustom){bgCustom.oninput=e=>{cards[sel].cardBg=e.target.value;e.target.closest('.bg-custom-wrap').style.background=e.target.value;redraw();};}
+  if(bgCustom){bgCustom.oninput=e=>{fondoAplicar({cardBg:e.target.value});e.target.closest('.bg-custom-wrap').style.background=e.target.value;redraw();};}
 
   // Ocultar el logo en esta card (independiente del interruptor global)
   const lOff=el.querySelector('#logo-off');
@@ -11066,13 +11098,12 @@ REGLAS IMPORTANTES:
   });
   {
     const b2=el.querySelector('#bg2-custom');
-    if(b2) b2.oninput=e=>{ cards[sel].cardBg2=e.target.value;
-      if(!cards[sel].bgDir) cards[sel].bgDir='v';
+    if(b2) b2.oninput=e=>{ fondoAplicar({cardBg2:e.target.value, bgDir:cards[sel].bgDir||'v'});
       e.target.closest('.bg-custom-wrap').style.background=e.target.value;
       redraw(); };
     if(b2) b2.onchange=()=>renderEditor(cards[sel]);
     const bOff=el.querySelector('#bg2-off');
-    if(bOff) bOff.onclick=()=>{ cards[sel].cardBg2=null; renderEditor(cards[sel]); redraw(); };
+    if(bOff) bOff.onclick=()=>{ fondoAplicar({cardBg2:null}); renderEditor(cards[sel]); redraw(); };
     const bSug=el.querySelector('#bg2-sugerir');
     if(bSug) bSug.onclick=()=>{
       // Una variante del mismo color, no un color al azar: sobre un fondo claro
@@ -11083,12 +11114,32 @@ REGLAS IMPORTANTES:
       const oscuro=isColorDark(base), k=oscuro?1.55:0.62;
       const mez=v=>Math.max(0,Math.min(255,Math.round(v*k)));
       const hex=v=>('0'+mez(v).toString(16)).slice(-2);
-      cards[sel].cardBg2='#'+hex(r)+hex(g2)+hex(b3);
-      if(!cards[sel].bgDir) cards[sel].bgDir='v';
+      fondoAplicar({cardBg2:'#'+hex(r)+hex(g2)+hex(b3), bgDir:cards[sel].bgDir||'v'});
       renderEditor(cards[sel]); redraw();
     };
     el.querySelectorAll('[data-bgdir]').forEach(b=>{ b.onclick=()=>{
-      cards[sel].bgDir=b.dataset.bgdir; renderEditor(cards[sel]); redraw(); }; });
+      fondoAplicar({bgDir:b.dataset.bgdir}); renderEditor(cards[sel]); redraw(); }; });
+    {const bFit=el.querySelector('#info-fit');
+     if(bFit) bFit.onclick=()=>{ cards[sel].infoFit=(cards[sel].infoFit===false);
+       setStatus(cards[sel].infoFit!==false?'El cuerpo se ajusta solo':'El cuerpo respeta el tamaño elegido','');
+       renderEditor(cards[sel]); redraw(); };}
+    const bProp=el.querySelector('#bg-propio');
+    if(bProp) bProp.onclick=()=>{
+      const cc=cards[sel];
+      if(cc.bgPropio){
+        // Vuelve al comun: toma el fondo de la primera card que no sea propia,
+        // que es el que estan usando las demas.
+        cc.bgPropio=false;
+        const ref=cards.filter(x=>x!==cc && !x.bgPropio)[0];
+        if(ref){ cc.cardBg=ref.cardBg; cc.cardBg2=ref.cardBg2; cc.bgDir=ref.bgDir;
+                 cc.titleSz=ref.titleSz; cc.bodySz=ref.bodySz; cc.titleFont=ref.titleFont; }
+        setStatus('Esta card vuelve al común','');
+      }else{
+        cc.bgPropio=true;
+        setStatus('El fondo de esta card queda aparte','');
+      }
+      renderEditor(cards[sel]); redraw();
+    };
   }
   const frCustom=el.querySelector('#frame-custom');
   if(frCustom) frCustom.oninput=e=>{
@@ -11128,6 +11179,15 @@ function deleteCard(i){
 
 function addCard(tipo){
   const defaults={id:cards.length+1,tipo,titulo:'',cuerpo:'',mediaH:100,mediaW:100,anchor:'mc'};
+  // Nace con el fondo que ya tienen las demas: si no, cada card nueva rompia la
+  // pieza y habia que volver a elegirle el color a mano.
+  {
+    const ref=cards.filter(function(x){ return !x.bgPropio; })[0] || cards[0];
+    if(ref){ defaults.cardBg=ref.cardBg; defaults.cardBg2=ref.cardBg2; defaults.bgDir=ref.bgDir;
+             if(ref.titleSz) defaults.titleSz=ref.titleSz;
+             if(ref.bodySz)  defaults.bodySz=ref.bodySz;
+             if(ref.titleFont) defaults.titleFont=ref.titleFont; }
+  }
   if(tipo==='cover'){defaults.coverAccent='#1a1a1a';defaults.kicker='';defaults.coverImgY=0;defaults.coverTextY=5;defaults.coverBand=false;defaults.coverTypo='editorial';defaults.coverAlign='left';defaults.coverTitleSz=100;}
   if(tipo==='mapa'){defaults.mapZoom=13;defaults.mapPinColor='#D94F1C';}
   if(tipo==='nano'){defaults.nanoStyle='particulas';defaults.nanoColor1='#D94F1C';defaults.nanoColor2='#1a1a1a';}
@@ -12023,7 +12083,7 @@ document.getElementById('png-btn').onclick=()=>{
 // ════════════════════════════════
 const TPL_LS='incertis_templates';
 // Estilo que comparten todos los tipos de card
-const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animT','animZoom','animEstilo','animFotoDur','animSolape','fotoSobreTexto','titleColor','bodyColor','kickerColor','cardBg','cardBg2','bgDir','cardTextColor','frameW','frameColor','numbered',
+const TPL_COMUN=['animOn','animInicio','animPaso','animLargo','animEspera','animT','animZoom','animEstilo','animFotoDur','animSolape','fotoSobreTexto','titleColor','bodyColor','kickerColor','cardBg','cardBg2','bgDir','bgPropio','cardTextColor','frameW','frameColor','numbered',
   'titleSz','bodySz','titleFont','titleItalic','bodyItalic','volantaColor',
   'logoVariant','logoOff','logoPos','logoDX','logoDY','fixedDur',
   // Posición exacta del título y de la bajada. Es lo que permite dejar la placa
@@ -13089,6 +13149,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v192','El estilo es de la pieza','Lo mismo que el fondo pasaba con los cuerpos tipográficos: elegir el tamaño del título o del epígrafe cambiaba una sola placa, y en un carrusel de ocho había que repetirlo ocho veces. Ahora el tamaño del título, el del cuerpo y la fuente del título viajan con el fondo: se eligen una vez y van a todas, y una card nueva nace con los de la pieza. El escape es el mismo botón: «Solo esta» aparta la card entera, del fondo y de los cuerpos, y no se suma otro control a un panel que ya es largo. Y aparece un motivo que estaba escondido: la card de infografía tiene un AJUSTE AUTOMÁTICO que achica el cuerpo hasta que el texto entre en su zona. Estaba en el código desde siempre pero nunca tuvo botón, así que cada placa terminaba con un cuerpo distinto según cuánto texto tuviera y no había forma de saber por qué. Ahora se ve y se puede apagar, para que respete el tamaño elegido.'],
+    ['v191','El fondo es de la pieza','El fondo era decoración de cada card suelta: en un carrusel de ocho placas había que elegir el color ocho veces. Pero es identidad de la pieza, no de la card. Ahora se elige una vez y va a todas —el color, el segundo color del degradado y la dirección—, y una card nueva nace con el fondo que ya tienen las demás en vez de romper la pieza. Lo que no se pierde es la excepción: si una placa va distinta a propósito, el botón «Solo esta» la aparta y queda congelada, y ninguna otra la pisa. El rótulo del bloque dice siempre a cuántas cards va a ir el próximo cambio, antes de que pase. «↩ Volver al común» la devuelve al grupo con el fondo que están usando las demás. El logo ya funcionaba así desde antes: los archivos y la variante activa son globales, con override por card cuando hace falta.'],
     ['v190','El fondo deja de ser plano','El fondo de la card era un color y nada más. Ahora se puede elegir un segundo color y la placa va de uno a otro, en cuatro direcciones: de arriba abajo, de lado a lado, en diagonal o desde el centro. El botón «Sugerir» no tira un color al azar: toma una variante del color que ya elegiste —oscurece si el fondo es claro, aclara si es oscuro—, que es lo que hace que no parezca un degradado de plantilla. El degradado vive solo donde se pinta la placa entera; el fundido de bordes, el filete de la foto y las decisiones de contraste del texto siguen usando el primer color, porque necesitan un color y no un degradado.'],
     ['v189','Cada elemento entra cuando uno dice','La animación era una cadena: cada elemento esperaba al anterior y su momento salía de sumar todas las esperas de arriba. Eso dejaba afuera dos cosas. Que dos elementos entren JUNTOS —imposible, siempre había una espera entre medio—. Y que alguno entre MIENTRAS la foto todavía hace su zoom, porque la cadena recién arrancaba cuando la foto terminaba: había que esperar que una animación terminara para que empezara la otra, y el resultado era gomoso. Ahora cada elemento tiene su segundo propio, absoluto, contado desde que arranca la card. Dos con el mismo número entran a la vez; uno en 0,2 entra con el zoom corriendo. La cadena vieja sigue como valor de arranque: una card que nunca se tocó se ve exactamente igual que antes, y la primera vez que se escribe un tiempo se congelan los de todos, para que tocar uno no corra a los de abajo. Las flechas ↑↓ ahora intercambian también los tiempos, si no la lista quedaba en un orden y la animación en otro. Y cada fila tiene una ✕ que saca el elemento de la card: una capa se borra, un título o una bajada se vacían.'],
     ['v188','La foto puede tapar al texto','El efecto de tapa de revista —el sujeto recortado pasando por delante del título, como hace Time— no se podía hacer cuando el retrato era la foto de la card: el orden de dibujo es foto y después texto, así que el título siempre quedaba arriba. Ahora hay un botón, «La foto tapa al texto», en el bloque de Efectos de la card. No da vuelta el dibujo —eso arrastraría la veladura, el fundido de bordes y el filete, que tienen que seguir debajo del texto—: vuelve a pasar la foto encima del título. Donde el PNG es transparente el texto se sigue viendo; donde hay figura, la tapa. Por eso solo tiene sentido con el fondo recortado: con una foto opaca el texto desaparece entero. La foto queda por delante del título y la bajada, pero sigue por detrás de las capas y del pie, así que un logo puesto como capa sigue arriba de todo.'],
