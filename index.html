@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v192 «el estilo es de la pieza»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v194 «un estilo puede ser una imagen»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v192 «el estilo es de la pieza»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v194 «un estilo puede ser una imagen»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -1153,20 +1153,59 @@ function ilusTodos(){
     if(!x||!x.nombre) return;
     const id=x.id||('u-'+hashTxt(x.nombre));
     if(vistos[id]) return; vistos[id]=1;
-    out.push({id:id, nombre:x.nombre, desc:x.desc||'Prompt propio', transparente:!!x.transparente, prompt:x.prompt||'', propio:true});
+    out.push({id:id, nombre:x.nombre, desc:x.desc||'Prompt propio', transparente:!!x.transparente,
+              prompt:x.prompt||'', refs:Array.isArray(x.refs)?x.refs:[], propio:true});
   });
   return out;
 }
 function ilusPorId(id){ return ilusTodos().filter(x=>x.id===id)[0]||ILUS_BASE[0]; }
+const ILUS_REFS_MAX=2;
+function ilusRefAchicar(dataUrl){
+  return new Promise(function(res){
+    const im=new Image();
+    im.onload=function(){
+      let w=im.naturalWidth||im.width, h=im.naturalHeight||im.height;
+      const m=640;
+      if(Math.max(w,h)>m){ const k=m/Math.max(w,h); w=Math.round(w*k); h=Math.round(h*k); }
+      const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+      const g=cv.getContext('2d');
+      g.fillStyle='#ffffff'; g.fillRect(0,0,w,h);   // JPEG no tiene alfa
+      g.drawImage(im,0,0,w,h);
+      try{ res(cv.toDataURL('image/jpeg',0.82)); }catch(e){ res(dataUrl); }
+    };
+    im.onerror=function(){ res(dataUrl); };
+    im.src=dataUrl;
+  });
+}
+function ilusLeerArchivo(file){
+  return new Promise(function(res,rej){
+    const fr=new FileReader();
+    fr.onload=function(){ ilusRefAchicar(fr.result).then(res); };
+    fr.onerror=function(){ rej(new Error('No se pudo leer la imagen')); };
+    fr.readAsDataURL(file);
+  });
+}
+// Borra un estilo propio del navegador. Devuelve si estaba.
+function ilusBorrarMio(id){
+  const l=ilusMios(), n=l.length;
+  const out=l.filter(function(z){ return z && (z.id||('u-'+hashTxt(z.nombre)))!==id; });
+  ilusGuardarMios(out);
+  return out.length<n;
+}
 function ilusCargarEquipo(){
   return storeLeer('ilustraciones').then(l=>{
-    ILUS_EQUIPO = l ? l.filter(x=>x&&x.nombre&&x.prompt) : [];
+    ILUS_EQUIPO = l ? l.filter(x=>x&&x.nombre&&(x.prompt||(Array.isArray(x.refs)&&x.refs.length))) : [];
     return ILUS_EQUIPO;
   }).catch(()=>{ ILUS_EQUIPO=[]; return ILUS_EQUIPO; });
 }
 // Arma el prompt final: estilo + ajuste puntual + guardas de parecido/recorte.
 function ilusPrompt(estilo, extra, transparente, refs){
   var p=String(estilo&&estilo.prompt||'').trim();
+  // Un estilo sin texto: lo unico que lo define son sus imagenes, y hay que
+  // decirle al modelo que las mire como estilo, no como contenido.
+  if(!p && refs>0) p='Redraw the subject of the first image in exactly the style of the reference image'+
+    (refs>1?'s':'')+' attached after it: same drawing technique, same line quality, same palette, same level '+
+    'of detail and same finish. Keep the subject, pose and identity of the first image.';
   if(extra && extra.trim()) p+=' Additional instruction: '+extra.trim()+'.';
   // Sin esta línea el modelo tiende a devolver la referencia retocada en vez
   // de usarla como guía. Hay que decirle explícitamente para qué está ahí.
@@ -7289,7 +7328,10 @@ async function ilustrarConReferencias(cardId, prompt, opts){
   opts=opts||{};
   const key=getOpenAIKey();
   if(!key) throw new Error('Cargá tu OpenAI key arriba (sk-…)');
-  const refs=refsDe(cardId);
+  // Las referencias pueden venir de la card (las que se suman a mano) o del
+  // estilo elegido (las que lo definen). Si vienen las dos, van las dos.
+  const propias=(opts.refs||[]).map(function(src){ return {src:src}; });
+  const refs=propias.concat(refsDe(cardId));
   if(!refs.length) throw new Error('No hay referencias cargadas');
   const m=mediaCache[cardId];
   const base=(m&&m.type==='img')?(m._aiOriginal||m.dataUrl):null;
@@ -8281,6 +8323,9 @@ function wireIlusBlock(el, c){
         const runEl=el.querySelector('#ilus-run'), stEl=el.querySelector('#ilus-status');
         const cntEl=el.querySelector('#ilus-guardados');
         const bNuevo=el.querySelector('#ilus-nuevo'), bEditar=el.querySelector('#ilus-editar'), bBorrar=el.querySelector('#ilus-borrar');
+        const bDesdeImg=el.querySelector('#ilus-desdeimg');
+        const refAdd=el.querySelector('#ilus-refadd'), refFile=el.querySelector('#ilus-reffile');
+        const bFijar=el.querySelector('#ilus-fijar');
         const form=el.querySelector('#ilus-form'), nomEl=el.querySelector('#ilus-nom'), txtEl=el.querySelector('#ilus-txt');
         const bNRec=el.querySelector('#ilus-nrecorta'), bNNoRec=el.querySelector('#ilus-nnorecorta');
         const errEl=el.querySelector('#ilus-error');
@@ -8327,14 +8372,44 @@ function wireIlusBlock(el, c){
         function pintarDesc(){
           const x=ilusPorId(selEl.value);
           window.__ilusUltimo=selEl.value;
-          descEl.textContent=x.desc||'';
+          const mini=el.querySelector('#ilus-refmini');
+          if(mini){
+            const r=(x.refs&&x.refs[0])||null;
+            mini.style.display=r?'block':'none';
+            mini.innerHTML=r?('<img src="'+r+'" style="width:54px;height:54px;object-fit:cover;border-radius:3px;border:1px solid var(--border);display:block">'):'';
+          }
+          descEl.textContent = x.desc || ((x.refs&&x.refs.length)?'Estilo definido por su imagen de referencia.':'');
           recorta=!!x.transparente;      // cada estilo trae su default; se puede cambiar
           pintarFondoBtns();
           const esPropio=!!x.propio;
           bEditar.style.display=esPropio?'':'none';
-          bBorrar.style.display=esPropio?'':'none';
+          if(bBorrar) bBorrar.style.display='none';   // ahora se borra desde «Mis estilos»
         }
-        selEl.onchange=pintarDesc;
+        // El ajuste puntual es de un solo uso. Si salio bien y se quiere repetir,
+        // este boton lo mete adentro del estilo y deja de haber que reescribirlo.
+        function refrescarFijar(){
+          if(!bFijar) return;
+          const x=ilusPorId(selEl.value);
+          const hay=!!(extraEl.value||'').trim();
+          bFijar.style.display=(hay&&x.propio)?'block':'none';
+        }
+        if(extraEl) extraEl.addEventListener('input', refrescarFijar);
+        if(bFijar) bFijar.onclick=()=>{
+          const x=ilusPorId(selEl.value);
+          const extra=(extraEl.value||'').trim();
+          if(!x.propio||!extra) return;
+          const l=ilusMios();
+          const i=l.findIndex(z=>z&&(z.id||('u-'+hashTxt(z.nombre)))===x.id);
+          if(i<0){ decir('Ese estilo es de la casa: guardalo como propio primero.','err'); return; }
+          l[i].prompt=String(l[i].prompt||'').trim();
+          l[i].prompt=(l[i].prompt?l[i].prompt+' ':'')+extra.replace(/\s+/g,' ').trim()+(/[.!?]$/.test(extra)?'':'.');
+          if(!ilusGuardarMios(l)){ decir('No se pudo guardar el ajuste','err'); return; }
+          extraEl.value='';
+          decir('✓ El ajuste quedó dentro de «'+x.nombre+'»','ok');
+          renderEditor(cards[sel]);
+        };
+        selEl.onchange=()=>{ pintarDesc(); refrescarFijar(); };
+        refrescarFijar();
         pintarLista();
         // Los del equipo se piden una sola vez por sesión, no en cada render.
         if(!window.__ilusPedidos){
@@ -8350,7 +8425,9 @@ function wireIlusBlock(el, c){
           pintarFondoNuevo();
         }
         function guardarBorrador(){
-          window.__ilusBorrador={nombre:nomEl.value, prompt:txtEl.value, transparente:nRecorta, editando:editando};
+          const prev=window.__ilusBorrador||{};
+          window.__ilusBorrador={nombre:nomEl.value, prompt:txtEl.value, transparente:nRecorta,
+                                 editando:editando, refs:prev.refs||[]};
         }
         nomEl.oninput=guardarBorrador; txtEl.oninput=guardarBorrador;
 
@@ -8372,19 +8449,20 @@ function wireIlusBlock(el, c){
         const rotuloRun = desdeCero ? 'Crear la imagen' : 'Ilustrar';
         runEl.onclick=async()=>{
           const x=ilusPorId(selEl.value);
-          if(!x.prompt){ decir('Ese estilo no tiene prompt.','err'); return; }
+          const refsEstilo=(x.refs&&x.refs.length)?x.refs:[];
+          if(!x.prompt && !refsEstilo.length){ decir('Ese estilo no tiene ni prompt ni referencia.','err'); return; }
           // Sin foto de partida el texto no es un ajuste: es el tema. Sin él,
           // la API devolvería el estilo aplicado a nada.
           if(desdeCero && !(extraEl.value||'').trim()){
             decir('Escribí qué se ve: sin foto de partida, ese texto es el tema.','err');
             extraEl.focus(); return;
           }
-          const nRefs=refsDe(c.id).length;
+          const nRefs=refsDe(c.id).length+refsEstilo.length;
           const p=ilusPrompt(x, extraEl.value, recorta, nRefs);
           runEl.disabled=true; runEl.textContent=desdeCero?'Creando… (~20-40s)':'Ilustrando… (~20-40s)';
           decir(nRefs?('Enviando a OpenAI con '+nRefs+' referencia'+(nRefs>1?'s':'')+'…'):'Enviando a OpenAI…','work');
           try{
-            if(nRefs)          await ilustrarConReferencias(c.id, p, {transparente:recorta});
+            if(nRefs)          await ilustrarConReferencias(c.id, p, {transparente:recorta, refs:refsEstilo});
             else if(desdeCero) await crearImagenConOpenAI(c.id, p, {transparente:recorta});
             else               await editImageWithOpenAI(c.id, p, {transparente:recorta});
             if(recorta){ const m3=mediaCache[c.id]; if(m3) m3.fitMode='contain'; }
@@ -8396,7 +8474,8 @@ function wireIlusBlock(el, c){
           }
         };
 
-        function abrirForm(base){
+        function abrirForm(base, opts){
+          opts=opts||{};
           form.style.display='flex';
           errorForm('');
           nomEl.value=base?base.nombre:'';
@@ -8404,10 +8483,49 @@ function wireIlusBlock(el, c){
           nRecorta=base?!!base.transparente:true;
           pintarFondoNuevo();
           editando=(base&&base.propio)?base.id:null;
-          guardarBorrador();
-          nomEl.focus();
+          window.__ilusBorrador={nombre:nomEl.value, prompt:txtEl.value, transparente:nRecorta,
+                                 editando:editando, refs:(base&&Array.isArray(base.refs))?base.refs.slice():[]};
+          renderEditor(cards[sel]);
+          const f2=document.getElementById('ilus-form'); if(f2) f2.style.display='flex';
+          const n2=document.getElementById('ilus-nom'); if(n2) n2.focus();
+          // «Desde una imagen» abre el mismo formulario y va derecho al archivo:
+          // el estilo va a ser la imagen, no el texto.
+          if(opts.pedirImagen){ const rf=document.getElementById('ilus-reffile'); if(rf) rf.click(); }
         }
         bNuevo.onclick=()=>abrirForm(null);
+        if(bDesdeImg) bDesdeImg.onclick=()=>abrirForm(null,{pedirImagen:true});
+        if(refAdd&&refFile) refAdd.onclick=()=>refFile.click();
+        if(refFile) refFile.onchange=async ev=>{
+          const fs=[...(ev.target.files||[])]; ev.target.value='';
+          if(!fs.length) return;
+          const b=window.__ilusBorrador||{refs:[]};
+          b.refs=b.refs||[];
+          for(const f of fs){
+            if(b.refs.length>=ILUS_REFS_MAX) break;
+            try{ b.refs.push(await ilusLeerArchivo(f)); }catch(e){}
+          }
+          window.__ilusBorrador=b;
+          renderEditor(cards[sel]);
+          const f2=document.getElementById('ilus-form'); if(f2) f2.style.display='flex';
+        };
+        el.querySelectorAll('[data-ilusrefdel]').forEach(b2=>{ b2.onclick=()=>{
+          const b=window.__ilusBorrador; if(!b||!b.refs) return;
+          b.refs.splice(+b2.dataset.ilusrefdel,1);
+          renderEditor(cards[sel]);
+          const f2=document.getElementById('ilus-form'); if(f2) f2.style.display='flex';
+        };});
+        // Borrar desde la lista «Mis estilos»: sin pasar por el desplegable.
+        el.querySelectorAll('[data-ilusdel]').forEach(b2=>{ b2.onclick=async()=>{
+          const id=b2.dataset.ilusdel, x=ilusPorId(id);
+          const nom=(x&&x.nombre)||'';
+          ilusBorrarMio(id);
+          ILUS_EQUIPO=ILUS_EQUIPO.filter(z=>z&&(z.id||('u-'+hashTxt(z.nombre)))!==id);
+          renderEditor(cards[sel]);
+          try{ const lista=await storeBorrar('ilustraciones', nom);
+               ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&(z.prompt||(Array.isArray(z.refs)&&z.refs.length)));
+          }catch(e){}
+          setStatus('«'+nom+'» borrado','');
+        };});
         bEditar.onclick=()=>abrirForm(ilusPorId(selEl.value));
         bBase.onclick=()=>{
           const x=ilusPorId(selEl.value);
@@ -8421,18 +8539,25 @@ function wireIlusBlock(el, c){
           const nombre=(nomEl.value||'').trim(), prompt=(txtEl.value||'').trim();
           // Los avisos van DENTRO del formulario: el status de abajo se perdía
           // de vista en el panel y parecía que el botón no hacía nada.
+          const refs=((window.__ilusBorrador||{}).refs)||[];
           if(!nombre){ errorForm('Falta el nombre del estilo.'); nomEl.focus(); return; }
-          if(prompt.length<20){ errorForm('El prompt es muy corto. Describí trazo, color y nivel de detalle.'); txtEl.focus(); return; }
+          // Con una imagen de referencia el texto sobra: la imagen ES el estilo.
+          if(!refs.length && prompt.length<20){
+            errorForm('Escribí el prompt —trazo, color, nivel de detalle— o subí una imagen de referencia.');
+            txtEl.focus(); return;
+          }
           errorForm('');
           const item={ id: editando||('u-'+Math.abs(hashTxt(nombre)).toString(36)),
-                       nombre:nombre, prompt:prompt, transparente:!!nRecorta,
-                       desc:'Prompt propio'+(nRecorta?' · recorta el fondo':' · conserva el fondo'),
+                       nombre:nombre, prompt:prompt, refs:refs, transparente:!!nRecorta,
+                       desc:(refs.length?('Estilo por imagen'+(prompt?' + prompt':'')):'Prompt propio')+(nRecorta?' · recorta el fondo':' · conserva el fondo'),
                        fecha:new Date().toISOString().slice(0,10) };
           // 1) Guardado local: es el que manda. Si esto falla, se avisa fuerte.
           const l=ilusMios(); const ya=l.findIndex(z=>z&&z.id===item.id);
           if(ya>=0) l[ya]=item; else l.push(item);
           if(!ilusGuardarMios(l)){
-            errorForm('Este navegador no dejó guardar (¿modo privado o almacenamiento lleno?). Copiá el prompt antes de cerrar.');
+            errorForm(refs.length
+              ? 'No entró: el navegador se quedó sin lugar. Borrá algún estilo con imagen desde «Mis estilos» y probá de nuevo.'
+              : 'Este navegador no dejó guardar (¿modo privado o almacenamiento lleno?). Copiá el prompt antes de cerrar.');
             return;
           }
           form.style.display='none'; editando=null; window.__ilusBorrador=null;
@@ -8441,7 +8566,7 @@ function wireIlusBlock(el, c){
           // 2) Publicación al equipo: si no sale, el prompt YA está guardado.
           bSave.disabled=true;
           storeGuardar('ilustraciones', item).then(lista=>{
-            ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&z.prompt);
+            ILUS_EQUIPO=(lista||[]).filter(z=>z&&z.nombre&&(z.prompt||(Array.isArray(z.refs)&&z.refs.length)));
             pintarLista(item.id);
             decir('✓ «'+nombre+'» guardado y publicado para todo el equipo','ok');
           }).catch(()=>{
@@ -8451,7 +8576,9 @@ function wireIlusBlock(el, c){
         bSave.onclick=guardar;
         nomEl.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); guardar(); } };
 
-        bBorrar.onclick=async()=>{
+        // El boton viejo del desplegable ya no se dibuja: el borrado vive en
+        // «Mis estilos». Se deja el handler por si queda alguna version cacheada.
+        if(bBorrar) bBorrar.onclick=async()=>{
           const x=ilusPorId(selEl.value); if(!x.propio) return;
           const l=ilusMios().filter(z=>z&&z.id!==x.id);
           ilusGuardarMios(l);
@@ -8473,7 +8600,10 @@ function ilusBlockHTML(hayFoto, cid){
   return `<div class="ilus-block" id="ilus-block" data-desde="${hayFoto?'foto':'cero'}">
           <div class="aiedit-head"><span>✎ ${hayFoto?'Ilustrar la foto':'Ilustrar desde cero'}</span><span class="aiedit-sub">${hayFoto?'guarda el parecido':'sin foto de partida'}</span></div>
           <select id="ilus-sel" class="ilus-sel"></select>
-          <div class="ilus-desc" id="ilus-desc"></div>
+          <div style="display:flex;gap:8px;align-items:flex-start;margin-top:5px">
+            <div id="ilus-refmini" style="display:none;flex-shrink:0"></div>
+            <div class="ilus-desc" id="ilus-desc" style="margin:0;flex:1"></div>
+          </div>
           <div class="ilus-fondo">
             <button class="tipo-btn" id="ilus-recorta" style="flex:1;font-size:11px">✂ Recortar fondo</button>
             <button class="tipo-btn" id="ilus-norecorta" style="flex:1;font-size:11px">▣ No recortar fondo</button>
@@ -8497,15 +8627,53 @@ function ilusBlockHTML(hayFoto, cid){
           })()}
           <input type="file" id="ilus-ref-file" accept="image/*" multiple style="display:none">
           <button class="aiedit-run" id="ilus-run">${hayFoto?'Ilustrar':'Crear la imagen'}</button>
+          <button class="tpl-mini" id="ilus-fijar" style="display:none;width:100%;margin-top:5px">⤓ Sumar este ajuste al estilo</button>
           <div class="ilus-fila">
-            <button class="tpl-mini" id="ilus-nuevo">＋ Guardar un prompt</button>
+            <button class="tpl-mini" id="ilus-nuevo">＋ Nuevo estilo</button>
+            <button class="tpl-mini" id="ilus-desdeimg">✦ Desde una imagen</button>
             <button class="tpl-mini" id="ilus-editar" style="display:none">✎ Editar</button>
-            <button class="tpl-mini del" id="ilus-borrar" style="display:none">Borrar</button>
           </div>
           <div class="ilus-guardados" id="ilus-guardados"></div>
+          ${(function(){
+            const M=ilusMios();
+            if(!M.length) return '';
+            return `<details class="adj-details" style="margin-top:6px">
+              <summary class="adj-summary"><span>Mis estilos · ${M.length}</span></summary>
+              <div class="adj-body">
+                ${M.map(x=>{
+                  const id=x.id||('u-'+hashTxt(x.nombre));
+                  const r=(Array.isArray(x.refs)&&x.refs[0])||null;
+                  return `<div style="display:flex;align-items:center;gap:7px;padding:5px 0;border-top:1px solid var(--border)">
+                    ${r?`<img src="${r}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;flex-shrink:0;border:1px solid var(--border)">`
+                       :`<span style="width:32px;height:32px;border-radius:3px;flex-shrink:0;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text3)">T</span>`}
+                    <span style="flex:1;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.nombre||'sin nombre')}</span>
+                    <button class="capa-b del" data-ilusdel="${id}" title="Borrar este estilo" style="width:18px;height:18px;line-height:1;font-size:10px;padding:0">✕</button>
+                  </div>`;
+                }).join('')}
+                <div style="font-size:10px;color:var(--text3);line-height:1.4;margin-top:6px">Se borran de este navegador y, si el almacén responde, también para el equipo.</div>
+              </div>
+            </details>`;
+          })()}
           <div class="ilus-form" id="ilus-form" style="display:none">
             <input type="text" id="ilus-nom" placeholder="Nombre del estilo (ej: Acuarela suave)" maxlength="48"/>
-            <textarea id="ilus-txt" placeholder="Prompt, preferentemente en inglés. Describí el trazo, el color y el nivel de detalle; el parecido de la persona y el recorte del fondo los agrega el editor."></textarea>
+            ${(function(){
+              const R=(window.__ilusBorrador&&window.__ilusBorrador.refs)||[];
+              return `<div style="border:1px solid var(--border);border-radius:3px;padding:7px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span style="font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:var(--text3);flex:1">Referencia visual ${R.length?'· '+R.length+'/'+ILUS_REFS_MAX:''}</span>
+                  ${R.length<ILUS_REFS_MAX?`<button class="tpl-mini" id="ilus-refadd">＋ Subir imagen</button>`:''}
+                </div>
+                ${R.length?`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:6px">
+                  ${R.map((src,i)=>`<div style="position:relative">
+                    <img src="${src}" style="width:100%;height:52px;object-fit:cover;border-radius:3px;display:block;border:1px solid var(--border)">
+                    <button class="capa-b del" data-ilusrefdel="${i}" style="position:absolute;top:-5px;right:-5px;width:16px;height:16px;line-height:1;font-size:9px;padding:0">✕</button>
+                  </div>`).join('')}
+                </div>`
+                :`<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Subí una ilustración que ya salió como querés y el estilo queda definido por ella. No hace falta escribir nada más abajo.</div>`}
+              </div>`;
+            })()}
+            <input type="file" id="ilus-reffile" accept="image/*" multiple style="display:none">
+            <textarea id="ilus-txt" placeholder="Prompt, opcional si subiste una referencia. En inglés va mejor: describí el trazo, el color y el nivel de detalle; el parecido de la persona y el recorte del fondo los agrega el editor."></textarea>
             <div class="ilus-fondo">
               <button class="tipo-btn" id="ilus-nrecorta" style="flex:1;font-size:11px">✂ Recorta el fondo</button>
               <button class="tipo-btn" id="ilus-nnorecorta" style="flex:1;font-size:11px">▣ Conserva el fondo</button>
@@ -9697,7 +9865,7 @@ function renderEditor(c){
       </div>`:`<div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Elegí un segundo color y la placa deja de ser plana: el fondo va de uno a otro.</div>`}
       ${cards.length>1?`
       <div style="display:flex;gap:5px;align-items:center;margin-top:8px;padding-top:7px;border-top:1px solid var(--border)">
-        <span style="flex:1;font-size:10.5px;color:var(--text3);line-height:1.4">${c.bgPropio?'Esta card va aparte: el fondo y los cuerpos que elijas en las demás no la tocan.':'El fondo y los cuerpos tipográficos se aplican a todas las cards a la vez.'}</span>
+        <span style="flex:1;font-size:10.5px;color:var(--text3);line-height:1.4">${c.bgPropio?'Esta card va aparte: el fondo, los cuerpos, el logo y el crédito que elijas en las demás no la tocan.':'El fondo, los cuerpos tipográficos, el logo y el crédito se aplican a todas las cards a la vez.'}</span>
         <button class="tipo-btn${c.bgPropio?' active':''}" id="bg-propio" style="font-size:11px;white-space:nowrap">${c.bgPropio?'↩ Volver al común':'Solo esta'}</button>
       </div>`:''}
     </div>
@@ -10947,13 +11115,15 @@ REGLAS IMPORTANTES:
   // Crédito del pie: input libre + atajos (INCERTIS por defecto, vacío = sin crédito)
   const fcr=document.getElementById('f-credito');
   if(fcr){ fcr.oninput=e=>{
-    cards[sel].credito=e.target.value;
+    // El crédito y el logo son identidad de la pieza, igual que el fondo: se
+    // eligen una vez. La card apartada con «Solo esta» queda afuera.
+    fondoAplicar({credito:e.target.value});
     document.querySelectorAll('.cred-pill').forEach(b=>b.classList.toggle('on', b.dataset.cred===e.target.value));
     redraw();
   }; }
   document.querySelectorAll('.cred-pill').forEach(b=>{
     b.onclick=()=>{
-      cards[sel].credito=b.dataset.cred;
+      fondoAplicar({credito:b.dataset.cred});
       if(fcr) fcr.value=b.dataset.cred;
       document.querySelectorAll('.cred-pill').forEach(x=>x.classList.toggle('on', x===b));
       redraw();
@@ -10963,7 +11133,7 @@ REGLAS IMPORTANTES:
   el.querySelectorAll('[data-clogo]').forEach(btn=>{
     btn.onclick=()=>{
       var v=btn.dataset.clogo;
-      if(v) cards[sel].logoVariant=v; else delete cards[sel].logoVariant;
+      fondoAplicar({logoVariant: v || null});
       renderEditor(cards[sel]); redraw();
     };
   });
@@ -11039,7 +11209,7 @@ REGLAS IMPORTANTES:
 
   // Ocultar el logo en esta card (independiente del interruptor global)
   const lOff=el.querySelector('#logo-off');
-  if(lOff) lOff.onclick=()=>{ cards[sel].logoOff=!cards[sel].logoOff; renderEditor(cards[sel]); redraw(); };
+  if(lOff) lOff.onclick=()=>{ fondoAplicar({logoOff: !cards[sel].logoOff}); renderEditor(cards[sel]); redraw(); };
   // ── Logo: presets de posición (un clic) ──
   // ── Bloques libres ──
   function lbBlocks(){ return cards[sel] && cards[sel].blocks ? cards[sel].blocks : null; }
@@ -11132,7 +11302,8 @@ REGLAS IMPORTANTES:
         cc.bgPropio=false;
         const ref=cards.filter(x=>x!==cc && !x.bgPropio)[0];
         if(ref){ cc.cardBg=ref.cardBg; cc.cardBg2=ref.cardBg2; cc.bgDir=ref.bgDir;
-                 cc.titleSz=ref.titleSz; cc.bodySz=ref.bodySz; cc.titleFont=ref.titleFont; }
+                 cc.titleSz=ref.titleSz; cc.bodySz=ref.bodySz; cc.titleFont=ref.titleFont;
+                 cc.credito=ref.credito; cc.logoVariant=ref.logoVariant; cc.logoOff=ref.logoOff; }
         setStatus('Esta card vuelve al común','');
       }else{
         cc.bgPropio=true;
@@ -11186,7 +11357,10 @@ function addCard(tipo){
     if(ref){ defaults.cardBg=ref.cardBg; defaults.cardBg2=ref.cardBg2; defaults.bgDir=ref.bgDir;
              if(ref.titleSz) defaults.titleSz=ref.titleSz;
              if(ref.bodySz)  defaults.bodySz=ref.bodySz;
-             if(ref.titleFont) defaults.titleFont=ref.titleFont; }
+             if(ref.titleFont) defaults.titleFont=ref.titleFont;
+             if(ref.credito!==undefined) defaults.credito=ref.credito;
+             if(ref.logoVariant) defaults.logoVariant=ref.logoVariant;
+             if(ref.logoOff) defaults.logoOff=ref.logoOff; }
   }
   if(tipo==='cover'){defaults.coverAccent='#1a1a1a';defaults.kicker='';defaults.coverImgY=0;defaults.coverTextY=5;defaults.coverBand=false;defaults.coverTypo='editorial';defaults.coverAlign='left';defaults.coverTitleSz=100;}
   if(tipo==='mapa'){defaults.mapZoom=13;defaults.mapPinColor='#D94F1C';}
@@ -13149,6 +13323,8 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v194','Un estilo puede ser una imagen','Escribir con palabras un trazo, una paleta y un nivel de detalle es difícil y sale mal; mostrar una ilustración que ya salió bien, no. Ahora un estilo guardado puede tener prompt escrito, imágenes de referencia, o las dos cosas. «✦ Desde una imagen» abre el formulario y va derecho al archivo: le ponés nombre, subís la ilustración que querés repetir y listo, sin escribir nada. Al usarlo, la referencia viaja junto a la foto de la card y el prompt le dice al modelo que la mire como estilo y no como contenido —sin esa línea devuelve la referencia retocada en vez de usarla de guía—. Las referencias se guardan a 640 px en JPEG: a esa medida el modelo ve trazo, paleta y detalle, y entran veinte estilos en el navegador; en PNG a tamaño completo, tres llenaban el almacenamiento. BORRAR: existía, pero escondido detrás del desplegable, de a uno y solo con el estilo seleccionado; con diecisiete acumulados era inusable. Ahora hay un bloque «Mis estilos» con todos listados, su miniatura y una ✕ por fila. ITERAR: el ajuste puntual seguía siendo de un solo uso. Si salió bien y lo querés repetir, «⤓ Sumar este ajuste al estilo» lo incorpora al prompt guardado y deja de haber que reescribirlo.'],
+    ['v193','El logo y el crédito, también de la pieza','Faltaban dos que son identidad tanto como el fondo: la variante del logo —blanco, negro, rojo o el global—, el ocultarlo, y el crédito del pie. Se elegían card por card. Ahora viajan con el resto: se eligen una vez, van a todas, una card nueva nace con ellos, y «↩ Volver al común» los trae de vuelta junto con el fondo y los cuerpos. El escape sigue siendo el mismo botón «Solo esta». Nota: si una foto necesita su propio crédito —una agencia distinta en una sola placa—, ése es el caso para apartar esa card.'],
     ['v192','El estilo es de la pieza','Lo mismo que el fondo pasaba con los cuerpos tipográficos: elegir el tamaño del título o del epígrafe cambiaba una sola placa, y en un carrusel de ocho había que repetirlo ocho veces. Ahora el tamaño del título, el del cuerpo y la fuente del título viajan con el fondo: se eligen una vez y van a todas, y una card nueva nace con los de la pieza. El escape es el mismo botón: «Solo esta» aparta la card entera, del fondo y de los cuerpos, y no se suma otro control a un panel que ya es largo. Y aparece un motivo que estaba escondido: la card de infografía tiene un AJUSTE AUTOMÁTICO que achica el cuerpo hasta que el texto entre en su zona. Estaba en el código desde siempre pero nunca tuvo botón, así que cada placa terminaba con un cuerpo distinto según cuánto texto tuviera y no había forma de saber por qué. Ahora se ve y se puede apagar, para que respete el tamaño elegido.'],
     ['v191','El fondo es de la pieza','El fondo era decoración de cada card suelta: en un carrusel de ocho placas había que elegir el color ocho veces. Pero es identidad de la pieza, no de la card. Ahora se elige una vez y va a todas —el color, el segundo color del degradado y la dirección—, y una card nueva nace con el fondo que ya tienen las demás en vez de romper la pieza. Lo que no se pierde es la excepción: si una placa va distinta a propósito, el botón «Solo esta» la aparta y queda congelada, y ninguna otra la pisa. El rótulo del bloque dice siempre a cuántas cards va a ir el próximo cambio, antes de que pase. «↩ Volver al común» la devuelve al grupo con el fondo que están usando las demás. El logo ya funcionaba así desde antes: los archivos y la variante activa son globales, con override por card cuando hace falta.'],
     ['v190','El fondo deja de ser plano','El fondo de la card era un color y nada más. Ahora se puede elegir un segundo color y la placa va de uno a otro, en cuatro direcciones: de arriba abajo, de lado a lado, en diagonal o desde el centro. El botón «Sugerir» no tira un color al azar: toma una variante del color que ya elegiste —oscurece si el fondo es claro, aclara si es oscuro—, que es lo que hace que no parezca un degradado de plantilla. El degradado vive solo donde se pinta la placa entera; el fundido de bordes, el filete de la foto y las decisiones de contraste del texto siguen usando el primer color, porque necesitan un color y no un degradado.'],
