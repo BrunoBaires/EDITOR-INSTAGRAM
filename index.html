@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v194 «un estilo puede ser una imagen»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v195 «la ilustración se dibuja sola»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v194 «un estilo puede ser una imagen»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v195 «la ilustración se dibuja sola»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -2113,6 +2113,239 @@ function drawPhotoRule(x,y,w,h,bgHex,radius){
   else ctx.rect(x+0.5,y+0.5,w-1,h-1);
   ctx.stroke(); ctx.restore();
 }
+// ══════════════════════════════════════════════════════════════════
+// PINTADO  ·  la ilustración se dibuja sola (v195)
+// ══════════════════════════════════════════════════════════════════
+// Lo primero, para no vender lo que no es: gpt-image devuelve un PNG plano, no
+// las pinceladas. Procreate graba los trazos de verdad mientras dibujás; acá no
+// hay trazos que grabar. Lo que se hace es reconstruir un proceso creíble desde
+// la imagen terminada, con las tres etapas con las que trabaja un ilustrador:
+// el boceto, las manchas de color plano, y el detalle encima.
+//
+// Todo sale de `t`: cada cuadro se calcula solo, sin acumular estado. Es lo que
+// permite que se grabe en el MP4 igual que se ve, y que en t=1 el resultado sea
+// exactamente la imagen original, sin rastro del efecto.
+const pintCache={};
+
+// El mapa de ORDEN dice, para cada punto, en qué momento aparece. Es lo único
+// que define el recorrido: una barrida en diagonal —como quien pinta de arriba
+// a la izquierda hacia abajo a la derecha—, ensuciada con ruido para que el
+// frente no sea una línea recta, y adelantada en las zonas oscuras, porque un
+// ilustrador bloquea las sombras antes que las luces.
+function pintOrden(px, lw, lh){
+  const orden=new Float32Array(lw*lh);
+  // ruido de valor: una grilla chica interpolada, sin dependencias
+  const gw=9, gh=11, g=new Float32Array(gw*gh);
+  let semilla=1337;
+  const rnd=()=>{ semilla=(semilla*1103515245+12345)&0x7fffffff; return semilla/0x7fffffff; };
+  for(let i=0;i<gw*gh;i++) g[i]=rnd();
+  const suave=v=>v*v*(3-2*v);
+  function ruido(u,v){
+    const fx=u*(gw-1), fy=v*(gh-1);
+    const x0=Math.floor(fx), y0=Math.floor(fy);
+    const x1=Math.min(gw-1,x0+1), y1=Math.min(gh-1,y0+1);
+    const tx=suave(fx-x0), ty=suave(fy-y0);
+    const a=g[y0*gw+x0]*(1-tx)+g[y0*gw+x1]*tx;
+    const b=g[y1*gw+x0]*(1-tx)+g[y1*gw+x1]*tx;
+    return a*(1-ty)+b*ty;
+  }
+  let mn=1e9, mx=-1e9;
+  for(let y=0;y<lh;y++) for(let x=0;x<lw;x++){
+    const i=y*lw+x, p=i*4;
+    const lum=(px[p]*0.299+px[p+1]*0.587+px[p+2]*0.114)/255;
+    const alfa=px[p+3]/255;
+    const u=x/(lw-1), v=y/(lh-1);
+    const barrida=u*0.58+v*0.42;
+    let o=barrida*0.76 + ruido(u,v)*0.24 - (1-lum)*0.10;
+    // lo transparente no se pinta: que quede afuera del recorrido
+    if(alfa<0.04) o=2;
+    orden[i]=o;
+    if(o<2){ if(o<mn) mn=o; if(o>mx) mx=o; }
+  }
+  const rg=Math.max(1e-6,mx-mn);
+  for(let i=0;i<orden.length;i++) orden[i]= orden[i]>=2 ? 2 : (orden[i]-mn)/rg;
+  return orden;
+}
+
+// El boceto: bordes por diferencia con el desenfoque —un unsharp al revés—,
+// dibujados en grafito sobre transparente.
+function pintBordes(el, aw, ah){
+  const cv=document.createElement('canvas'); cv.width=aw; cv.height=ah;
+  const g=cv.getContext('2d',{willReadFrequently:true});
+  g.drawImage(el,0,0,aw,ah);
+  const base=g.getImageData(0,0,aw,ah);
+  const cv2=document.createElement('canvas'); cv2.width=aw; cv2.height=ah;
+  const g2=cv2.getContext('2d',{willReadFrequently:true});
+  g2.filter='blur(2px)'; g2.drawImage(el,0,0,aw,ah); g2.filter='none';
+  const suave=g2.getImageData(0,0,aw,ah);
+  const out=g.createImageData(aw,ah);
+  for(let i=0;i<aw*ah;i++){
+    const p=i*4;
+    const l1=(base.data[p]*0.299+base.data[p+1]*0.587+base.data[p+2]*0.114);
+    const l2=(suave.data[p]*0.299+suave.data[p+1]*0.587+suave.data[p+2]*0.114);
+    let d=Math.abs(l1-l2)*3.2;
+    if(d>255) d=255;
+    if(d<18) d=0;                                  // ruido de fondo, afuera
+    out.data[p]=30; out.data[p+1]=28; out.data[p+2]=26;
+    out.data[p+3]=Math.round(d*0.80*(base.data[p+3]/255));
+  }
+  g.putImageData(out,0,0);
+  return cv;
+}
+
+// Las manchas: la imagen posterizada a pocos tonos y desenfocada, que es como
+// se ve una base de color plano antes de que llegue el detalle.
+function pintPlano(el, aw, ah){
+  const cv=document.createElement('canvas'); cv.width=aw; cv.height=ah;
+  const g=cv.getContext('2d',{willReadFrequently:true});
+  g.filter='blur(3px) saturate(115%)'; g.drawImage(el,0,0,aw,ah); g.filter='none';
+  const d=g.getImageData(0,0,aw,ah);
+  const N=5, paso=255/(N-1);
+  for(let i=0;i<aw*ah;i++){
+    const p=i*4;
+    d.data[p]  =Math.round(Math.round(d.data[p]  /paso)*paso);
+    d.data[p+1]=Math.round(Math.round(d.data[p+1]/paso)*paso);
+    d.data[p+2]=Math.round(Math.round(d.data[p+2]/paso)*paso);
+  }
+  g.putImageData(d,0,0);
+  return cv;
+}
+
+function pintPreparar(el, clave){
+  if(pintCache[clave]) return pintCache[clave];
+  const sw=el.naturalWidth||el.width, sh=el.naturalHeight||el.height;
+  if(!sw||!sh) return null;
+  const k=Math.min(1, 240/Math.max(sw,sh));
+  const lw=Math.max(8,Math.round(sw*k)), lh=Math.max(8,Math.round(sh*k));
+  const cv=document.createElement('canvas'); cv.width=lw; cv.height=lh;
+  const g=cv.getContext('2d',{willReadFrequently:true});
+  g.drawImage(el,0,0,lw,lh);
+  const px=g.getImageData(0,0,lw,lh).data;
+  const ka=Math.min(1, 760/Math.max(sw,sh));
+  const aw=Math.max(16,Math.round(sw*ka)), ah=Math.max(16,Math.round(sh*ka));
+  const dato={ orden:pintOrden(px,lw,lh), lw:lw, lh:lh,
+               bordes:pintBordes(el,aw,ah), plano:pintPlano(el,aw,ah),
+               mask:document.createElement('canvas'), tmp:document.createElement('canvas') };
+  dato.mask.width=lw; dato.mask.height=lh;
+  pintCache[clave]=dato;
+  return dato;
+}
+
+// La máscara del cuadro: opaca donde ya se pintó, transparente donde todavía
+// no, con un frente blando de unos pocos puntos para que el borde parezca
+// pincel y no recorte de tijera.
+function pintMascara(dato, avance){
+  const {orden,lw,lh}=dato;
+  // Sin willReadFrequently: esta canvas se escribe y se dibuja, nunca se lee.
+  // Con la bandera puesta el navegador la deja en memoria de CPU y cada
+  // drawImage escalado costaba una subida entera a la placa, tres veces por
+  // cuadro. Y el ImageData se reusa: crear uno nuevo por etapa era basura.
+  const g=dato.mask.getContext('2d');
+  if(!dato._im) dato._im=g.createImageData(lw,lh);
+  const im=dato._im;
+  const borde=0.085;
+  for(let i=0;i<orden.length;i++){
+    const o=orden[i];
+    let a;
+    if(o>=2) a=1;                                  // transparente del PNG: pasa
+    else if(o<=avance-borde) a=1;
+    else if(o>=avance) a=0;
+    else { const u=(avance-o)/borde; a=u*u*(3-2*u); }
+    const p=i*4;
+    im.data[p]=255; im.data[p+1]=255; im.data[p+2]=255;
+    im.data[p+3]=Math.round(a*255);
+  }
+  g.putImageData(im,0,0);
+  return dato.mask;
+}
+
+// Dónde está la mano en este momento: el promedio de los puntos que se están
+// pintando justo ahora. Sin esto el efecto se lee como un barrido; con el punto
+// se lee como alguien dibujando.
+function pintFrente(dato, avance){
+  const {orden,lw,lh}=dato;
+  let sx=0, sy=0, n=0;
+  // De a cuatro puntos: el promedio no cambia y cuesta la cuarta parte.
+  for(let i=0;i<orden.length;i+=4){
+    const o=orden[i];
+    if(o>=2) continue;
+    if(Math.abs(o-avance)<0.02){ sx+=i%lw; sy+=(i/lw)|0; n++; }
+  }
+  if(!n) return null;
+  return {x:(sx/n)/lw, y:(sy/n)/lh};
+}
+
+// Las tres capas se componen en una canvas aparte y recién ahí se vuelca UNA
+// vez sobre la placa. Antes cada etapa se volcaba por su cuenta: tres idas y
+// vueltas con la canvas principal, y cada una obliga al navegador a esperar a
+// que termine lo anterior. Medido, esa espera era casi todo el costo del
+// efecto; el recorte en sí cuesta medio milisegundo.
+function pintLienzo(dato, campo, tw, th){
+  const cv=dato[campo] || (dato[campo]=document.createElement('canvas'));
+  if(cv.width!==tw||cv.height!==th){ cv.width=tw; cv.height=th; }
+  return cv;
+}
+function pintDibujar(el, clave, dx, dy, dw, dh, t){
+  const dato=pintPreparar(el, clave);
+  if(!dato){ ctx.drawImage(el,dx,dy,dw,dh); return false; }
+  const p=Math.max(0,Math.min(1,t));
+  const tramo=(a,b)=>Math.max(0,Math.min(1,(p-a)/(b-a)));
+  const pBoceto=tramo(0.00,0.34);
+  const pPlano =tramo(0.22,0.70);
+  const pFinal =tramo(0.55,1.00);
+  // Terminado: la imagen tal cual, sin una sola operación de más.
+  if(pFinal>=1){ ctx.drawImage(el,dx,dy,dw,dh); return true; }
+
+  // El armado se hace a resolucion acotada y se agranda al volcarlo. El costo
+  // de componer crece con el cuadrado del lado, asi que sin tope una
+  // exportacion a 2x costaria cuatro veces lo que el preview. Y no se pierde
+  // nada: las manchas van desenfocadas a proposito y el frente de la mascara es
+  // blando, o sea que no hay detalle fino que defender. El unico cuadro que
+  // necesita nitidez es el ultimo, y ese sale por el atajo de arriba con la
+  // imagen original a tamano completo.
+  const TOPE=1000;
+  const esc=Math.min(1, TOPE/Math.max(dw,dh));
+  const tw=Math.max(1,Math.round(dw*esc)), th=Math.max(1,Math.round(dh*esc));
+  const tmp=pintLienzo(dato,'tmp',tw,th), scr=pintLienzo(dato,'scr',tw,th);
+  const gt=tmp.getContext('2d'), gs=scr.getContext('2d');
+  gt.clearRect(0,0,tw,th);
+  gt.imageSmoothingQuality='medium'; gs.imageSmoothingQuality='medium';
+
+  // Una capa: se recorta en la canvas de apoyo y se apila en la de armado.
+  // Una etapa tapada del todo por la siguiente no se dibuja: es trabajo que
+  // no se ve.
+  function capa(fuente, avance){
+    if(avance<=0) return;
+    gs.clearRect(0,0,tw,th);
+    gs.drawImage(fuente,0,0,tw,th);
+    if(avance<1){
+      gs.globalCompositeOperation='destination-in';
+      gs.drawImage(pintMascara(dato,avance),0,0,tw,th);
+      gs.globalCompositeOperation='source-over';
+    }
+    gt.drawImage(scr,0,0);
+  }
+  if(pPlano<1) capa(dato.bordes, pBoceto);
+  if(pFinal<1) capa(dato.plano,  pPlano);
+  capa(el, pFinal);
+
+  ctx.drawImage(tmp,dx,dy,dw,dh);
+
+  // El punto del pincel, sobre la placa y no dentro del armado: así no queda
+  // recortado por la máscara de la etapa siguiente.
+  const fr=pintFrente(dato, pFinal>0.02?pFinal:pPlano);
+  if(fr){
+    const r=Math.max(3, dw*0.014);
+    ctx.save();
+    ctx.globalAlpha=0.55;
+    ctx.beginPath(); ctx.arc(dx+fr.x*dw, dy+fr.y*dh, r, 0, Math.PI*2);
+    ctx.fillStyle='rgba(20,20,20,0.35)'; ctx.fill();
+    ctx.lineWidth=Math.max(1,r*0.18); ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.stroke();
+    ctx.restore();
+  }
+  return true;
+}
+
 function drawMedia(m,x,y,w,h,t_anim){
   if(!m)return;
   const el=m.el;
@@ -2178,7 +2411,15 @@ function drawMedia(m,x,y,w,h,t_anim){
   // Desplazamiento libre en píxeles (v155): el arrastre suma acá, sin tope.
   // cx/cy quedan como encuadre base; offX/offY son el corrimiento a mano, y
   // permiten sacar la foto todo lo que haga falta fuera de la zona.
-  ctx.drawImage(el,x+(w-dw)*cx+(m.offX||0),y+(h-dh)*cy+(m.offY||0),dw,dh);
+  {
+    const _px=x+(w-dw)*cx+(m.offX||0), _py=y+(h-dh)*cy+(m.offY||0);
+    // El pintado solo tiene sentido en una imagen fija: un video ya se mueve.
+    if(m.pintado && m.type==='img' && t_anim!==undefined){
+      pintDibujar(el, m.dataUrl||m.thumbUrl||'x', _px,_py,dw,dh, t_anim);
+    }else{
+      ctx.drawImage(el,_px,_py,dw,dh);
+    }
+  }
   ctx.filter='none';
   ctx.restore();
   // Viraje cinematográfico: viñeteado + luz cálida, encima de la foto ya corregida.
@@ -8858,6 +9099,9 @@ function renderEditor(c){
           <button class="tipo-btn${m.cinematic?' active':''}" id="cine-toggle" style="flex:1">🎬 Cinemático</button>
           <button class="tipo-btn${cards[sel].blurBg?' active':''}" id="blurbg-toggle" style="flex:1">◎ Blur</button>
         </div>
+        ${m.type==='img'?`
+        <button class="tipo-btn${m.pintado?' active':''}" id="pint-toggle" style="width:100%;margin-top:6px;font-size:11px">✎ Pintado — se dibuja sola</button>
+        <div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">La ilustración se arma frente a la cámara: primero el boceto, después las manchas de color y al final el detalle, con el punto del pincel siguiendo el trazo. Termina siendo exactamente la imagen original. Anda en el preview y en el MP4; en el PNG no se nota porque es un solo cuadro.</div>`:''}
         <button class="tipo-btn${c.fotoSobreTexto?' active':''}" id="foto-sobre-texto" style="width:100%;margin-top:6px;font-size:11px" title="La figura de la foto pasa por delante del título, como en una tapa de revista">${c.fotoSobreTexto?'▣ La foto tapa al texto':'▢ La foto tapa al texto'}</button>
         <div style="font-size:10.5px;color:var(--text3);line-height:1.45;margin-top:5px">Para el efecto de tapa de revista: el sujeto recortado pasa por delante del título. Necesita una foto <b>con el fondo recortado</b> —un PNG con transparencia—; con una foto opaca el texto desaparece entero.</div>
         ${m.kenBurns?`
@@ -10173,6 +10417,11 @@ function renderEditor(c){
       // de partida y sin ella, y estas dos ramas son distintas.
 
       // ── Ken Burns ──
+      {const pt=el.querySelector('#pint-toggle');
+       if(pt) pt.onclick=()=>{ const m2=mediaCache[c.id]; if(!m2) return;
+         m2.pintado=!m2.pintado;
+         setStatus(m2.pintado?'La ilustración se va a dibujar sola':'Pintado apagado','');
+         renderEditor(cards[sel]); repintar(); };}
       {const fst=el.querySelector('#foto-sobre-texto');
        if(fst) fst.onclick=()=>{ cards[sel].fotoSobreTexto=!cards[sel].fotoSobreTexto;
          setStatus(cards[sel].fotoSobreTexto?'La foto pasa por delante del texto':'La foto vuelve atrás del texto','');
@@ -13323,6 +13572,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v195','La ilustración se dibuja sola','Un efecto nuevo para las imágenes fijas: la ilustración se arma frente a la cámara, como una repetición de Procreate. Primero el boceto —los bordes en grafito—, después las manchas de color plano, y al final el detalle encima, con un punto de pincel siguiendo el frente del trazo. Aclaración honesta sobre qué es y qué no: gpt-image devuelve un PNG plano, no las pinceladas. Procreate graba los trazos de verdad mientras dibujás; acá no hay trazos que grabar, así que se reconstruye un proceso creíble desde la imagen terminada. El recorrido sale de un mapa de orden: una barrida en diagonal ensuciada con ruido para que el frente no sea una línea recta, y adelantada en las zonas oscuras, porque un ilustrador bloquea las sombras antes que las luces. Todo se calcula desde el tiempo del cuadro, sin acumular estado: por eso se graba en el MP4 igual que se ve en el preview, y en el último cuadro queda exactamente la imagen original, sin rastro del efecto. Está en Efectos, junto a Ken Burns y Cinemático, y aparece solo en imágenes fijas: un video ya se mueve solo.'],
     ['v194','Un estilo puede ser una imagen','Escribir con palabras un trazo, una paleta y un nivel de detalle es difícil y sale mal; mostrar una ilustración que ya salió bien, no. Ahora un estilo guardado puede tener prompt escrito, imágenes de referencia, o las dos cosas. «✦ Desde una imagen» abre el formulario y va derecho al archivo: le ponés nombre, subís la ilustración que querés repetir y listo, sin escribir nada. Al usarlo, la referencia viaja junto a la foto de la card y el prompt le dice al modelo que la mire como estilo y no como contenido —sin esa línea devuelve la referencia retocada en vez de usarla de guía—. Las referencias se guardan a 640 px en JPEG: a esa medida el modelo ve trazo, paleta y detalle, y entran veinte estilos en el navegador; en PNG a tamaño completo, tres llenaban el almacenamiento. BORRAR: existía, pero escondido detrás del desplegable, de a uno y solo con el estilo seleccionado; con diecisiete acumulados era inusable. Ahora hay un bloque «Mis estilos» con todos listados, su miniatura y una ✕ por fila. ITERAR: el ajuste puntual seguía siendo de un solo uso. Si salió bien y lo querés repetir, «⤓ Sumar este ajuste al estilo» lo incorpora al prompt guardado y deja de haber que reescribirlo.'],
     ['v193','El logo y el crédito, también de la pieza','Faltaban dos que son identidad tanto como el fondo: la variante del logo —blanco, negro, rojo o el global—, el ocultarlo, y el crédito del pie. Se elegían card por card. Ahora viajan con el resto: se eligen una vez, van a todas, una card nueva nace con ellos, y «↩ Volver al común» los trae de vuelta junto con el fondo y los cuerpos. El escape sigue siendo el mismo botón «Solo esta». Nota: si una foto necesita su propio crédito —una agencia distinta en una sola placa—, ése es el caso para apartar esa card.'],
     ['v192','El estilo es de la pieza','Lo mismo que el fondo pasaba con los cuerpos tipográficos: elegir el tamaño del título o del epígrafe cambiaba una sola placa, y en un carrusel de ocho había que repetirlo ocho veces. Ahora el tamaño del título, el del cuerpo y la fuente del título viajan con el fondo: se eligen una vez y van a todas, y una card nueva nace con los de la pieza. El escape es el mismo botón: «Solo esta» aparta la card entera, del fondo y de los cuerpos, y no se suma otro control a un panel que ya es largo. Y aparece un motivo que estaba escondido: la card de infografía tiene un AJUSTE AUTOMÁTICO que achica el cuerpo hasta que el texto entre en su zona. Estaba en el código desde siempre pero nunca tuvo botón, así que cada placa terminaba con un cuerpo distinto según cuánto texto tuviera y no había forma de saber por qué. Ahora se ve y se puede apagar, para que respete el tamaño elegido.'],
