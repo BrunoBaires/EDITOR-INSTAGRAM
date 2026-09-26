@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v196 «se pinta mancha por mancha»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v197 «pinceladas y paleta»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v196 «se pinta mancha por mancha»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v197 «pinceladas y paleta»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -2240,24 +2240,57 @@ function pintOrden(px, lw, lh, R){
     acum+=dur*(1-SOLAPE*0.35);
   }
   const fin=acum + (largo[R.n-1]||0)*0.2;
-  // Dentro de cada mancha, un trazo corto: se llena en diagonal, rapido. El
-  // centro de la region es el punto de partida, como quien apoya el pincel y
-  // abre desde ahi.
+  // Dentro de cada mancha, PINCELADAS. Antes se abria desde el centro hacia
+  // afuera y se veia como una gota de tinta cayendo en agua: la forma del
+  // frente era un circulo, y eso no lo hace ninguna mano. Un pincel va y
+  // viene en franjas paralelas —ida, vuelta, ida— hasta tapar el area. Eso es
+  // lo que se calcula acá: a que franja pertenece cada punto y cuanto avanzo
+  // el pincel dentro de esa franja.
   const cx=new Float32Array(R.n), cy=new Float32Array(R.n), cn=new Float32Array(R.n);
   for(let i=0;i<N;i++){ const k=R.reg[i]; if(k<0) continue; cx[k]+=i%lw; cy[k]+=(i/lw)|0; cn[k]++; }
   for(let k=0;k<R.n;k++){ if(cn[k]){ cx[k]/=cn[k]; cy[k]/=cn[k]; } }
-  const rad=new Float32Array(R.n);
+  // Cada mancha con su angulo: si todas se pintaran en la misma direccion se
+  // notaria la maquina. Sale del tamaño de la region, asi que es estable.
+  const ang=new Float32Array(R.n), anchoTrazo=new Float32Array(R.n);
+  const ex=new Float32Array(R.n).fill(-1e9), en=new Float32Array(R.n).fill(1e9);
+  const px2=new Float32Array(R.n).fill(-1e9), pn=new Float32Array(R.n).fill(1e9);
+  for(let k=0;k<R.n;k++) ang[k]=(-0.55 + ((k*0.37)%1)*1.1);   // entre -0.55 y 0.55 rad
+  // Extremos de cada region en el eje del trazo y en el perpendicular.
   for(let i=0;i<N;i++){
     const k=R.reg[i]; if(k<0) continue;
-    const d=Math.hypot(i%lw-cx[k], ((i/lw)|0)-cy[k]);
-    if(d>rad[k]) rad[k]=d;
+    const x=i%lw, y=(i/lw)|0, c=Math.cos(ang[k]), sn2=Math.sin(ang[k]);
+    const u= x*c + y*sn2;                            // a lo largo del trazo
+    const v=-x*sn2 + y*c;                            // de un trazo al siguiente
+    if(u>ex[k]) ex[k]=u; if(u<en[k]) en[k]=u;
+    if(v>px2[k]) px2[k]=v; if(v<pn[k]) pn[k]=v;
+  }
+  // El ancho del trazo se fija DESPUES de medir la region, y se lo obliga a
+  // entrar al menos siete veces en ella. Calculado solo por el area, una mancha
+  // grande se llenaba en tres pasadas y no se leia como pincel sino como un
+  // barrido; un pincel deja ver sus pasadas.
+  for(let k=0;k<R.n;k++){
+    const cruce=Math.max(1, px2[k]-pn[k]);
+    anchoTrazo[k]=Math.max(1.6, Math.min(Math.sqrt(R.areas[k])*0.30, cruce/7));
   }
   for(let i=0;i<N;i++){
     const k=R.reg[i];
     if(k<0){ orden[i]=2; continue; }                 // transparente: no se pinta
-    const d=Math.hypot(i%lw-cx[k], ((i/lw)|0)-cy[k]) / Math.max(1,rad[k]);
-    orden[i]=(inicio[k] + d*largo[k]) / fin;
+    const x=i%lw, y=(i/lw)|0, c=Math.cos(ang[k]), sn2=Math.sin(ang[k]);
+    const u= x*c + y*sn2, v=-x*sn2 + y*c;
+    const nTraz=Math.max(1, Math.ceil((px2[k]-pn[k])/anchoTrazo[k]));
+    const franja=Math.min(nTraz-1, Math.floor((v-pn[k])/anchoTrazo[k]));
+    let a=(u-en[k])/Math.max(1e-6, ex[k]-en[k]);     // 0..1 dentro de la franja
+    if(franja%2===1) a=1-a;                          // ida y vuelta, como la mano
+    // 82% del tiempo de la mancha es el barrido de franjas; el 18% restante es
+    // el avance dentro de cada una, asi cada pasada se ve como una pincelada.
+    const dentro=(franja + a)/nTraz;
+    // El 25% inicial del turno es el viaje a la paleta: la pintura todavia no
+    // toca el papel.
+    orden[i]=(inicio[k] + (0.25 + 0.75*dentro)*largo[k]) / fin;
   }
+  // Los tiempos de cada mancha quedan a mano para la paleta y el pincel.
+  orden._slots=[];
+  for(let k=0;k<R.n;k++) orden._slots.push({i:inicio[k]/fin, d:largo[k]/fin, cx:cx[k]/lw, cy:cy[k]/lh});
   return orden;
 }
 
@@ -2266,7 +2299,7 @@ function pintOrden(px, lw, lh, R){
 // cada mancha se pinta con SU color —el promedio de sus propios píxeles—, que
 // es literalmente lo que hace alguien cuando bloquea una base de color. Se arma
 // chica y se agranda al componerla: los bordes quedan blandos, como pintura.
-function pintPlano(px, lw, lh, R){
+function pintPlano(px, lw, lh, R, colores){
   const cv=document.createElement('canvas'); cv.width=lw; cv.height=lh;
   const g=cv.getContext('2d');
   const im=g.createImageData(lw,lh);
@@ -2282,6 +2315,11 @@ function pintPlano(px, lw, lh, R){
     im.data[p]=sr[k]/n; im.data[p+1]=sg[k]/n; im.data[p+2]=sb[k]/n; im.data[p+3]=255;
   }
   g.putImageData(im,0,0);
+  // Los colores promedio son, literalmente, la paleta con la que se pinta.
+  if(colores) for(let k=0;k<R.n;k++){
+    const n=sn[k]||1;
+    colores.push('rgb('+Math.round(sr[k]/n)+','+Math.round(sg[k]/n)+','+Math.round(sb[k]/n)+')');
+  }
   return cv;
 }
 
@@ -2309,8 +2347,11 @@ function pintPreparar(el, clave){
   const ka=Math.min(1, 760/Math.max(sw,sh));
   const aw=Math.max(16,Math.round(sw*ka)), ah=Math.max(16,Math.round(sh*ka));
   const R=pintRegiones(px,lw,lh);
-  const dato={ orden:pintOrden(px,lw,lh,R), lw:lw, lh:lh, regiones:R.n,
-               plano:pintPlano(px,lw,lh,R),
+  const colores=[];
+  const orden=pintOrden(px,lw,lh,R);
+  const dato={ orden:orden, slots:orden._slots||[], colores:colores,
+               lw:lw, lh:lh, regiones:R.n,
+               plano:pintPlano(px,lw,lh,R,colores),
                suave:pintSuave(el,aw,ah),
                mask:document.createElement('canvas'), tmp:document.createElement('canvas') };
   dato.mask.width=lw; dato.mask.height=lh;
@@ -2330,7 +2371,9 @@ function pintMascara(dato, avance){
   const g=dato.mask.getContext('2d');
   if(!dato._im) dato._im=g.createImageData(lw,lh);
   const im=dato._im;
-  const borde=0.055;
+  // Borde corto: un pincel deja un canto, no un degradado de aerografo. Lo que
+  // da la textura es la forma del frente —las franjas—, no su blandura.
+  const borde=0.022;
   for(let i=0;i<orden.length;i++){
     const o=orden[i];
     let a;
@@ -2372,6 +2415,82 @@ function pintLienzo(dato, campo, tw, th){
   if(cv.width!==tw||cv.height!==th){ cv.width=tw; cv.height=th; }
   return cv;
 }
+// La paleta y el pincel. Es lo que convierte un relleno progresivo en algo que
+// se lee como una mano trabajando: el pincel va al color, lo carga, cruza hasta
+// el area y la llena; despues vuelve por el siguiente. Los colores de la paleta
+// no son decorativos: son exactamente los promedios con los que se pinta cada
+// mancha. Todo se dibuja SOBRE la placa, nunca dentro del armado, asi la
+// mascara de la etapa siguiente no lo recorta. Y desaparece al terminar, porque
+// en el ultimo cuadro el efecto sale por el atajo de la imagen limpia.
+function pintPaletaYPincel(dato, dx, dy, dw, dh, p, pPlano, pSuave, pFinal){
+  const slots=dato.slots||[], cols=dato.colores||[];
+  if(!slots.length) return;
+
+  // ── qué mancha se está pintando ahora ──
+  let k=-1, u=0;
+  for(let j=0;j<slots.length;j++){
+    const s0=slots[j].i, s1=slots[j].i+slots[j].d;
+    if(p>=s0 && p<s1){ k=j; u=(p-s0)/Math.max(1e-6,slots[j].d); break; }
+    if(p<s0) break;
+    k=j; u=1;
+  }
+  if(k<0) k=0;
+
+  // ── la paleta: una columna de tonos al costado ──
+  const N=Math.min(cols.length, 9);
+  const r=Math.max(5, dw*0.021);
+  const px0=dx+dw*0.052, py0=dy+dh*0.5-(N-1)*r*1.55/2;
+  const desvanece=Math.max(0, Math.min(1, (1-pFinal)*3.2));   // se va al final
+  ctx.save();
+  ctx.globalAlpha=0.92*desvanece;
+  // la madera de la paleta
+  ctx.beginPath();
+  if(ctx.roundRect) ctx.roundRect(px0-r*1.7, py0-r*1.9, r*3.4, (N-1)*r*1.55+r*3.8, r);
+  else ctx.rect(px0-r*1.7, py0-r*1.9, r*3.4, (N-1)*r*1.55+r*3.8);
+  ctx.fillStyle='rgba(28,26,24,0.30)'; ctx.fill();
+  for(let j=0;j<N;j++){
+    const cy=py0+j*r*1.55;
+    ctx.beginPath(); ctx.arc(px0, cy, r*0.78, 0, Math.PI*2);
+    ctx.fillStyle=cols[j]||'#888'; ctx.fill();
+    if(j===k){                                       // el que se está usando
+      ctx.lineWidth=Math.max(1.4, r*0.20);
+      ctx.strokeStyle='rgba(255,255,255,0.95)'; ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  // ── el pincel ──
+  // Primer cuarto del turno: está en la paleta cargando color. Después cruza
+  // hasta la mancha. El resto del turno va con el frente del trazo.
+  const enPaleta={ x:px0, y:py0+Math.min(k,N-1)*r*1.55 };
+  const fr=pintFrente(dato, pFinal>0.02?pFinal:(pSuave>0.02?pSuave:pPlano));
+  const enTela=fr ? {x:dx+fr.x*dw, y:dy+fr.y*dh}
+                  : {x:dx+slots[k].cx*dw, y:dy+slots[k].cy*dh};
+  let bx, by, cargando=false;
+  if(u<0.12){ bx=enPaleta.x; by=enPaleta.y+Math.sin(p*90)*r*0.25; cargando=true; }
+  else if(u<0.26){
+    const q=(u-0.12)/0.14, e=q*q*(3-2*q);
+    bx=enPaleta.x+(enTela.x-enPaleta.x)*e;
+    by=enPaleta.y+(enTela.y-enPaleta.y)*e - Math.sin(e*Math.PI)*dh*0.05;  // arco
+  }else{ bx=enTela.x; by=enTela.y; }
+
+  ctx.save();
+  ctx.globalAlpha=desvanece;
+  // el mango, apuntando desde arriba a la derecha
+  const L=Math.max(18, dw*0.10);
+  ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(bx+L*0.62, by-L); ctx.lineTo(bx+r*0.25, by-r*0.5);
+  ctx.lineWidth=Math.max(2, r*0.42); ctx.strokeStyle='rgba(40,34,28,0.75)'; ctx.stroke();
+  // la virola
+  ctx.beginPath(); ctx.moveTo(bx+r*0.30, by-r*0.60); ctx.lineTo(bx+r*0.12, by-r*0.22);
+  ctx.lineWidth=Math.max(2, r*0.50); ctx.strokeStyle='rgba(180,176,168,0.85)'; ctx.stroke();
+  // la punta, del color que está cargando
+  ctx.beginPath(); ctx.arc(bx, by, r*(cargando?0.62:0.52), 0, Math.PI*2);
+  ctx.fillStyle=cols[k]||'#666'; ctx.fill();
+  ctx.lineWidth=Math.max(1, r*0.14); ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.stroke();
+  ctx.restore();
+}
+
 function pintDibujar(el, clave, dx, dy, dw, dh, t){
   const dato=pintPreparar(el, clave);
   if(!dato){ ctx.drawImage(el,dx,dy,dw,dh); return false; }
@@ -2421,18 +2540,7 @@ function pintDibujar(el, clave, dx, dy, dw, dh, t){
 
   ctx.drawImage(tmp,dx,dy,dw,dh);
 
-  // El punto del pincel, sobre la placa y no dentro del armado: así no queda
-  // recortado por la máscara de la etapa siguiente.
-  const fr=pintFrente(dato, pFinal>0.02?pFinal:(pSuave>0.02?pSuave:pPlano));
-  if(fr){
-    const r=Math.max(3, dw*0.014);
-    ctx.save();
-    ctx.globalAlpha=0.55;
-    ctx.beginPath(); ctx.arc(dx+fr.x*dw, dy+fr.y*dh, r, 0, Math.PI*2);
-    ctx.fillStyle='rgba(20,20,20,0.35)'; ctx.fill();
-    ctx.lineWidth=Math.max(1,r*0.18); ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.stroke();
-    ctx.restore();
-  }
+  pintPaletaYPincel(dato, dx, dy, dw, dh, p, pPlano, pSuave, pFinal);
   return true;
 }
 
@@ -13662,6 +13770,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v197','Pinceladas y paleta','Dos cambios para que se sienta una mano y no un proceso. PINCELADAS: cada mancha se llenaba desde el centro hacia afuera, y el frente era un círculo —se veía como una gota de tinta cayendo en agua, que no es algo que haga ninguna mano—. Ahora el pincel va y viene en franjas paralelas, ida y vuelta, hasta tapar el área, con un ángulo distinto por mancha para que no se note la máquina. El ancho del trazo se fija después de medir la región y se lo obliga a entrar al menos siete veces: calculado solo por el área, una mancha grande se llenaba en tres pasadas y volvía a leerse como un barrido. Y el borde del frente se acortó: un pincel deja un canto, no un degradado de aerógrafo; lo que da la textura es la forma del frente, no su blandura. PALETA: al costado aparece la paleta con la que se está pintando, y los colores no son decorativos —son exactamente los promedios de cada mancha, los mismos con los que se rellena—. El pincel va al color, lo carga, cruza en arco hasta el área y la llena; después vuelve por el siguiente. El primer cuarto del turno de cada mancha es ese viaje: la pintura todavía no toca el papel. La paleta y el pincel se dibujan sobre la placa y no dentro del armado, así la máscara de la etapa siguiente no los recorta, y se desvanecen al final: el último cuadro sigue siendo la imagen limpia.'],
     ['v196','Se pinta mancha por mancha','La primera versión barría en diagonal: prolijo, pero no se parecía a pintar, porque nadie pinta un cuadro de izquierda a derecha. Ahora el orden sale de las REGIONES de color. La imagen se agrupa en manchas —cada canal reducido a cinco niveles, islas conectadas de ese mapa, y las motas del borde absorbidas por la vecina más grande en seis pasadas, porque una mota pegada a otra necesita que primero se resuelva la vecina— y se pintan de la más grande a la más chica: primero el fondo, después los cuerpos, y al final lo corto, que es el pelo, la barba, las hojas. Cada mancha se llena con su propio trazo desde el centro hacia afuera, y las franjas de tiempo se pisan entre sí, así se ve fluido y no como una lista de turnos. Encima de eso, tres pasadas sobre las mismas regiones, cada una más rápida que la anterior: las manchas de color planas, después el detalle flojo —la imagen real con el contraste bajado— y al final el contraste definitivo. UN ERROR QUE VALE CONTAR: la primera vuelta posterizaba cada canal por separado para armar las manchas, y eso mentía el color —un beige daba rosa, un azul daba violeta—. Ahora cada mancha se pinta con SU color, el promedio de sus propios píxeles, que es literalmente lo que hace alguien cuando bloquea una base de color.'],
     ['v195','La ilustración se dibuja sola','Un efecto nuevo para las imágenes fijas: la ilustración se arma frente a la cámara, como una repetición de Procreate. Primero el boceto —los bordes en grafito—, después las manchas de color plano, y al final el detalle encima, con un punto de pincel siguiendo el frente del trazo. Aclaración honesta sobre qué es y qué no: gpt-image devuelve un PNG plano, no las pinceladas. Procreate graba los trazos de verdad mientras dibujás; acá no hay trazos que grabar, así que se reconstruye un proceso creíble desde la imagen terminada. El recorrido sale de un mapa de orden: una barrida en diagonal ensuciada con ruido para que el frente no sea una línea recta, y adelantada en las zonas oscuras, porque un ilustrador bloquea las sombras antes que las luces. Todo se calcula desde el tiempo del cuadro, sin acumular estado: por eso se graba en el MP4 igual que se ve en el preview, y en el último cuadro queda exactamente la imagen original, sin rastro del efecto. Está en Efectos, junto a Ken Burns y Cinemático, y aparece solo en imágenes fijas: un video ya se mueve solo.'],
     ['v194','Un estilo puede ser una imagen','Escribir con palabras un trazo, una paleta y un nivel de detalle es difícil y sale mal; mostrar una ilustración que ya salió bien, no. Ahora un estilo guardado puede tener prompt escrito, imágenes de referencia, o las dos cosas. «✦ Desde una imagen» abre el formulario y va derecho al archivo: le ponés nombre, subís la ilustración que querés repetir y listo, sin escribir nada. Al usarlo, la referencia viaja junto a la foto de la card y el prompt le dice al modelo que la mire como estilo y no como contenido —sin esa línea devuelve la referencia retocada en vez de usarla de guía—. Las referencias se guardan a 640 px en JPEG: a esa medida el modelo ve trazo, paleta y detalle, y entran veinte estilos en el navegador; en PNG a tamaño completo, tres llenaban el almacenamiento. BORRAR: existía, pero escondido detrás del desplegable, de a uno y solo con el estilo seleccionado; con diecisiete acumulados era inusable. Ahora hay un bloque «Mis estilos» con todos listados, su miniatura y una ✕ por fila. ITERAR: el ajuste puntual seguía siendo de un solo uso. Si salió bien y lo querés repetir, «⤓ Sumar este ajuste al estilo» lo incorpora al prompt guardado y deja de haber que reescribirlo.'],
