@@ -617,7 +617,7 @@ header{display:flex;align-items:center;gap:14px;padding:11px 18px;border-bottom:
 
 <header>
   <span class="logo">INCERTIS</span>
-  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v195 «la ilustración se dibuja sola»</span>
+  <span class="badge" id="ver-badge" title="Ver historial de versiones" style="cursor:pointer">Instagram 4:5 · v196 «se pinta mancha por mancha»</span>
   <div id="ver-history" style="display:none"></div>
   <div class="fmt-size-row" id="fmt-size-row">
     <button class="fmt-size-btn active" data-format="4:5" title="Vertical 4:5">4:5</button>
@@ -928,7 +928,7 @@ function setFormat(fmt){
   var st=document.getElementById('stxt'); if(st) st.textContent='Listo · '+W+'×'+H;
   var qd=document.getElementById('q-dims');
   if(qd) qd.textContent=Math.round(W*EXPORT_SCALE)+'×'+Math.round(H*EXPORT_SCALE);
-  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v195 «la ilustración se dibuja sola»';
+  var badge=document.querySelector('header .badge'); if(badge) badge.textContent='Instagram '+fmt+' · v196 «se pinta mancha por mancha»';
   if(typeof cards!=="undefined" && cards[typeof sel!=="undefined"?sel:0] && typeof drawCard==="function") drawCard(cards[sel],0.7);
 }
 // Máxima calidad tipográfica para exportación
@@ -2127,90 +2127,175 @@ function drawPhotoRule(x,y,w,h,bgHex,radius){
 // exactamente la imagen original, sin rastro del efecto.
 const pintCache={};
 
-// El mapa de ORDEN dice, para cada punto, en qué momento aparece. Es lo único
-// que define el recorrido: una barrida en diagonal —como quien pinta de arriba
-// a la izquierda hacia abajo a la derecha—, ensuciada con ruido para que el
-// frente no sea una línea recta, y adelantada en las zonas oscuras, porque un
-// ilustrador bloquea las sombras antes que las luces.
-function pintOrden(px, lw, lh){
-  const orden=new Float32Array(lw*lh);
-  // ruido de valor: una grilla chica interpolada, sin dependencias
-  const gw=9, gh=11, g=new Float32Array(gw*gh);
-  let semilla=1337;
-  const rnd=()=>{ semilla=(semilla*1103515245+12345)&0x7fffffff; return semilla/0x7fffffff; };
-  for(let i=0;i<gw*gh;i++) g[i]=rnd();
-  const suave=v=>v*v*(3-2*v);
-  function ruido(u,v){
-    const fx=u*(gw-1), fy=v*(gh-1);
-    const x0=Math.floor(fx), y0=Math.floor(fy);
-    const x1=Math.min(gw-1,x0+1), y1=Math.min(gh-1,y0+1);
-    const tx=suave(fx-x0), ty=suave(fy-y0);
-    const a=g[y0*gw+x0]*(1-tx)+g[y0*gw+x1]*tx;
-    const b=g[y1*gw+x0]*(1-tx)+g[y1*gw+x1]*tx;
-    return a*(1-ty)+b*ty;
+// El mapa de ORDEN dice, para cada punto, en qué momento se pinta. Antes era
+// una barrida en diagonal: se veía prolijo pero no se parecía a pintar, porque
+// nadie pinta un cuadro de izquierda a derecha. Un ilustrador cierra una mancha
+// de color entera, salta a otra que no la toca, y recién cuando están todas las
+// manchas se mete con el detalle. Así que el orden ahora sale de las REGIONES
+// de color: se agrupa la imagen en manchas, se pintan de la más grande a la más
+// chica —el fondo, después los cuerpos, al final el pelo, la barba, las hojas—
+// y cada una se llena con su propio trazo corto en vez de aparecer de golpe.
+
+// Agrupa la imagen en manchas del mismo color. Se reduce cada canal a cuatro
+// niveles —64 colores posibles— y se buscan las islas conectadas de ese mapa.
+// Las islas minúsculas no son una mancha, son ruido del borde: se las absorbe
+// la vecina más grande para que no generen mil regiones de un píxel.
+function pintRegiones(px, lw, lh){
+  const N=lw*lh;
+  const balde=new Int32Array(N);
+  for(let i=0;i<N;i++){
+    const p=i*4;
+    if(px[p+3]<10){ balde[i]=-1; continue; }          // transparente
+    // Cinco niveles por canal. Con tres, un beige y un rosa caian en el mismo
+    // balde y la imagen quedaba en cuatro manchas; con cinco aparecen las
+    // zonas que un ilustrador trataria por separado.
+    const r=(px[p]/52)|0, g=(px[p+1]/52)|0, b=(px[p+2]/52)|0;
+    balde[i]=r*36+g*6+b;
   }
-  let mn=1e9, mx=-1e9;
-  for(let y=0;y<lh;y++) for(let x=0;x<lw;x++){
-    const i=y*lw+x, p=i*4;
-    const lum=(px[p]*0.299+px[p+1]*0.587+px[p+2]*0.114)/255;
-    const alfa=px[p+3]/255;
-    const u=x/(lw-1), v=y/(lh-1);
-    const barrida=u*0.58+v*0.42;
-    let o=barrida*0.76 + ruido(u,v)*0.24 - (1-lum)*0.10;
-    // lo transparente no se pinta: que quede afuera del recorrido
-    if(alfa<0.04) o=2;
-    orden[i]=o;
-    if(o<2){ if(o<mn) mn=o; if(o>mx) mx=o; }
+  const reg=new Int32Array(N).fill(-1);
+  const areas=[], pila=new Int32Array(N);
+  let nReg=0;
+  for(let i0=0;i0<N;i0++){
+    if(reg[i0]>=0 || balde[i0]<0) continue;
+    const col=balde[i0], id=nReg++;
+    let sp=0, area=0;
+    pila[sp++]=i0; reg[i0]=id;
+    while(sp){
+      const i=pila[--sp]; area++;
+      const x=i%lw, y=(i/lw)|0;
+      if(x>0   && reg[i-1]<0  && balde[i-1]===col ){ reg[i-1]=id;  pila[sp++]=i-1; }
+      if(x<lw-1&& reg[i+1]<0  && balde[i+1]===col ){ reg[i+1]=id;  pila[sp++]=i+1; }
+      if(y>0   && reg[i-lw]<0 && balde[i-lw]===col){ reg[i-lw]=id; pila[sp++]=i-lw; }
+      if(y<lh-1&& reg[i+lw]<0 && balde[i+lw]===col){ reg[i+lw]=id; pila[sp++]=i+lw; }
+    }
+    areas.push(area);
   }
-  const rg=Math.max(1e-6,mx-mn);
-  for(let i=0;i<orden.length;i++) orden[i]= orden[i]>=2 ? 2 : (orden[i]-mn)/rg;
+  // Absorber las motas: una isla de menos del 0,12% de la imagen se pega a la
+  // region vecina mas grande. Sin esto el borde entre dos colores genera una
+  // nube de regiones de tres pixeles y el efecto se vuelve ruido.
+  const MIN=Math.max(6, Math.round(N*0.0012));
+  const destino=new Int32Array(nReg);
+  for(let i=0;i<nReg;i++) destino[i]=i;
+  // Seis pasadas, no dos: una mota pegada a otra mota necesita que primero se
+  // resuelva la vecina. Con dos quedaban islas de uno o dos pixeles, y cada una
+  // se llevaba un turno de la animacion que no se ve.
+  for(let paso=0;paso<6;paso++){
+    const mejor=new Int32Array(nReg).fill(-1);
+    const mejorArea=new Int32Array(nReg);
+    for(let i=0;i<N;i++){
+      const a=reg[i]; if(a<0 || areas[a]>=MIN) continue;
+      const x=i%lw, y=(i/lw)|0;
+      const vs=[x>0?i-1:-1, x<lw-1?i+1:-1, y>0?i-lw:-1, y<lh-1?i+lw:-1];
+      for(const v of vs){
+        if(v<0) continue;
+        const b=reg[v];
+        if(b<0||b===a) continue;
+        if(areas[b]>mejorArea[a]){ mejorArea[a]=areas[b]; mejor[a]=b; }
+      }
+    }
+    for(let i=0;i<nReg;i++) if(areas[i]<MIN && mejor[i]>=0) destino[i]=mejor[i];
+    for(let i=0;i<N;i++) if(reg[i]>=0) reg[i]=destino[reg[i]];
+    for(let i=0;i<nReg;i++) areas[i]=0;
+    for(let i=0;i<N;i++) if(reg[i]>=0) areas[reg[i]]++;
+  }
+  // Renumerar dejando solo las que sobrevivieron, ordenadas de mayor a menor:
+  // el orden de pintado es el orden de la lista.
+  // Lo que siga siendo diminuto despues de todo eso no merece su propio turno:
+  // se lo manda con la region mas grande de la imagen y se dibuja con ella.
+  const vivas=[];
+  for(let i=0;i<nReg;i++) if(areas[i]>=MIN) vivas.push([areas[i], i]);
+  if(vivas.length){
+    const grande=vivas.reduce((a,b)=>a[0]>=b[0]?a:b)[1];
+    for(let i=0;i<N;i++){ const k=reg[i]; if(k>=0 && areas[k]<MIN) reg[i]=grande; }
+    for(let i=0;i<nReg;i++) areas[i]=0;
+    for(let i=0;i<N;i++) if(reg[i]>=0) areas[reg[i]]++;
+    vivas.length=0;
+    for(let i=0;i<nReg;i++) if(areas[i]>0) vivas.push([areas[i], i]);
+  }
+  vivas.sort((a,b)=>b[0]-a[0]);
+  const nuevo=new Int32Array(nReg).fill(-1);
+  vivas.forEach((v,k)=>{ nuevo[v[1]]=k; });
+  for(let i=0;i<N;i++) if(reg[i]>=0) reg[i]=nuevo[reg[i]];
+  return {reg:reg, areas:vivas.map(v=>v[0]), n:vivas.length};
+}
+
+function pintOrden(px, lw, lh, R){
+  const N=lw*lh;
+  const orden=new Float32Array(N);
+  if(!R.n){ orden.fill(0); return orden; }
+  // A cada region le toca una franja de tiempo. No son iguales: las grandes se
+  // llevan algo mas, porque tapar un fondo lleva mas que dar cuatro toques en
+  // una hoja. Y se pisan un poco entre si, que es lo que hace que se vea fluido
+  // en vez de una lista de turnos.
+  const total=R.areas.reduce((a,b)=>a+b,0)||1;
+  const peso=R.areas.map(a=>0.45/R.n + 0.55*(a/total));
+  const sumaPeso=peso.reduce((a,b)=>a+b,0)||1;
+  const inicio=new Float32Array(R.n), largo=new Float32Array(R.n);
+  let acum=0;
+  const SOLAPE=0.55;
+  for(let k=0;k<R.n;k++){
+    const dur=peso[k]/sumaPeso;
+    inicio[k]=acum;
+    largo[k]=dur*(1+SOLAPE);
+    acum+=dur*(1-SOLAPE*0.35);
+  }
+  const fin=acum + (largo[R.n-1]||0)*0.2;
+  // Dentro de cada mancha, un trazo corto: se llena en diagonal, rapido. El
+  // centro de la region es el punto de partida, como quien apoya el pincel y
+  // abre desde ahi.
+  const cx=new Float32Array(R.n), cy=new Float32Array(R.n), cn=new Float32Array(R.n);
+  for(let i=0;i<N;i++){ const k=R.reg[i]; if(k<0) continue; cx[k]+=i%lw; cy[k]+=(i/lw)|0; cn[k]++; }
+  for(let k=0;k<R.n;k++){ if(cn[k]){ cx[k]/=cn[k]; cy[k]/=cn[k]; } }
+  const rad=new Float32Array(R.n);
+  for(let i=0;i<N;i++){
+    const k=R.reg[i]; if(k<0) continue;
+    const d=Math.hypot(i%lw-cx[k], ((i/lw)|0)-cy[k]);
+    if(d>rad[k]) rad[k]=d;
+  }
+  for(let i=0;i<N;i++){
+    const k=R.reg[i];
+    if(k<0){ orden[i]=2; continue; }                 // transparente: no se pinta
+    const d=Math.hypot(i%lw-cx[k], ((i/lw)|0)-cy[k]) / Math.max(1,rad[k]);
+    orden[i]=(inicio[k] + d*largo[k]) / fin;
+  }
   return orden;
 }
 
-// El boceto: bordes por diferencia con el desenfoque —un unsharp al revés—,
-// dibujados en grafito sobre transparente.
-function pintBordes(el, aw, ah){
+// Las manchas de color plano. Antes esto posterizaba cada canal por separado y
+// el resultado mentía el color: un beige daba rosa, un azul daba violeta. Ahora
+// cada mancha se pinta con SU color —el promedio de sus propios píxeles—, que
+// es literalmente lo que hace alguien cuando bloquea una base de color. Se arma
+// chica y se agranda al componerla: los bordes quedan blandos, como pintura.
+function pintPlano(px, lw, lh, R){
+  const cv=document.createElement('canvas'); cv.width=lw; cv.height=lh;
+  const g=cv.getContext('2d');
+  const im=g.createImageData(lw,lh);
+  const sr=new Float64Array(R.n), sg=new Float64Array(R.n), sb=new Float64Array(R.n), sn=new Float64Array(R.n);
+  for(let i=0;i<lw*lh;i++){
+    const k=R.reg[i]; if(k<0) continue;
+    const p=i*4; sr[k]+=px[p]; sg[k]+=px[p+1]; sb[k]+=px[p+2]; sn[k]++;
+  }
+  for(let i=0;i<lw*lh;i++){
+    const k=R.reg[i], p=i*4;
+    if(k<0){ im.data[p+3]=0; continue; }
+    const n=sn[k]||1;
+    im.data[p]=sr[k]/n; im.data[p+1]=sg[k]/n; im.data[p+2]=sb[k]/n; im.data[p+3]=255;
+  }
+  g.putImageData(im,0,0);
+  return cv;
+}
+
+// El detalle, pero flojo: la imagen real con el contraste bajado y una pizca
+// de desenfoque. Es el paso del medio, cuando la ilustracion ya tiene todas las
+// formas pero todavia no tiene fuerza.
+function pintSuave(el, aw, ah){
   const cv=document.createElement('canvas'); cv.width=aw; cv.height=ah;
-  const g=cv.getContext('2d',{willReadFrequently:true});
+  const g=cv.getContext('2d');
+  g.filter='blur(1.2px) contrast(72%) saturate(88%)';
   g.drawImage(el,0,0,aw,ah);
-  const base=g.getImageData(0,0,aw,ah);
-  const cv2=document.createElement('canvas'); cv2.width=aw; cv2.height=ah;
-  const g2=cv2.getContext('2d',{willReadFrequently:true});
-  g2.filter='blur(2px)'; g2.drawImage(el,0,0,aw,ah); g2.filter='none';
-  const suave=g2.getImageData(0,0,aw,ah);
-  const out=g.createImageData(aw,ah);
-  for(let i=0;i<aw*ah;i++){
-    const p=i*4;
-    const l1=(base.data[p]*0.299+base.data[p+1]*0.587+base.data[p+2]*0.114);
-    const l2=(suave.data[p]*0.299+suave.data[p+1]*0.587+suave.data[p+2]*0.114);
-    let d=Math.abs(l1-l2)*3.2;
-    if(d>255) d=255;
-    if(d<18) d=0;                                  // ruido de fondo, afuera
-    out.data[p]=30; out.data[p+1]=28; out.data[p+2]=26;
-    out.data[p+3]=Math.round(d*0.80*(base.data[p+3]/255));
-  }
-  g.putImageData(out,0,0);
+  g.filter='none';
   return cv;
 }
-
-// Las manchas: la imagen posterizada a pocos tonos y desenfocada, que es como
-// se ve una base de color plano antes de que llegue el detalle.
-function pintPlano(el, aw, ah){
-  const cv=document.createElement('canvas'); cv.width=aw; cv.height=ah;
-  const g=cv.getContext('2d',{willReadFrequently:true});
-  g.filter='blur(3px) saturate(115%)'; g.drawImage(el,0,0,aw,ah); g.filter='none';
-  const d=g.getImageData(0,0,aw,ah);
-  const N=5, paso=255/(N-1);
-  for(let i=0;i<aw*ah;i++){
-    const p=i*4;
-    d.data[p]  =Math.round(Math.round(d.data[p]  /paso)*paso);
-    d.data[p+1]=Math.round(Math.round(d.data[p+1]/paso)*paso);
-    d.data[p+2]=Math.round(Math.round(d.data[p+2]/paso)*paso);
-  }
-  g.putImageData(d,0,0);
-  return cv;
-}
-
 function pintPreparar(el, clave){
   if(pintCache[clave]) return pintCache[clave];
   const sw=el.naturalWidth||el.width, sh=el.naturalHeight||el.height;
@@ -2223,8 +2308,10 @@ function pintPreparar(el, clave){
   const px=g.getImageData(0,0,lw,lh).data;
   const ka=Math.min(1, 760/Math.max(sw,sh));
   const aw=Math.max(16,Math.round(sw*ka)), ah=Math.max(16,Math.round(sh*ka));
-  const dato={ orden:pintOrden(px,lw,lh), lw:lw, lh:lh,
-               bordes:pintBordes(el,aw,ah), plano:pintPlano(el,aw,ah),
+  const R=pintRegiones(px,lw,lh);
+  const dato={ orden:pintOrden(px,lw,lh,R), lw:lw, lh:lh, regiones:R.n,
+               plano:pintPlano(px,lw,lh,R),
+               suave:pintSuave(el,aw,ah),
                mask:document.createElement('canvas'), tmp:document.createElement('canvas') };
   dato.mask.width=lw; dato.mask.height=lh;
   pintCache[clave]=dato;
@@ -2243,7 +2330,7 @@ function pintMascara(dato, avance){
   const g=dato.mask.getContext('2d');
   if(!dato._im) dato._im=g.createImageData(lw,lh);
   const im=dato._im;
-  const borde=0.085;
+  const borde=0.055;
   for(let i=0;i<orden.length;i++){
     const o=orden[i];
     let a;
@@ -2269,7 +2356,7 @@ function pintFrente(dato, avance){
   for(let i=0;i<orden.length;i+=4){
     const o=orden[i];
     if(o>=2) continue;
-    if(Math.abs(o-avance)<0.02){ sx+=i%lw; sy+=(i/lw)|0; n++; }
+    if(Math.abs(o-avance)<0.03){ sx+=i%lw; sy+=(i/lw)|0; n++; }
   }
   if(!n) return null;
   return {x:(sx/n)/lw, y:(sy/n)/lh};
@@ -2290,9 +2377,12 @@ function pintDibujar(el, clave, dx, dy, dw, dh, t){
   if(!dato){ ctx.drawImage(el,dx,dy,dw,dh); return false; }
   const p=Math.max(0,Math.min(1,t));
   const tramo=(a,b)=>Math.max(0,Math.min(1,(p-a)/(b-a)));
-  const pBoceto=tramo(0.00,0.34);
-  const pPlano =tramo(0.22,0.70);
-  const pFinal =tramo(0.55,1.00);
+  // Tres pasadas sobre las mismas regiones, cada una mas rapida que la
+  // anterior: las manchas de color, el detalle flojo, y el contraste final.
+  // Se pisan a proposito, asi no se leen como tres etapas separadas.
+  const pPlano =tramo(0.00,0.52);
+  const pSuave =tramo(0.34,0.78);
+  const pFinal =tramo(0.62,1.00);
   // Terminado: la imagen tal cual, sin una sola operación de más.
   if(pFinal>=1){ ctx.drawImage(el,dx,dy,dw,dh); return true; }
 
@@ -2325,15 +2415,15 @@ function pintDibujar(el, clave, dx, dy, dw, dh, t){
     }
     gt.drawImage(scr,0,0);
   }
-  if(pPlano<1) capa(dato.bordes, pBoceto);
-  if(pFinal<1) capa(dato.plano,  pPlano);
+  if(pSuave<1) capa(dato.plano, pPlano);
+  if(pFinal<1) capa(dato.suave, pSuave);
   capa(el, pFinal);
 
   ctx.drawImage(tmp,dx,dy,dw,dh);
 
   // El punto del pincel, sobre la placa y no dentro del armado: así no queda
   // recortado por la máscara de la etapa siguiente.
-  const fr=pintFrente(dato, pFinal>0.02?pFinal:pPlano);
+  const fr=pintFrente(dato, pFinal>0.02?pFinal:(pSuave>0.02?pSuave:pPlano));
   if(fr){
     const r=Math.max(3, dw*0.014);
     ctx.save();
@@ -13572,6 +13662,7 @@ document.fonts.ready.then(()=>{
   // ── Historial de versiones ──
   // Cada entrada: [numero, nombre corto, qué cambió]. La más nueva primero.
   const VERSIONS=[
+    ['v196','Se pinta mancha por mancha','La primera versión barría en diagonal: prolijo, pero no se parecía a pintar, porque nadie pinta un cuadro de izquierda a derecha. Ahora el orden sale de las REGIONES de color. La imagen se agrupa en manchas —cada canal reducido a cinco niveles, islas conectadas de ese mapa, y las motas del borde absorbidas por la vecina más grande en seis pasadas, porque una mota pegada a otra necesita que primero se resuelva la vecina— y se pintan de la más grande a la más chica: primero el fondo, después los cuerpos, y al final lo corto, que es el pelo, la barba, las hojas. Cada mancha se llena con su propio trazo desde el centro hacia afuera, y las franjas de tiempo se pisan entre sí, así se ve fluido y no como una lista de turnos. Encima de eso, tres pasadas sobre las mismas regiones, cada una más rápida que la anterior: las manchas de color planas, después el detalle flojo —la imagen real con el contraste bajado— y al final el contraste definitivo. UN ERROR QUE VALE CONTAR: la primera vuelta posterizaba cada canal por separado para armar las manchas, y eso mentía el color —un beige daba rosa, un azul daba violeta—. Ahora cada mancha se pinta con SU color, el promedio de sus propios píxeles, que es literalmente lo que hace alguien cuando bloquea una base de color.'],
     ['v195','La ilustración se dibuja sola','Un efecto nuevo para las imágenes fijas: la ilustración se arma frente a la cámara, como una repetición de Procreate. Primero el boceto —los bordes en grafito—, después las manchas de color plano, y al final el detalle encima, con un punto de pincel siguiendo el frente del trazo. Aclaración honesta sobre qué es y qué no: gpt-image devuelve un PNG plano, no las pinceladas. Procreate graba los trazos de verdad mientras dibujás; acá no hay trazos que grabar, así que se reconstruye un proceso creíble desde la imagen terminada. El recorrido sale de un mapa de orden: una barrida en diagonal ensuciada con ruido para que el frente no sea una línea recta, y adelantada en las zonas oscuras, porque un ilustrador bloquea las sombras antes que las luces. Todo se calcula desde el tiempo del cuadro, sin acumular estado: por eso se graba en el MP4 igual que se ve en el preview, y en el último cuadro queda exactamente la imagen original, sin rastro del efecto. Está en Efectos, junto a Ken Burns y Cinemático, y aparece solo en imágenes fijas: un video ya se mueve solo.'],
     ['v194','Un estilo puede ser una imagen','Escribir con palabras un trazo, una paleta y un nivel de detalle es difícil y sale mal; mostrar una ilustración que ya salió bien, no. Ahora un estilo guardado puede tener prompt escrito, imágenes de referencia, o las dos cosas. «✦ Desde una imagen» abre el formulario y va derecho al archivo: le ponés nombre, subís la ilustración que querés repetir y listo, sin escribir nada. Al usarlo, la referencia viaja junto a la foto de la card y el prompt le dice al modelo que la mire como estilo y no como contenido —sin esa línea devuelve la referencia retocada en vez de usarla de guía—. Las referencias se guardan a 640 px en JPEG: a esa medida el modelo ve trazo, paleta y detalle, y entran veinte estilos en el navegador; en PNG a tamaño completo, tres llenaban el almacenamiento. BORRAR: existía, pero escondido detrás del desplegable, de a uno y solo con el estilo seleccionado; con diecisiete acumulados era inusable. Ahora hay un bloque «Mis estilos» con todos listados, su miniatura y una ✕ por fila. ITERAR: el ajuste puntual seguía siendo de un solo uso. Si salió bien y lo querés repetir, «⤓ Sumar este ajuste al estilo» lo incorpora al prompt guardado y deja de haber que reescribirlo.'],
     ['v193','El logo y el crédito, también de la pieza','Faltaban dos que son identidad tanto como el fondo: la variante del logo —blanco, negro, rojo o el global—, el ocultarlo, y el crédito del pie. Se elegían card por card. Ahora viajan con el resto: se eligen una vez, van a todas, una card nueva nace con ellos, y «↩ Volver al común» los trae de vuelta junto con el fondo y los cuerpos. El escape sigue siendo el mismo botón «Solo esta». Nota: si una foto necesita su propio crédito —una agencia distinta en una sola placa—, ése es el caso para apartar esa card.'],
